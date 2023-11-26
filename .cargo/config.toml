@@ -1,0 +1,12 @@
+[alias]
+rel="build --release"
+
+[build]
+target="armv7a-none-eabi"
+
+[target.armv7a-none-eabi]
+runner="qemu-system-arm -m 1G -M raspi2b -serial stdio -kernel"
+rustflags=[
+    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=-s"
+]
