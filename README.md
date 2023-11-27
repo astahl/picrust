@@ -67,8 +67,9 @@ To run the system on a real pi, it might be possible -- but as of yet untested -
 
 1. take a fresh sd card, 
 2. write a raspbian 32 bit image to it, using the raspberry pi imager tool
-3. replace the `kernel.img` file in `boot/` with the `picrust` binary (rename accordingly).
-4. stick the card into a rpi 2/3/4 and see what happens. 
-5. fiddle with the config.txt file and retry.
+3. Run the command `cargo img`, which is an alias for `cargo objcopy --release -- -O binary kernel.img`
+4. replace the `kernel.img` file on your sd card with the `kernel.img` binary generated in the previous step. Remove any other .img files.
+5. stick the card into a rpi 2/3/4 and see what happens. 
+6. fiddle with the `config.txt` file and retry. You might need to set [https://www.raspberrypi.com/documentation/computers/config_txt.html#what-is-config-txt](various parameters), for example `arm_64bit=0` and also the `video=` setting in `cmdline.txt`, see [https://www.raspberrypi.com/documentation/computers/configuration.html#the-kernel-command-line](this page).
 
-As of now, only the serial interface via UART0 pins _should_ be working. Framebuffer output is currently not in use.
+As of now, only a simple test pattern is output via a 1280x720 framebuffer on the hdmi.

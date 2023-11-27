@@ -1,5 +1,6 @@
 [alias]
 rel="build --release"
+img="objcopy --release -- -O binary kernel.img"
 
 [build]
 target="armv7a-none-eabi"

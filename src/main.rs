@@ -3,6 +3,7 @@
 
 mod monitor;
 mod peripherals;
+mod framebuffer;
 
 use core::arch::global_asm;
 
@@ -14,8 +15,23 @@ fn on_panic(_info: &core::panic::PanicInfo) -> ! {
 #[no_mangle]
 pub extern "C" fn kernel_main() {
     use peripherals::uart;
+    let core = get_core_num() as usize;
+    if let Some(framebuffer) = framebuffer::Framebuffer::new() {
+        for y in 300..600 {
+            for x in 400..800 {
+                framebuffer.set_pixel(x, y, 0xFF00FF00);
+            }
+        }
+        framebuffer.set_pixel(200, 200, 0xFFFFFFFF);
+        framebuffer.set_pixel(201, 201, 0x00FFFFFF);
+        framebuffer.set_pixel(202, 202, 0xFF00FFFF);
+        framebuffer.set_pixel(203, 203, 0xFFFF00FF);
+        framebuffer.set_pixel(204, 204, 0xFFFFFF00);
+        framebuffer.set_pixel(205, 205, 0xFFFFFFFF);
+    }
+
     uart::init();
-    uart::put_uint(get_core_num() as u64);
+    uart::put_uint(core as u64);
     uart::puts("Hallo");
 
     let mut mon = monitor::Monitor::new(|| uart::get_byte().unwrap_or(b'0'), uart::putc);

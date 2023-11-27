@@ -293,7 +293,7 @@ pub mod uart {
     }
 }
 
-mod mbox {
+pub mod mailbox {
     use crate::peripherals::mmio;
     use crate::peripherals::mmio::MMIO;
 
@@ -306,16 +306,12 @@ mod mbox {
     type MBOX_WRITE = MMIO<MBOX_BASE, 0x20>;
 
     #[repr(align(16), C)]
-    struct Mailbox<const BUFFER_SIZE: usize> {
+    pub struct Mailbox<const BUFFER_SIZE: usize> {
         size: u32,
         req_res_code: ReqResCode,
         buffer: [u8; BUFFER_SIZE],
     }
-
-    const MAILBOX_SIZE: usize = 256;
-    static mut MAILBOX: Mailbox<MAILBOX_SIZE> = Mailbox::new();
-
-    struct ReqResCode(u32);
+    pub struct ReqResCode(u32);
 
     impl ReqResCode {
         pub const fn new() -> Self {
@@ -343,7 +339,7 @@ mod mbox {
         }
     }
 
-    struct MboxStatus(u32);
+    pub struct MboxStatus(u32);
 
     impl MboxStatus {
         pub const fn is_full(&self) -> bool {
@@ -356,7 +352,7 @@ mod mbox {
     }
 
     #[repr(u32)]
-    enum PropertyMessageRequest {
+    pub enum PropertyMessageRequest {
         Null = 0,
         VcGetFirmwareRevision = 0x00000001,
         HwGetBoardModel = 0x00010001,
@@ -376,7 +372,7 @@ mod mbox {
 
     #[repr(u32)]
     #[derive(Copy, Clone)]
-    enum PropertyMessageResponse {
+    pub enum PropertyMessageResponse {
         Null = 0,
         VcGetFirmwareRevision {
             firmware_revision: u32,
@@ -558,7 +554,7 @@ mod mbox {
             }
         }
 
-        fn request<const TAG_COUNT: usize>(
+        pub fn request<const TAG_COUNT: usize>(
             &mut self,
             channel: u8,
             request: &[PropertyMessageRequest; TAG_COUNT],
@@ -573,12 +569,12 @@ mod mbox {
                 buffer = rest;
             }
             self.req_res_code.clear();
-            crate::peripherals::uart::put_hex_bytes(&self.buffer);
+            // crate::peripherals::uart::put_hex_bytes(&self.buffer);
             self.call(channel);
 
-            crate::peripherals::uart::put_hex_bytes(&self.req_res_code.raw_value().to_ne_bytes());
-            crate::peripherals::uart::putc(b'\n');
-            crate::peripherals::uart::put_hex_bytes(&self.buffer);
+            // crate::peripherals::uart::put_hex_bytes(&self.req_res_code.raw_value().to_ne_bytes());
+            // crate::peripherals::uart::putc(b'\n');
+            // crate::peripherals::uart::put_hex_bytes(&self.buffer);
 
             if !self.req_res_code.is_success() {
                 return Err(self.req_res_code.raw_value());
@@ -590,8 +586,8 @@ mod mbox {
 
             for res in response.as_mut_slice() {
                 let length = PropertyMessageResponse::peek_len(buffer);
-                crate::peripherals::uart::put_uint(length as u64);
-                crate::peripherals::uart::putc(b'\n');
+                // crate::peripherals::uart::put_uint(length as u64);
+                // crate::peripherals::uart::putc(b'\n');
                 let (head, rest) = buffer.split_at(length);
                 res.fill_from(head);
                 buffer = rest;
