@@ -70,6 +70,6 @@ To run the system on a real pi, it might be possible -- but as of yet untested -
 3. Run the command `cargo img`, which is an alias for `cargo objcopy --release -- -O binary kernel.img`
 4. replace the `kernel.img` file on your sd card with the `kernel.img` binary generated in the previous step. Remove any other .img files.
 5. stick the card into a rpi 2/3/4 and see what happens. 
-6. fiddle with the (https://www.raspberrypi.com/documentation/computers/config_txt.html)[`config.txt` file] and retry. You might need to set  various parameters, for example `arm_64bit=0` and also the `video=` setting in the (https://www.raspberrypi.com/documentation/computers/configuration.html#the-kernel-command-line)[`cmdline.txt` file].
+6. fiddle with the [`config.txt` file](https://www.raspberrypi.com/documentation/computers/config_txt.html) and retry. You might need to set  various parameters, for example `arm_64bit=0` and also the `video=` setting in the [`cmdline.txt` file](https://www.raspberrypi.com/documentation/computers/configuration.html#the-kernel-command-line).
 
 As of now, only a simple test pattern is output via a 1280x720 framebuffer on the hdmi.
