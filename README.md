@@ -4,8 +4,8 @@ A basic system to tinker with ARM and the Raspberry Pi - 99.9% rust.
 
 ## Inspired by...
 
-* (Building an Operating System for the Raspberry Pi)[https://jsandler18.github.io/] by Jake Sandler.
-* (Writing a “bare metal” operating system for Raspberry Pi 4)[https://www.rpi4os.com] by Adam Greenwood-Byrne.
+* [Building an Operating System for the Raspberry Pi](https://jsandler18.github.io) by Jake Sandler.
+* [Writing a “bare metal” operating system for Raspberry Pi 4](https://www.rpi4os.com) by Adam Greenwood-Byrne.
 
 Thank you!
 
