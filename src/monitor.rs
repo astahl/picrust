@@ -80,6 +80,22 @@ impl<In: Fn() -> u8, Out: Fn(u8) -> ()> Monitor<In, Out> {
         self.echo(b'\n');
     }
 
+    fn echo_line_buffer(&self) {
+        for c in self.line_buffer.iter().take_while(|c| **c != 0) {
+            self.echo(*c);
+        }
+    }
+
+    fn echo_error(&self, position: usize) {
+        self.echo_line_buffer();
+        self.echo_newline();
+        for _ in 0..position {
+            self.echo(b' ');
+        }
+        self.echo(b'^');
+        self.echo(b'!');
+    }
+
     fn echo_backspace(&self) {
         self.echo(0x08);
         self.echo(0x20);
@@ -120,27 +136,33 @@ impl<In: Fn() -> u8, Out: Fn(u8) -> ()> Monitor<In, Out> {
         self.line_cursor = 0;
         let mut current: usize = 0;
         let mut mode = 'P';
-        for c in self.line_buffer.iter() {
+        for (pos, c) in self.line_buffer.iter().enumerate() {
             match *c {
                 b'R' => {
                     mode = 'R';
-                },
+                }
                 b' ' => {
                     current = 0;
-                },
+                }
                 0 => {
                     break;
                 }
-                _ => {
+                b'0'..=b'9' | b'A'..=b'F' => {
                     let n = nybble_from_hex_digit(*c) & 0xF;
                     current <<= 4;
                     current |= n as usize;
                 }
+                _ => {
+                    self.echo_error(pos);
+                    self.echo_newline();
+                    return;
+                }
             }
         }
+        if current > 0 {}
         match mode {
             'R' => self.execute(current),
-            _ => self.echo_memory(current, 8)
+            _ => self.echo_memory(current, 8),
         };
 
         self.echo_newline();
