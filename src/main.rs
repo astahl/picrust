@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
 
+mod framebuffer;
 mod monitor;
 mod peripherals;
-mod framebuffer;
 
 use core::arch::global_asm;
 
@@ -19,15 +19,15 @@ pub extern "C" fn kernel_main() {
     if let Some(framebuffer) = framebuffer::Framebuffer::new() {
         for y in 300..600 {
             for x in 400..800 {
-                framebuffer.set_pixel(x, y, 0xFF00FF00);
+                framebuffer.set_pixel_a8r8g8b8(x, y, 0xFF00FF00);
             }
         }
-        framebuffer.set_pixel(200, 200, 0xFFFFFFFF);
-        framebuffer.set_pixel(201, 201, 0x00FFFFFF);
-        framebuffer.set_pixel(202, 202, 0xFF00FFFF);
-        framebuffer.set_pixel(203, 203, 0xFFFF00FF);
-        framebuffer.set_pixel(204, 204, 0xFFFFFF00);
-        framebuffer.set_pixel(205, 205, 0xFFFFFFFF);
+        framebuffer.set_pixel_a8r8g8b8(200, 200, 0xFFFFFFFF);
+        framebuffer.set_pixel_a8r8g8b8(201, 201, 0x00FFFFFF);
+        framebuffer.set_pixel_a8r8g8b8(202, 202, 0xFF00FFFF);
+        framebuffer.set_pixel_a8r8g8b8(203, 203, 0xFFFF00FF);
+        framebuffer.set_pixel_a8r8g8b8(204, 204, 0xFFFFFF00);
+        framebuffer.set_pixel_a8r8g8b8(205, 205, 0xFFFFFFFF);
     }
 
     uart::init();

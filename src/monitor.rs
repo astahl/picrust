@@ -18,7 +18,7 @@ const fn nybble_from_hex_digit(char: u8) -> u8 {
     }
 }
 
-pub struct Monitor<In: Fn() -> u8, Out: Fn(u8) -> ()> {
+pub struct Monitor<In: Fn() -> u8, Out: Fn(u8)> {
     input: In,
     output: Out,
     line_buffer: [u8; LINE_LEN],
@@ -26,7 +26,7 @@ pub struct Monitor<In: Fn() -> u8, Out: Fn(u8) -> ()> {
     line_cursor: usize,
 }
 
-impl<In: Fn() -> u8, Out: Fn(u8) -> ()> Monitor<In, Out> {
+impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
     pub fn new(input: In, output: Out) -> Self {
         Self {
             input,
@@ -127,7 +127,7 @@ impl<In: Fn() -> u8, Out: Fn(u8) -> ()> Monitor<In, Out> {
                 in(reg) address
             );
         }
-        loop {}
+        panic!()
     }
 
     fn submit(&mut self) {
@@ -159,7 +159,9 @@ impl<In: Fn() -> u8, Out: Fn(u8) -> ()> Monitor<In, Out> {
                 }
             }
         }
-        if current > 0 {}
+        if current > 0 {
+            self.address = current;
+        }
         match mode {
             'R' => self.execute(current),
             _ => self.echo_memory(current, 8),

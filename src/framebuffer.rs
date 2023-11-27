@@ -1,4 +1,3 @@
-
 pub struct Framebuffer {
     ptr: *mut u8,
     pub size_bytes: usize,
@@ -12,7 +11,7 @@ impl Framebuffer {
     pub fn new() -> Option<Self> {
         use crate::peripherals::mailbox::*;
         let mut mailbox = Mailbox::<256>::new();
-        let mut result = Framebuffer{
+        let mut result = Framebuffer {
             ptr: 0 as *mut u8,
             size_bytes: 0,
             width_px: 0,
@@ -22,63 +21,60 @@ impl Framebuffer {
         };
         use PropertyMessageRequest::*;
         let messages = [
-            FbSetPhysicalDimensions{width_px: 1280, height_px: 720},
-            FbSetVirtualDimensions{width_px: 1280, height_px: 720},
-            FbSetDepth{bpp: 32},
-            Null
+            FbSetPhysicalDimensions {
+                width_px: 1280,
+                height_px: 720,
+            },
+            FbSetVirtualDimensions {
+                width_px: 1280,
+                height_px: 720,
+            },
+            FbSetDepth { bpp: 32 },
+            Null,
         ];
-    
-        if let Ok(response) = mailbox.request(8, &messages) 
-        {
+
+        if let Ok(response) = mailbox.request(8, &messages) {
             use PropertyMessageResponse::*;
             match response {
-                [
-                    FbSetPhysicalDimensions{width_px: ph_w, height_px: ph_h},
-                    FbSetVirtualDimensions{width_px: v_w, height_px: v_h},
-                    FbSetDepth{bpp},
-                    Null
-                ] => {
+                [FbSetPhysicalDimensions {
+                    width_px: ph_w,
+                    height_px: ph_h,
+                }, FbSetVirtualDimensions {
+                    width_px: v_w,
+                    height_px: v_h,
+                }, FbSetDepth { bpp }, Null] => {
                     result.width_px = v_w as usize;
                     result.height_px = v_h as usize;
                     result.bits_per_pixel = bpp as usize;
-                }, 
-                _ => return None
+                }
+                _ => return None,
             }
-        }
-        else 
-        {
+        } else {
             return None;
         }
-    
+
         let messages: [PropertyMessageRequest; 3] = [
             FbAllocateBuffer {
-                alignment_bytes: 16
+                alignment_bytes: 16,
             },
             FbGetPitch,
-            Null
+            Null,
         ];
-    
-        if let Ok(response) = mailbox.request(8, &messages) 
-        {
+
+        if let Ok(response) = mailbox.request(8, &messages) {
             use PropertyMessageResponse::*;
             match response {
-                [
-                    FbAllocateBuffer{
-                        base_address_bytes,
-                        size_bytes,
-                    },
-                    FbGetPitch{bytes_per_line},
-                    Null
-                ] => {
+                [FbAllocateBuffer {
+                    base_address_bytes,
+                    size_bytes,
+                }, FbGetPitch { bytes_per_line }, Null] => {
                     result.ptr = base_address_bytes as *mut u8;
                     result.size_bytes = size_bytes as usize;
                     result.pitch_bytes = bytes_per_line as usize;
-                }, 
-                _ => return None
+                }
+                _ => return None,
             }
-        }
-        else 
-        {
+        } else {
             return None;
         }
 
@@ -86,7 +82,9 @@ impl Framebuffer {
     }
 
     pub fn set_pixel_a8r8g8b8(&self, x: usize, y: usize, value: u32) {
-        unsafe { *self.ptr.add(self.pitch_bytes * y + x*4).cast::<u32>() = value; }
+        unsafe {
+            *self.ptr.add(self.pitch_bytes * y + x * 4).cast::<u32>() = value;
+        }
     }
 
     pub fn as_pixels(&self) -> &[u32] {
