@@ -120,12 +120,22 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
 
     fn execute(&self, address: usize) -> ! {
         unsafe {
+            
+            #[cfg(target_arch = "arm")]
             core::arch::asm!(
-                "MOV {0}, {1}",
-                "BLX {0}",
+                "mov {0}, {1}",
+                "blx {0}",
                 out(reg) _,
                 in(reg) address
             );
+
+
+            #[cfg(target_arch = "aarch64")]
+            core::arch::asm!(
+                "blr {0}",
+                in(reg) address
+            );
+            
         }
         panic!()
     }

@@ -9,12 +9,13 @@ SECTIONS
 	.rodata : {	*(.rodata .rodata.* .gnu.linkonce.r*) }
     PROVIDE(_data = .);
 	.data : { *(.data .data.* .gnu.linkonce.d*)	}
-	.bss ALIGN(0x1000) : {
-    	__bss_start = .;
+    . = ALIGN(0x1000);
+    __bss_start = .;
+	.bss : {
 		*(.bss .bss.*)
         *(COMMON)
-	    __bss_end = .;
-	} = 0x0000
+	}
+	__bss_end = .;
 	__end = .;
 
    /DISCARD/ : { *(.comment) *(.gnu*) *(.note*) *(.eh_frame*) }

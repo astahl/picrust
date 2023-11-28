@@ -12,8 +12,25 @@ fn on_panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+extern "C" {
+    static __bss_start: usize;
+    static __bss_end: usize;
+}
+
+
+fn clear_bss() {
+    unsafe {
+        for address in __bss_start..__bss_end {
+            *(address as *mut u8) = 0;
+            
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn kernel_main() {
+    clear_bss();
+
     use peripherals::uart::Uart0;
     let core = get_core_num() as usize;
     if let Some(framebuffer) = framebuffer::Framebuffer::new() {
@@ -32,26 +49,31 @@ pub extern "C" fn kernel_main() {
 
     Uart0::init();
     Uart0::put_uint(core as u64);
-    Uart0::puts("Hallo");
+    Uart0::puts("Hallo\n");
 
     let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     mon.run();
+
     loop {
         core::hint::spin_loop();
     }
 }
 
-fn get_core_num() -> u32 {
-    let mut core_num: u32;
+fn get_core_num() -> usize {
+    let mut core_num: usize;
     unsafe {
         #[cfg(target_arch = "arm")]
         core::arch::asm!(
             "mrc p15, #0, {0}, c0, c0, #5",
-            "and {0}, {0}, #3",
+            out(reg) core_num
+        );
+        #[cfg(target_arch = "aarch64")]
+        core::arch::asm!(
+            "mrs {0}, mpidr_el1",
             out(reg) core_num
         );
     }
-    core_num
+    core_num & 0b11
 }
 
 #[cfg(target_arch = "arm")]
@@ -67,23 +89,35 @@ global_asm!(
     //@ Set the stack pointer to start of executable code, grow down)
     "ldr r1, =_start",
     "mov sp, r1",
-    //@ Clear the BSS segment (C statics) to 0
-    "ldr r4, =__bss_start",
-    "ldr r9, =__bss_end",
-    "mov r5, #0",
-    "mov r6, #0",
-    "mov r7, #0",
-    "mov r8, #0",
-    "b       2f",
-    "1: ",
-    "stmia r4!, {{r5-r8}}",
-    "2: ",
-    "cmp r4, r9",
-    "blo 1b",
     //@ Jump to kernel_main
     "ldr r3, =kernel_main",
     "blx r3",
     "halt:",
     "wfe",
     "b halt"
+);
+
+
+#[cfg(target_arch = "aarch64")]
+global_asm!(
+".section \".text.boot\"",  // Make sure the linker puts this at the start of the kernel image
+".global _start",  // Execution starts here
+"_start:",
+    // Check processor ID is zero (executing on main core), else hang
+    "mrs     x1, mpidr_el1",
+    "and     x1, x1, #3",
+    "cbz     x1, 2f",
+    // We're not on the main core, so hang in an infinite wait loop
+"1:  wfe",
+    "b       1b",
+"2:",  // We're on the main core!
+
+    // Set stack to start below our code
+    "ldr     x1, =_start",
+    "mov     sp, x1",
+    
+    // Jump to our main() routine in C (make sure it doesn't return)
+"4:  bl      kernel_main",
+    // In case it does return, halt the master core too
+    "b       1b"
 );
