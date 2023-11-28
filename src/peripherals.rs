@@ -18,22 +18,22 @@ mod mmio {
         unsafe { core::ptr::read_volatile(ptr) }
     }
 
-    pub struct MMIO<const BASE: usize, const OFFSET: usize>();
+    pub struct  MMIO<const BASE: usize, const OFFSET: usize>();
     impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
         const ADDRESS: usize = PERIPHERAL_BASE + BASE + OFFSET;
 
-        pub fn write(data: u32) {
+        pub fn write(&self, data: u32) {
             write_to(Self::ADDRESS as *mut u32, data);
         }
 
-        pub fn read() -> u32 {
+        pub fn read(&self) -> u32 {
             read_from(Self::ADDRESS as *const u32)
         }
 
-        pub fn update(mask: u32, data: u32) -> u32 {
-            let old_value = Self::read();
+        pub fn update(&self, mask: u32, data: u32) -> u32 {
+            let old_value = self.read();
             let new_value = (!mask & old_value) | (mask & data);
-            Self::write(new_value);
+            self.write(new_value);
             old_value
         }
     }
@@ -44,21 +44,25 @@ mod gpio {
     use crate::peripherals::delay;
     use crate::peripherals::mmio::MMIO;
 
+    pub struct Gpio ();
+
     const GPIO_BASE: usize = 0x200000;
-    type GPPUD = MMIO<GPIO_BASE, 0x94>;
-    type GPPUDCLK0 = MMIO<GPIO_BASE, 0x98>;
-
-    pub fn init_uart0() {
-        // select GPIO Pin Update Disable
-        GPPUD::write(0x00000000);
-        delay(150);
-
-        // select Pin 14 and 15
-        GPPUDCLK0::write((1 << 14) | (1 << 15));
-        delay(150);
-
-        // Commit Pin Update
-        GPPUDCLK0::write(0x00000000);
+    impl Gpio {
+        const GPPUD: MMIO<GPIO_BASE, 0x94> = MMIO();
+        const GPPUDCLK0: MMIO<GPIO_BASE, 0x98> = MMIO();
+    
+        pub fn init_uart0() {
+            // select GPIO Pin Update Disable
+            Self::GPPUD.write(0x00000000);
+            delay(150);
+    
+            // select Pin 14 and 15
+            Self::GPPUDCLK0.write((1 << 14) | (1 << 15));
+            delay(150);
+    
+            // Commit Pin Update
+            Self::GPPUDCLK0.write(0x00000000);
+        }
     }
 }
 
@@ -66,127 +70,161 @@ pub mod uart {
     use crate::peripherals::gpio;
     use crate::peripherals::mmio::MMIO;
 
+    pub struct Uart0();
+
     const UART0_BASE: usize = 0x201000;
-
-    type UART0_DR = MMIO<UART0_BASE, 0x00>;
-
-    type UART0_RSRECR = MMIO<UART0_BASE, 0x04>;
-    type UART0_FR = MMIO<UART0_BASE, 0x18>;
-    type UART0_ILPR = MMIO<UART0_BASE, 0x20>;
-    type UART0_IBRD = MMIO<UART0_BASE, 0x24>;
-    type UART0_FBRD = MMIO<UART0_BASE, 0x28>;
-    // Line Control Register
-    type UART0_LCRH = MMIO<UART0_BASE, 0x2C>;
-    // CR Control Register
-    type UART0_CR = MMIO<UART0_BASE, 0x30>;
-    type UART0_IFLS = MMIO<UART0_BASE, 0x34>;
-    // Interrupt Mask Set-Clear
-    type UART0_IMSC = MMIO<UART0_BASE, 0x38>;
-    type UART0_RIS = MMIO<UART0_BASE, 0x3C>;
-    type UART0_MIS = MMIO<UART0_BASE, 0x40>;
-    // ICR Interrupt Clear Register
-    type UART0_ICR = MMIO<UART0_BASE, 0x44>;
-    type UART0_DMACR = MMIO<UART0_BASE, 0x48>;
-    type UART0_ITCR = MMIO<UART0_BASE, 0x80>;
-    type UART0_ITIP = MMIO<UART0_BASE, 0x84>;
-    type UART0_ITOP = MMIO<UART0_BASE, 0x88>;
-    type UART0_TDR = MMIO<UART0_BASE, 0x8C>;
-
-    pub fn putc(c: u8) {
-        while flags().transmit_fifo_full() {
-            core::hint::spin_loop();
+    impl Uart0 {
+        const UART0_DR: MMIO<UART0_BASE, 0x00> = MMIO();
+        const UART0_RSRECR: MMIO<UART0_BASE, 0x04> = MMIO();
+        const UART0_FR: MMIO<UART0_BASE, 0x18> = MMIO();
+        const UART0_ILPR: MMIO<UART0_BASE, 0x20> = MMIO();
+        const UART0_IBRD: MMIO<UART0_BASE, 0x24> = MMIO();
+        const UART0_FBRD: MMIO<UART0_BASE, 0x28> = MMIO();
+        // Line Control Register
+        const UART0_LCRH: MMIO<UART0_BASE, 0x2C> = MMIO();
+        // CR Control Register
+        const UART0_CR: MMIO<UART0_BASE, 0x30> = MMIO();
+        const UART0_IFLS: MMIO<UART0_BASE, 0x34> = MMIO();
+        // Interrupt Mask Set-Clear
+        const UART0_IMSC: MMIO<UART0_BASE, 0x38> = MMIO();
+        const UART0_RIS: MMIO<UART0_BASE, 0x3C> = MMIO();
+        const UART0_MIS: MMIO<UART0_BASE, 0x40> = MMIO();
+        // ICR Interrupt Clear Register
+        const UART0_ICR: MMIO<UART0_BASE, 0x44> = MMIO();
+        const UART0_DMACR: MMIO<UART0_BASE, 0x48> = MMIO();
+        const UART0_ITCR: MMIO<UART0_BASE, 0x80> = MMIO();
+        const UART0_ITIP: MMIO<UART0_BASE, 0x84> = MMIO();
+        const UART0_ITOP: MMIO<UART0_BASE, 0x88> = MMIO();
+        const UART0_TDR: MMIO<UART0_BASE, 0x8C> = MMIO();
+    
+        pub fn init() {
+            // disable UART
+            Self::UART0_CR.write(0x00000000);
+    
+            gpio::Gpio::init_uart0();
+    
+            // Clear all pending UART interrupts
+            Self::UART0_ICR.write(0x7FF);
+    
+            // Set UART Baud Rate to 115200 (look at docs for formula for values)
+            Self::UART0_IBRD.write(1);
+            Self::UART0_FBRD.write(40);
+    
+            // Set Line Control Register to 01110000
+            //                                 ^ use 8 item FIFO
+            //                               ^^ 8 bit words
+            Self::UART0_LCRH.write((1 << 4) | (1 << 5) | (1 << 6));
+    
+            // Set Interrupt Mask Set-Clear Register to 11111110010, disabling all UART interrupts
+            Self::UART0_IMSC.write(
+                (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10),
+            );
+    
+            // enable UART 1100000001
+            //                      ^ enable Hardware
+            //              ^ enable receive
+            //             ^ enable transmit
+            Self::UART0_CR.write((1 << 0) | (1 << 8) | (1 << 9));
         }
-        UART0_DR::write(c as u32);
-    }
 
-    pub fn put_hex(byte: u8) {
-        let upper = (byte >> 4) & 0xF;
-        let lower = byte & 0xF;
-        match upper {
-            0..=9 => putc(b'0' + upper),
-            _ => putc(b'A' + (upper - 10)),
+        pub fn putc(c: u8) {
+            while Self::flags().transmit_fifo_full() {
+                core::hint::spin_loop();
+            }
+            Self::UART0_DR.write(c as u32);
         }
-        match lower {
-            0..=9 => putc(b'0' + lower),
-            _ => putc(b'A' + (lower - 10)),
-        }
-    }
 
-    pub fn put_hex_bytes(buffer: &[u8]) {
-        for chunk in buffer.chunks(16) {
-            for chunk in chunk.chunks(4) {
-                for byte in chunk {
-                    put_hex(*byte);
-                    putc(b' ');
+        pub fn put_hex(byte: u8) {
+            let upper = (byte >> 4) & 0xF;
+            let lower = byte & 0xF;
+            match upper {
+                0..=9 => Self::putc(b'0' + upper),
+                _ => Self::putc(b'A' + (upper - 10)),
+            }
+            match lower {
+                0..=9 => Self::putc(b'0' + lower),
+                _ => Self::putc(b'A' + (lower - 10)),
+            }
+        }
+
+
+        pub fn put_hex_bytes(buffer: &[u8]) {
+            for chunk in buffer.chunks(16) {
+                for chunk in chunk.chunks(4) {
+                    for byte in chunk {
+                        Self::put_hex(*byte);
+                        Self::putc(b' ');
+                    }
+                    Self::putc(b' ');
                 }
-                putc(b' ');
+                Self::putc(b'\n');
             }
-            putc(b'\n');
         }
-    }
 
-    pub fn put_uint(mut value: u64) {
-        let mut power_of_ten = 1;
-        let mut next_power_of_ten = 10;
-        while next_power_of_ten < value {
-            power_of_ten = next_power_of_ten;
-            next_power_of_ten *= 10;
-        }
-        while power_of_ten > 0 {
-            let quotient = (value / power_of_ten) as u8;
-            value %= power_of_ten;
-            putc(b'0');
-            power_of_ten /= 10;
-        }
-    }
-
-    pub fn get_byte() -> Result<u8, UARTStatus> {
-        while flags().receive_fifo_empty() {
-            core::hint::spin_loop();
-        }
-        let read = UART0_DR::read();
-        let status = UARTStatus(read >> 8);
-        if status.is_clear() {
-            Ok(read as u8)
-        } else {
-            Err(status)
-        }
-    }
-
-    pub fn get_bytes(buffer: &mut [u8]) -> Result<usize, UARTStatus> {
-        while flags().receive_fifo_empty() {
-            core::hint::spin_loop();
-        }
-        let mut count: usize = 0;
-        while !flags().receive_fifo_empty() {
-            let read = UART0_DR::read();
-            let status = UARTStatus(read >> 8);
-            if !status.is_clear() {
-                return Err(status);
+        pub fn put_uint(mut value: u64) {
+            let mut power_of_ten = 1;
+            let mut next_power_of_ten = 10;
+            while next_power_of_ten < value {
+                power_of_ten = next_power_of_ten;
+                next_power_of_ten *= 10;
             }
-            if count < buffer.len() {
-                unsafe { *buffer.get_unchecked_mut(count) = read as u8 };
+            while power_of_ten > 0 {
+                let quotient = (value / power_of_ten) as u8;
+                value %= power_of_ten;
+                Self::putc(b'0' + quotient);
+                power_of_ten /= 10;
+            }
+        }
+
+        pub fn get_byte() -> Result<u8, UartStatus> {
+            while Self::flags().receive_fifo_empty() {
+                core::hint::spin_loop();
+            }
+            let read = Self::UART0_DR.read();
+            let status = UartStatus(read >> 8);
+            if status.is_clear() {
+                Ok(read as u8)
             } else {
-                return Ok(count);
+                Err(status)
             }
-            count += 1;
         }
-        Ok(count)
-    }
 
-    pub fn puts(string: &str) {
-        for b in string.bytes() {
-            putc(b);
+        pub fn get_bytes(buffer: &mut [u8]) -> Result<usize, UartStatus> {
+            while Self::flags().receive_fifo_empty() {
+                core::hint::spin_loop();
+            }
+            let mut count: usize = 0;
+            while !Self::flags().receive_fifo_empty() {
+                let read = Self::UART0_DR.read();
+                let status = UartStatus(read >> 8);
+                if !status.is_clear() {
+                    return Err(status);
+                }
+                if count < buffer.len() {
+                    unsafe { *buffer.get_unchecked_mut(count) = read as u8 };
+                } else {
+                    return Ok(count);
+                }
+                count += 1;
+            }
+            Ok(count)
         }
-        putc(0);
+
+        pub fn puts(string: &str) {
+            for b in string.bytes() {
+                Self::putc(b);
+            }
+            Self::putc(0);
+        }
+
+        pub fn flags() -> UartFlags {
+            UartFlags(Self::UART0_FR.read())
+        }
     }
 
-    pub fn flags() -> UARTFlags {
-        UARTFlags(UART0_FR::read())
-    }
 
-    pub struct UARTStatus(u32);
-    impl UARTStatus {
+    pub struct UartStatus(u32);
+    impl UartStatus {
         const OE: u32 = 1 << 3;
         const BE: u32 = 1 << 2;
         const PE: u32 = 1 << 1;
@@ -213,8 +251,8 @@ pub mod uart {
         }
     }
 
-    pub struct UARTFlags(u32);
-    impl UARTFlags {
+    pub struct UartFlags(u32);
+    impl UartFlags {
         const TXFE: u32 = 1 << 7;
         const RXFF: u32 = 1 << 6;
         const TXFF: u32 = 1 << 5;
@@ -261,49 +299,12 @@ pub mod uart {
             self.0 & Self::CTS != 0
         }
     }
-
-    pub fn init() {
-        // disable UART
-        UART0_CR::write(0x00000000);
-
-        gpio::init_uart0();
-
-        // Clear all pending UART interrupts
-        UART0_ICR::write(0x7FF);
-
-        // Set UART Baud Rate to 115200 (look at docs for formula for values)
-        UART0_IBRD::write(1);
-        UART0_FBRD::write(40);
-
-        // Set Line Control Register to 01110000
-        //                                 ^ use 8 item FIFO
-        //                               ^^ 8 bit words
-        UART0_LCRH::write((1 << 4) | (1 << 5) | (1 << 6));
-
-        // Set Interrupt Mask Set-Clear Register to 11111110010, disabling all UART interrupts
-        UART0_IMSC::write(
-            (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10),
-        );
-
-        // enable UART 1100000001
-        //                      ^ enable Hardware
-        //              ^ enable receive
-        //             ^ enable transmit
-        UART0_CR::write((1 << 0) | (1 << 8) | (1 << 9));
-    }
 }
 
 pub mod mailbox {
     use crate::peripherals::mmio;
     use crate::peripherals::mmio::MMIO;
 
-    const MBOX_BASE: usize = 0xB880; //0x201000;
-    type MBOX_READ = MMIO<MBOX_BASE, 0x00>;
-    type MBOX_POLL = MMIO<MBOX_BASE, 0x10>;
-    type MBOX_SENDER = MMIO<MBOX_BASE, 0x14>;
-    type MBOX_STATUS = MMIO<MBOX_BASE, 0x18>;
-    type MBOX_CONFIG = MMIO<MBOX_BASE, 0x1C>;
-    type MBOX_WRITE = MMIO<MBOX_BASE, 0x20>;
 
     #[repr(align(16), C)]
     pub struct Mailbox<const BUFFER_SIZE: usize> {
@@ -521,7 +522,17 @@ pub mod mailbox {
         }
     }
 
+    const MBOX_BASE: usize = 0xB880; //0x201000;
     impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
+
+        const MBOX_READ: MMIO<MBOX_BASE, 0x00> = MMIO();
+        const MBOX_POLL: MMIO<MBOX_BASE, 0x10> = MMIO();
+        const MBOX_SENDER: MMIO<MBOX_BASE, 0x14> = MMIO();
+        const MBOX_STATUS: MMIO<MBOX_BASE, 0x18> = MMIO();
+        const MBOX_CONFIG: MMIO<MBOX_BASE, 0x1C> = MMIO();
+        const MBOX_WRITE: MMIO<MBOX_BASE, 0x20> = MMIO();
+    
+
         pub const fn new() -> Self {
             Self {
                 size: BUFFER_SIZE as u32 * 4 + 8,
@@ -531,7 +542,7 @@ pub mod mailbox {
         }
 
         fn status() -> MboxStatus {
-            MboxStatus(MBOX_STATUS::read())
+            MboxStatus(Self::MBOX_STATUS.read())
         }
 
         fn call(&self, channel: u8) {
@@ -541,13 +552,13 @@ pub mod mailbox {
             while Self::status().is_full() {
                 core::hint::spin_loop();
             }
-            MBOX_WRITE::write(address);
+            Self::MBOX_WRITE.write(address);
 
             loop {
                 while Self::status().is_empty() {
                     core::hint::spin_loop();
                 }
-                let read = MBOX_READ::read();
+                let read = Self::MBOX_READ.read();
                 if read == address {
                     break;
                 }

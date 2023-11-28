@@ -22,12 +22,12 @@ impl Framebuffer {
         use PropertyMessageRequest::*;
         let messages = [
             FbSetPhysicalDimensions {
-                width_px: 1280,
-                height_px: 720,
+                width_px: 1920,
+                height_px: 1080,
             },
             FbSetVirtualDimensions {
-                width_px: 1280,
-                height_px: 720,
+                width_px: 1920,
+                height_px: 1080,
             },
             FbSetDepth { bpp: 32 },
             Null,
@@ -36,15 +36,12 @@ impl Framebuffer {
         if let Ok(response) = mailbox.request(8, &messages) {
             use PropertyMessageResponse::*;
             match response {
-                [FbSetPhysicalDimensions {
-                    width_px: ph_w,
-                    height_px: ph_h,
-                }, FbSetVirtualDimensions {
-                    width_px: v_w,
-                    height_px: v_h,
+                [FbSetPhysicalDimensions {..}, FbSetVirtualDimensions {
+                    width_px,
+                    height_px,
                 }, FbSetDepth { bpp }, Null] => {
-                    result.width_px = v_w as usize;
-                    result.height_px = v_h as usize;
+                    result.width_px = width_px as usize;
+                    result.height_px = height_px as usize;
                     result.bits_per_pixel = bpp as usize;
                 }
                 _ => return None,
@@ -87,19 +84,19 @@ impl Framebuffer {
         }
     }
 
-    pub fn as_pixels(&self) -> &[u32] {
-        unsafe { core::slice::from_raw_parts(self.ptr.cast::<u32>(), self.size_bytes / 4) }
-    }
+    // pub fn as_pixels(&self) -> &[u32] {
+    //     unsafe { core::slice::from_raw_parts(self.ptr.cast::<u32>(), self.size_bytes / 4) }
+    // }
 
-    pub fn as_mut_pixels(&self) -> &[u32] {
-        unsafe { core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes / 4) }
-    }
+    // pub fn as_mut_pixels(&self) -> &mut [u32] {
+    //     unsafe { core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes / 4) }
+    // }
 
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe { core::slice::from_raw_parts(self.ptr, self.size_bytes) }
-    }
+    // pub fn as_slice(&self) -> &[u8] {
+    //     unsafe { core::slice::from_raw_parts(self.ptr, self.size_bytes) }
+    // }
 
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { core::slice::from_raw_parts_mut(self.ptr, self.size_bytes) }
-    }
+    // pub fn as_mut_slice(&mut self) -> &mut [u8] {
+    //     unsafe { core::slice::from_raw_parts_mut(self.ptr, self.size_bytes) }
+    // }
 }

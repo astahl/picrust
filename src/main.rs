@@ -14,7 +14,7 @@ fn on_panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
-    use peripherals::uart;
+    use peripherals::uart::Uart0;
     let core = get_core_num() as usize;
     if let Some(framebuffer) = framebuffer::Framebuffer::new() {
         for y in 300..600 {
@@ -30,11 +30,11 @@ pub extern "C" fn kernel_main() {
         framebuffer.set_pixel_a8r8g8b8(205, 205, 0xFFFFFFFF);
     }
 
-    uart::init();
-    uart::put_uint(core as u64);
-    uart::puts("Hallo");
+    Uart0::init();
+    Uart0::put_uint(core as u64);
+    Uart0::puts("Hallo");
 
-    let mut mon = monitor::Monitor::new(|| uart::get_byte().unwrap_or(b'0'), uart::putc);
+    let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     mon.run();
     loop {
         core::hint::spin_loop();
@@ -64,8 +64,9 @@ global_asm!(
     "and r1, r1, #3",
     "cmp r1, #0",
     "bne halt",
-    //@ Set the stack pointer to 0x8000 (start of executable code, grow down)
-    "mov sp, #0x8000",
+    //@ Set the stack pointer to start of executable code, grow down)
+    "ldr r1, =_start",
+    "mov sp, r1",
     //@ Clear the BSS segment (C statics) to 0
     "ldr r4, =__bss_start",
     "ldr r9, =__bss_end",
