@@ -70,53 +70,54 @@ pub mod uart {
     use crate::peripherals::gpio;
     use crate::peripherals::mmio::MMIO;
 
-    pub struct Uart0();
+    pub struct Uart<const UART_BASE: usize>();
 
-    const UART0_BASE: usize = 0x201000;
-    impl Uart0 {
-        const UART0_DR: MMIO<UART0_BASE, 0x00> = MMIO();
-        const UART0_RSRECR: MMIO<UART0_BASE, 0x04> = MMIO();
-        const UART0_FR: MMIO<UART0_BASE, 0x18> = MMIO();
-        const UART0_ILPR: MMIO<UART0_BASE, 0x20> = MMIO();
-        const UART0_IBRD: MMIO<UART0_BASE, 0x24> = MMIO();
-        const UART0_FBRD: MMIO<UART0_BASE, 0x28> = MMIO();
+    pub type Uart0 = Uart<0x201000>;
+
+    impl<const UART_BASE: usize> Uart<UART_BASE> {
+        const DR: MMIO<UART_BASE, 0x00> = MMIO();
+        const RSRECR: MMIO<UART_BASE, 0x04> = MMIO();
+        const FR: MMIO<UART_BASE, 0x18> = MMIO();
+        const ILPR: MMIO<UART_BASE, 0x20> = MMIO();
+        const IBRD: MMIO<UART_BASE, 0x24> = MMIO();
+        const FBRD: MMIO<UART_BASE, 0x28> = MMIO();
         // Line Control Register
-        const UART0_LCRH: MMIO<UART0_BASE, 0x2C> = MMIO();
+        const LCRH: MMIO<UART_BASE, 0x2C> = MMIO();
         // CR Control Register
-        const UART0_CR: MMIO<UART0_BASE, 0x30> = MMIO();
-        const UART0_IFLS: MMIO<UART0_BASE, 0x34> = MMIO();
+        const CR: MMIO<UART_BASE, 0x30> = MMIO();
+        const IFLS: MMIO<UART_BASE, 0x34> = MMIO();
         // Interrupt Mask Set-Clear
-        const UART0_IMSC: MMIO<UART0_BASE, 0x38> = MMIO();
-        const UART0_RIS: MMIO<UART0_BASE, 0x3C> = MMIO();
-        const UART0_MIS: MMIO<UART0_BASE, 0x40> = MMIO();
+        const IMSC: MMIO<UART_BASE, 0x38> = MMIO();
+        const RIS: MMIO<UART_BASE, 0x3C> = MMIO();
+        const MIS: MMIO<UART_BASE, 0x40> = MMIO();
         // ICR Interrupt Clear Register
-        const UART0_ICR: MMIO<UART0_BASE, 0x44> = MMIO();
-        const UART0_DMACR: MMIO<UART0_BASE, 0x48> = MMIO();
-        const UART0_ITCR: MMIO<UART0_BASE, 0x80> = MMIO();
-        const UART0_ITIP: MMIO<UART0_BASE, 0x84> = MMIO();
-        const UART0_ITOP: MMIO<UART0_BASE, 0x88> = MMIO();
-        const UART0_TDR: MMIO<UART0_BASE, 0x8C> = MMIO();
+        const ICR: MMIO<UART_BASE, 0x44> = MMIO();
+        const DMACR: MMIO<UART_BASE, 0x48> = MMIO();
+        const ITCR: MMIO<UART_BASE, 0x80> = MMIO();
+        const ITIP: MMIO<UART_BASE, 0x84> = MMIO();
+        const ITOP: MMIO<UART_BASE, 0x88> = MMIO();
+        const TDR: MMIO<UART_BASE, 0x8C> = MMIO();
     
         pub fn init() {
             // disable UART
-            Self::UART0_CR.write(0x00000000);
+            Self::CR.write(0x00000000);
     
             gpio::Gpio::init_uart0();
     
             // Clear all pending UART interrupts
-            Self::UART0_ICR.write(0x7FF);
+            Self::ICR.write(0x7FF);
     
             // Set UART Baud Rate to 115200 (look at docs for formula for values)
-            Self::UART0_IBRD.write(1);
-            Self::UART0_FBRD.write(40);
+            Self::IBRD.write(1);
+            Self::FBRD.write(40);
     
             // Set Line Control Register to 01110000
             //                                 ^ use 8 item FIFO
             //                               ^^ 8 bit words
-            Self::UART0_LCRH.write((1 << 4) | (1 << 5) | (1 << 6));
+            Self::LCRH.write((1 << 4) | (1 << 5) | (1 << 6));
     
             // Set Interrupt Mask Set-Clear Register to 11111110010, disabling all UART interrupts
-            Self::UART0_IMSC.write(
+            Self::IMSC.write(
                 (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10),
             );
     
@@ -124,14 +125,14 @@ pub mod uart {
             //                      ^ enable Hardware
             //              ^ enable receive
             //             ^ enable transmit
-            Self::UART0_CR.write((1 << 0) | (1 << 8) | (1 << 9));
+            Self::CR.write((1 << 0) | (1 << 8) | (1 << 9));
         }
 
         pub fn putc(c: u8) {
             while Self::flags().transmit_fifo_full() {
                 core::hint::spin_loop();
             }
-            Self::UART0_DR.write(c as u32);
+            Self::DR.write(c as u32);
         }
 
         pub fn put_hex(byte: u8) {
@@ -180,7 +181,7 @@ pub mod uart {
             while Self::flags().receive_fifo_empty() {
                 core::hint::spin_loop();
             }
-            let read = Self::UART0_DR.read();
+            let read = Self::DR.read();
             let status = UartStatus(read >> 8);
             if status.is_clear() {
                 Ok(read as u8)
@@ -195,7 +196,7 @@ pub mod uart {
             }
             let mut count: usize = 0;
             while !Self::flags().receive_fifo_empty() {
-                let read = Self::UART0_DR.read();
+                let read = Self::DR.read();
                 let status = UartStatus(read >> 8);
                 if !status.is_clear() {
                     return Err(status);
@@ -218,7 +219,7 @@ pub mod uart {
         }
 
         pub fn flags() -> UartFlags {
-            UartFlags(Self::UART0_FR.read())
+            UartFlags(Self::FR.read())
         }
     }
 
