@@ -31,6 +31,7 @@ fn clear_bss() {
 pub extern "C" fn kernel_main() {
     clear_bss();
 
+    peripherals::led_on();
     use peripherals::uart::Uart0;
     let core = get_core_num() as usize;
     if let Some(framebuffer) = framebuffer::Framebuffer::new() {
@@ -38,6 +39,7 @@ pub extern "C" fn kernel_main() {
             for x in 400..800 {
                 framebuffer.set_pixel_a8r8g8b8(x, y, 0xFF00FF00);
             }
+            peripherals::blink_led();
         }
         framebuffer.set_pixel_a8r8g8b8(200, 200, 0xFFFFFFFF);
         framebuffer.set_pixel_a8r8g8b8(201, 201, 0x00FFFFFF);
@@ -48,14 +50,15 @@ pub extern "C" fn kernel_main() {
     }
 
     Uart0::init();
-    Uart0::put_uint(core as u64);
-    Uart0::puts("Hallo\n");
-
-    let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
-    mon.run();
+    // Uart0::put_uint(core as u64);
+    // Uart0::puts("Hallo\n");
+    // peripherals::led_off();
+    // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
+    // mon.run();
 
     loop {
         core::hint::spin_loop();
+        peripherals::blink_led();
     }
 }
 

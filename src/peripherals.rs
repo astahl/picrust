@@ -1,14 +1,42 @@
 #![allow(dead_code)]
 
-fn delay(mut count: usize) {
+use self::mailbox::PropertyMessageRequest;
+
+pub fn delay(mut count: usize) {
     while count > 0 {
         count -= 1;
         core::hint::spin_loop();
     }
 }
 
+pub fn led_on() {
+    use mailbox::*;
+    let mut mailbox = Mailbox::<256>::new();
+    let _ = mailbox.request(8, &[
+        PropertyMessageRequest::SetOnboardLedStatus { pin_number: Led::Status, status: LedStatus::On },
+        PropertyMessageRequest::Null]);
+}
+
+pub fn led_off() {
+    use mailbox::*;
+    let mut mailbox = Mailbox::<256>::new();
+    let _ = mailbox.request(8, &[
+        PropertyMessageRequest::SetOnboardLedStatus { pin_number: Led::Status, status: LedStatus::Off },
+        PropertyMessageRequest::Null]);
+}
+
+pub fn blink_led() {
+    led_on();
+    delay(100000);
+    led_off();
+    delay(100000);
+}
+
 mod mmio {
+    #[cfg(target_arch="arm")]
     const PERIPHERAL_BASE: usize = 0x3F000000;
+    #[cfg(target_arch="aarch64")]
+    const PERIPHERAL_BASE: usize = 0xFE000000;
 
     pub fn write_to(ptr: *mut u32, data: u32) {
         unsafe { core::ptr::write_volatile(ptr, data) };
@@ -70,54 +98,58 @@ pub mod uart {
     use crate::peripherals::gpio;
     use crate::peripherals::mmio::MMIO;
 
-    pub struct Uart<const UART_BASE: usize>();
+    pub struct Pl011Uart<const UART_BASE: usize>();
 
-    pub type Uart0 = Uart<0x201000>;
+    pub type Uart0 = Pl011Uart<0x201000>;
+    pub type Uart2 = Pl011Uart<0x201400>;
+    pub type Uart3 = Pl011Uart<0x201600>;
+    pub type Uart4 = Pl011Uart<0x201800>;
+    pub type Uart5 = Pl011Uart<0x201a00>;
 
-    impl<const UART_BASE: usize> Uart<UART_BASE> {
-        const DR: MMIO<UART_BASE, 0x00> = MMIO();
-        const RSRECR: MMIO<UART_BASE, 0x04> = MMIO();
-        const FR: MMIO<UART_BASE, 0x18> = MMIO();
-        const ILPR: MMIO<UART_BASE, 0x20> = MMIO();
-        const IBRD: MMIO<UART_BASE, 0x24> = MMIO();
-        const FBRD: MMIO<UART_BASE, 0x28> = MMIO();
+    impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
+        const DATA_REGISTER: MMIO<UART_BASE, 0x00> = MMIO();
+        const RECV_STATUS_ERROR_CLEAR_REGISTER: MMIO<UART_BASE, 0x04> = MMIO();
+        const FLAG_REGISTER: MMIO<UART_BASE, 0x18> = MMIO();
+        const UNUSED_IRDA_REGISTER: MMIO<UART_BASE, 0x20> = MMIO();
+        const INTEGER_BAUD_RATE_DIVISOR: MMIO<UART_BASE, 0x24> = MMIO();
+        const FRACTIONAL_BAUD_RATE_DIVISOR: MMIO<UART_BASE, 0x28> = MMIO();
         // Line Control Register
-        const LCRH: MMIO<UART_BASE, 0x2C> = MMIO();
+        const LINE_CONTROL_REGISTER: MMIO<UART_BASE, 0x2C> = MMIO();
         // CR Control Register
-        const CR: MMIO<UART_BASE, 0x30> = MMIO();
-        const IFLS: MMIO<UART_BASE, 0x34> = MMIO();
+        const CONTROL_REGISTER: MMIO<UART_BASE, 0x30> = MMIO();
+        const INTERRUPT_FIFO_LEVEL_SELECT: MMIO<UART_BASE, 0x34> = MMIO();
         // Interrupt Mask Set-Clear
-        const IMSC: MMIO<UART_BASE, 0x38> = MMIO();
-        const RIS: MMIO<UART_BASE, 0x3C> = MMIO();
-        const MIS: MMIO<UART_BASE, 0x40> = MMIO();
+        const INTERRUPT_MASK_SET_CLEAR: MMIO<UART_BASE, 0x38> = MMIO();
+        const RAW_INTERRUPT_STATUS: MMIO<UART_BASE, 0x3C> = MMIO();
+        const MASKED_INTERRUPT_STATUS: MMIO<UART_BASE, 0x40> = MMIO();
         // ICR Interrupt Clear Register
-        const ICR: MMIO<UART_BASE, 0x44> = MMIO();
-        const DMACR: MMIO<UART_BASE, 0x48> = MMIO();
-        const ITCR: MMIO<UART_BASE, 0x80> = MMIO();
-        const ITIP: MMIO<UART_BASE, 0x84> = MMIO();
-        const ITOP: MMIO<UART_BASE, 0x88> = MMIO();
-        const TDR: MMIO<UART_BASE, 0x8C> = MMIO();
+        const INTERRUPT_CLEAR_REGISTER: MMIO<UART_BASE, 0x44> = MMIO();
+        const DMA_CONTROL_REGISTER: MMIO<UART_BASE, 0x48> = MMIO();
+        const INTEGRATION_TEST_CONTROL_REGISTER: MMIO<UART_BASE, 0x80> = MMIO();
+        const INTEGRATION_TEST_ITIP: MMIO<UART_BASE, 0x84> = MMIO();
+        const INTEGRATION_TEST_ITOP: MMIO<UART_BASE, 0x88> = MMIO();
+        const TEST_DATA_REGISTER: MMIO<UART_BASE, 0x8C> = MMIO();
     
         pub fn init() {
             // disable UART
-            Self::CR.write(0x00000000);
+            Self::CONTROL_REGISTER.write(0x00000000);
     
             gpio::Gpio::init_uart0();
     
             // Clear all pending UART interrupts
-            Self::ICR.write(0x7FF);
+            Self::INTERRUPT_CLEAR_REGISTER.write(0x7FF);
     
             // Set UART Baud Rate to 115200 (look at docs for formula for values)
-            Self::IBRD.write(1);
-            Self::FBRD.write(40);
+            Self::INTEGER_BAUD_RATE_DIVISOR.write(1);
+            Self::FRACTIONAL_BAUD_RATE_DIVISOR.write(40);
     
             // Set Line Control Register to 01110000
             //                                 ^ use 8 item FIFO
             //                               ^^ 8 bit words
-            Self::LCRH.write((1 << 4) | (1 << 5) | (1 << 6));
+            Self::LINE_CONTROL_REGISTER.write((1 << 4) | (1 << 5) | (1 << 6));
     
             // Set Interrupt Mask Set-Clear Register to 11111110010, disabling all UART interrupts
-            Self::IMSC.write(
+            Self::INTERRUPT_MASK_SET_CLEAR.write(
                 (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10),
             );
     
@@ -125,14 +157,14 @@ pub mod uart {
             //                      ^ enable Hardware
             //              ^ enable receive
             //             ^ enable transmit
-            Self::CR.write((1 << 0) | (1 << 8) | (1 << 9));
+            Self::CONTROL_REGISTER.write((1 << 0) | (1 << 8) | (1 << 9));
         }
 
         pub fn putc(c: u8) {
             while Self::flags().transmit_fifo_full() {
                 core::hint::spin_loop();
             }
-            Self::DR.write(c as u32);
+            Self::DATA_REGISTER.write(c as u32);
         }
 
         pub fn put_hex(byte: u8) {
@@ -181,7 +213,7 @@ pub mod uart {
             while Self::flags().receive_fifo_empty() {
                 core::hint::spin_loop();
             }
-            let read = Self::DR.read();
+            let read = Self::DATA_REGISTER.read();
             let status = UartStatus(read >> 8);
             if status.is_clear() {
                 Ok(read as u8)
@@ -196,7 +228,7 @@ pub mod uart {
             }
             let mut count: usize = 0;
             while !Self::flags().receive_fifo_empty() {
-                let read = Self::DR.read();
+                let read = Self::DATA_REGISTER.read();
                 let status = UartStatus(read >> 8);
                 if !status.is_clear() {
                     return Err(status);
@@ -219,7 +251,7 @@ pub mod uart {
         }
 
         pub fn flags() -> UartFlags {
-            UartFlags(Self::FR.read())
+            UartFlags(Self::FLAG_REGISTER.read())
         }
     }
 
@@ -354,10 +386,46 @@ pub mod mailbox {
     }
 
     #[repr(u32)]
+    #[derive(Copy, Clone)]
+    pub enum LedStatus {
+        Off = 0,
+        On = 1
+    }
+
+    #[repr(u32)]
+    #[derive(Copy, Clone)]
+    pub enum Led {
+        Status = 42,
+        Power = 130
+    }
+
+    #[repr(u32)]
+    #[derive(Copy, Clone)]
+    pub enum PixelOrder {
+        Bgr = 0,
+        Rgb = 1
+    }
+
+    #[repr(u32)]
+    #[derive(Copy, Clone)]
+    pub enum AlphaMode {
+        Enabled0Opaque = 0,
+        Enabled0Transparent = 1,
+        Ignored
+    }
+
+    #[repr(u32)]
+    #[derive(Copy, Clone)]
     pub enum PropertyMessageRequest {
         Null = 0,
         VcGetFirmwareRevision = 0x00000001,
         HwGetBoardModel = 0x00010001,
+        GetEdidBlock {
+            block_number: u32
+        } = 0x00030020,
+        GetOnboardLedStatus  = 0x00030041,
+        TestOnboardLedStatus { pin_number: Led, status: LedStatus } = 0x00034041,
+        SetOnboardLedStatus { pin_number: Led, status: LedStatus } = 0x00038041,
         FbAllocateBuffer { alignment_bytes: u32 } = 0x00040001,
         FbReleaseBuffer = 0x00048001,
         FbGetPhysicalDimensions = 0x00040003,
@@ -369,7 +437,16 @@ pub mod mailbox {
         FbGetDepth = 0x00040005,
         FbTestDepth { bpp: u32 } = 0x00044005,
         FbSetDepth { bpp: u32 } = 0x00048005,
+        FbGetPixelOrder = 0x00040006,
+        FbTestPixelOrder { state: PixelOrder } = 0x00044006,
+        FbSetPixelOrder { state: PixelOrder } = 0x00048006,
+        FbGetAlphaMode = 0x00040007,
+        FbTestAlphaMode { state: AlphaMode } = 0x00044007,
+        FbSetAlphaMode { state: AlphaMode } = 0x00048007,
         FbGetPitch = 0x00040008,
+        FbGetVirtualOffset = 0x00040009,
+        FbTestVirtualOffset { x_px: u32, y_px: u32 } = 0x00044009,
+        FbSetVirtualOffset { x_px: u32, y_px: u32 } = 0x00048009,
     }
 
     #[repr(u32)]
@@ -382,6 +459,23 @@ pub mod mailbox {
         HwGetBoardModel {
             board_model: u32,
         } = 0x00010001,
+        GetEdidBlock {
+            block_number: u32,
+            status: u32,
+            data: [u8; 128]
+        } = 0x00030020,
+        GetOnboardLedStatus {
+            pin_number: Led,
+            status: LedStatus,
+        } = 0x00030041,
+        TestOnboardLedStatus {
+            pin_number: Led,
+            status: LedStatus,
+        } = 0x00034041,
+        SetOnboardLedStatus {
+            pin_number: Led,
+            status: LedStatus,
+        } = 0x00038041,
         FbAllocateBuffer {
             base_address_bytes: u32,
             size_bytes: u32,
@@ -420,9 +514,18 @@ pub mod mailbox {
         FbSetDepth {
             bpp: u32,
         } = 0x00048005,
+        FbGetPixelOrder { state: PixelOrder } = 0x00040006,
+        FbTestPixelOrder { state: PixelOrder } = 0x00044006,
+        FbSetPixelOrder { state: PixelOrder } = 0x00048006,
+        FbGetAlphaMode { state: AlphaMode } = 0x00040007,
+        FbTestAlphaMode { state: AlphaMode } = 0x00044007,
+        FbSetAlphaMode { state: AlphaMode } = 0x00048007,
         FbGetPitch {
             bytes_per_line: u32,
         } = 0x00040008,
+        FbGetVirtualOffset { x_px: u32, y_px: u32 } = 0x00040009,
+        FbTestVirtualOffset { x_px: u32, y_px: u32 } = 0x00044009,
+        FbSetVirtualOffset { x_px: u32, y_px: u32 } = 0x00048009,
     }
 
     impl PropertyMessageRequest {
@@ -430,12 +533,19 @@ pub mod mailbox {
             match self {
                 Self::Null | Self::FbReleaseBuffer => 0,
 
-                Self::FbTestDepth { .. }
-                | Self::FbGetPitch
+                Self::FbGetPitch
                 | Self::FbGetDepth
+                | Self::FbTestDepth { .. }
+                | Self::FbSetDepth { .. } 
                 | Self::VcGetFirmwareRevision
                 | Self::HwGetBoardModel
-                | Self::FbSetDepth { .. } => 4,
+                | Self::FbGetPixelOrder 
+                | Self::FbTestPixelOrder { .. } 
+                | Self::FbSetPixelOrder { .. } 
+                | Self::FbGetAlphaMode
+                | Self::FbTestAlphaMode { .. }
+                | Self::FbSetAlphaMode { .. }
+                => 4,
 
                 Self::FbGetPhysicalDimensions
                 | Self::FbGetVirtualDimensions
@@ -443,7 +553,16 @@ pub mod mailbox {
                 | Self::FbTestPhysicalDimensions { .. }
                 | Self::FbSetPhysicalDimensions { .. }
                 | Self::FbTestVirtualDimensions { .. }
-                | Self::FbSetVirtualDimensions { .. } => 8,
+                | Self::FbSetVirtualDimensions { .. } 
+                | Self::FbGetVirtualOffset
+                | Self::FbTestVirtualOffset { .. }
+                | Self::FbSetVirtualOffset { .. }
+                | Self::GetOnboardLedStatus
+                | Self::TestOnboardLedStatus { .. }
+                | Self::SetOnboardLedStatus { .. } 
+                => 8,
+
+                Self::GetEdidBlock { .. } => 136
             }
         }
 
@@ -581,12 +700,12 @@ pub mod mailbox {
                 buffer = rest;
             }
             self.req_res_code.clear();
-            // crate::peripherals::uart::put_hex_bytes(&self.buffer);
+            // crate::peripherals::uart::Uart0::put_hex_bytes(&self.buffer);
             self.call(channel);
 
-            // crate::peripherals::uart::put_hex_bytes(&self.req_res_code.raw_value().to_ne_bytes());
-            // crate::peripherals::uart::putc(b'\n');
-            // crate::peripherals::uart::put_hex_bytes(&self.buffer);
+            // crate::peripherals::uart::Uart0::put_hex_bytes(&self.req_res_code.raw_value().to_ne_bytes());
+            // crate::peripherals::uart::Uart0::putc(b'\n');
+            // crate::peripherals::uart::Uart0::put_hex_bytes(&self.buffer);
 
             if !self.req_res_code.is_success() {
                 return Err(self.req_res_code.raw_value());

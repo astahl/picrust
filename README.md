@@ -35,8 +35,8 @@ raspi2b              Raspberry Pi 2B (revision 1.1)
 
 * `src/main.rs` contains the entry point written in inline asm, as well as the hand-off to rust code.
 * `src/peripherals` module that has various structs and fns to interface with the various Rapsberry Pi peripherals via memory mapped i/o (`mmio`) and the "property mailbox".
-* `link.x` a linker script that defines the structure of the executable blob, and whither the RPi VC firmware will load the various binary bits. 
-* `src/monitor.rs` RuzMon. Like WozMon, but instead of being 254 bytes of decade-defining, finely tuned 6502 assembler, it's written in Rust.
+* `link.x`, `link64.x` a linker script that defines the structure of the executable blob, and whither the RPi VC firmware will load the various binary bits.
+* `src/monitor.rs` RustMon. Like WozMon, but instead of being 254 bytes of decade-defining, finely tuned 6502 assembler, it's written in Rust.
 
 ## Using the Monitor
 
@@ -45,7 +45,7 @@ raspi2b              Raspberry Pi 2B (revision 1.1)
 
 ## Future plans
 
-* RuzMon: 
+* RustMon: 
   * [ ] Writing to memory `8000: BA DD F0 0F`
   * [ ] using ranges like `8000.8100` 
   * [ ] disassembly
@@ -53,7 +53,7 @@ raspi2b              Raspberry Pi 2B (revision 1.1)
   * [ ] Put a test image onto the framebuffer that indicates if more than one core is being started (if not, we might need to wake them up manually, or use the old_kernel=1 config)
   * [ ] a simple text mode, using some character ROM dump, e.g. from the PET because it looks nice.
     * [ ] how to put a binary file into the kernel image, linker perhaps?
-  * [ ] text output of RuzMon
+  * [ ] text output of RustMon
 * USB / HID to get at keyboard input, probably Interrupt handling, oh my.
 
 ## Building, Testing, Running
@@ -65,18 +65,18 @@ cargo build --release
 will put the kernel binary into `target/armv7a-none-eabi/release/picrust`
 
 ```
-cargo run --release
+cargo run32
 ```
 
 will start qemu (make sure its on the path) with the kernel loaded into the VMs RAM.
 
-To run the system on a real pi, it might be possible -- but as of yet untested -- to simply
+To run the system on a real pi,
 
 1. take a fresh sd card, 
-2. write a raspbian 32 bit image to it, using the raspberry pi imager tool
-3. Run the command `cargo img`, which is an alias for `cargo objcopy --release -- -O binary kernel.img`
-4. replace the `kernel.img` file on your sd card with the `kernel.img` binary generated in the previous step. Remove any other .img files.
-5. stick the card into a rpi 2/3/4 and see what happens. 
-6. fiddle with the [`config.txt` file](https://www.raspberrypi.com/documentation/computers/config_txt.html) and retry. You might need to set  various parameters, for example `arm_64bit=0` and also the `video=` setting in the [`cmdline.txt` file](https://www.raspberrypi.com/documentation/computers/configuration.html#the-kernel-command-line).
+2. write a raspbian 64 bit image to it, using the raspberry pi imager tool
+3. Run the command `cargo img64`, which is an alias for `cargo objcopy --release --target aarch64_unknown_none -- -O binary kernel8.img`
+4. replace the `kernel8.img` file on your sd card with the `kernel8.img` binary generated in the previous step. Remove any other .img files.
+5. stick the card into a rpi 3/4 and see what happens. 
+6. If it doesn't work, fiddle with the [`config.txt` file](https://www.raspberrypi.com/documentation/computers/config_txt.html) and retry. You might need to set  various parameters, for example `arm_64bit=1` and also the `video=` setting in the [`cmdline.txt` file](https://www.raspberrypi.com/documentation/computers/configuration.html#the-kernel-command-line).
 
 As of now, only a simple test pattern is output via a 1280x720 framebuffer on the hdmi.

@@ -1,5 +1,7 @@
 /target
 /Cargo.lock
 kernel.img
+kernel7.img
+kernel8.img
 .DS_Store
 Desktop.ini

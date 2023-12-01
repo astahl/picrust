@@ -1,13 +1,25 @@
 [alias]
 rel="build --release"
-img="objcopy --release -- -O binary kernel.img"
+run32="run --release --target=armv7a-none-eabi"
+run64="run --release --target=aarch64-unknown-none"
+img32="objcopy --release --target=armv7a-none-eabi -- -O binary kernel7.img"
+img64="objcopy --release --target=aarch64-unknown-none -- -O binary kernel8.img"
 
 [build]
-target="armv7a-none-eabi"
+target=["armv7a-none-eabi", "aarch64-unknown-none"]
 
 [target.armv7a-none-eabi]
 runner="qemu-system-arm -m 1G -M raspi2b -serial stdio -kernel"
 rustflags=[
+    "-C", "force-unwind-tables=false",
     "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=-s"
+]
+
+[target.aarch64-unknown-none]
+runner="qemu-system-aarch64 -m 1G -M raspi3b -serial stdio -kernel"
+rustflags=[
+    "-C", "force-unwind-tables=false",
+    "-C", "link-arg=-Tlink64.x",
     "-C", "link-arg=-s"
 ]
