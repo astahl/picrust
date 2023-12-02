@@ -22,43 +22,47 @@ fn clear_bss() {
     unsafe {
         for address in __bss_start..__bss_end {
             *(address as *mut u8) = 0;
-            
         }
     }
 }
 
+
+fn initialize_global() {
+    clear_bss();
+    peripherals::led_on();
+}
+
 #[no_mangle]
 pub extern "C" fn kernel_main() {
-    clear_bss();
-
-    peripherals::led_on();
-    use peripherals::uart::Uart0;
-    let core = get_core_num() as usize;
-    if let Some(framebuffer) = framebuffer::Framebuffer::new() {
-        for y in 300..600 {
-            for x in 400..800 {
-                framebuffer.set_pixel_a8r8g8b8(x, y, 0xFF00FF00);
-            }
-            peripherals::blink_led();
-        }
-        framebuffer.set_pixel_a8r8g8b8(200, 200, 0xFFFFFFFF);
-        framebuffer.set_pixel_a8r8g8b8(201, 201, 0x00FFFFFF);
-        framebuffer.set_pixel_a8r8g8b8(202, 202, 0xFF00FFFF);
-        framebuffer.set_pixel_a8r8g8b8(203, 203, 0xFFFF00FF);
-        framebuffer.set_pixel_a8r8g8b8(204, 204, 0xFFFFFF00);
-        framebuffer.set_pixel_a8r8g8b8(205, 205, 0xFFFFFFFF);
+    let core_num = get_core_num();
+    match core_num {
+        0 => initialize_global(),
+        _ => {}
     }
 
+    if let Some(framebuffer) = framebuffer::Framebuffer::new() {
+        for y in 400..800 {
+            for x in 400..800 {
+                let x = x + (core_num * 400) as u32;
+                framebuffer.set_pixel_a8r8g8b8(x, y, 0xFF00FF00);
+                crate::peripherals::delay(100000);
+            }
+        }
+    }
+    
+    use peripherals::uart::Uart0;
     Uart0::init();
     // Uart0::put_uint(core as u64);
-    // Uart0::puts("Hallo\n");
+    Uart0::puts("Hallo\n");
     // peripherals::led_off();
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();
 
     loop {
         core::hint::spin_loop();
-        peripherals::blink_led();
+        if core_num == 0 {
+            peripherals::blink_led();
+        }
     }
 }
 
@@ -89,7 +93,7 @@ global_asm!(
     "and r1, r1, #3",
     "cmp r1, #0",
     "bne halt",
-    //@ Set the stack pointer to start of executable code, grow down)
+    // //@ Set the stack pointer to start of executable code, grow down)
     "ldr r1, =_start",
     "mov sp, r1",
     //@ Jump to kernel_main

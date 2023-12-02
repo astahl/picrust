@@ -1,6 +1,6 @@
 pub struct Framebuffer {
     ptr: *mut u8,
-    pub size_bytes: u32,
+    size_bytes: u32,
     width_px: u32,
     height_px: u32,
     bits_per_pixel: u32,
@@ -29,7 +29,6 @@ impl Framebuffer {
                 alignment_bytes: 4096,
             },
             FbGetPitch,
-            //SetOnboardLedStatus { pin_number: Led::Status, status: LedStatus::Off },
             Null,
         ];
 
@@ -47,7 +46,6 @@ impl Framebuffer {
                         size_bytes,
                     },
                     FbGetPitch { bytes_per_line: pitch_bytes },
-                    //SetOnboardLedStatus { .. },
                     Null] => {
                     let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8; // Convert GPU address to ARM address
                     Some(Self {
@@ -61,9 +59,12 @@ impl Framebuffer {
         }
     }
 
-    pub fn set_pixel_a8r8g8b8(&self, x: usize, y: usize, value: u32) {
-        unsafe {
-            *self.ptr.add(self.pitch_bytes as usize * y + x * 4).cast::<u32>() = value;
+    pub fn set_pixel_a8r8g8b8(&self, x: u32, y: u32, value: u32) {
+        let bytes_per_pixel = self.bits_per_pixel >> 3;
+        if x < self.width_px && y < self.height_px {
+            unsafe {
+                *self.ptr.add((self.pitch_bytes * y + x * bytes_per_pixel) as usize).cast::<u32>() = value;
+            }
         }
     }
 
@@ -75,11 +76,11 @@ impl Framebuffer {
     //     unsafe { core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes / 4) }
     // }
 
-    // pub fn as_slice(&self) -> &[u8] {
-    //     unsafe { core::slice::from_raw_parts(self.ptr, self.size_bytes) }
-    // }
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self.ptr, self.size_bytes as usize) }
+    }
 
-    // pub fn as_mut_slice(&mut self) -> &mut [u8] {
-    //     unsafe { core::slice::from_raw_parts_mut(self.ptr, self.size_bytes) }
-    // }
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { core::slice::from_raw_parts_mut(self.ptr, self.size_bytes as usize) }
+    }
 }
