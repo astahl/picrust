@@ -6,6 +6,7 @@ imgpi3_32="objcopy --release --target=armv7a-none-eabi --no-default-features --f
 imgpi3_64="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -O binary kernel8.img"
 imgpi4_32="objcopy --release --target=armv7a-none-eabi --no-default-features --features=raspi4 -- -O binary kernel7l.img"
 imgpi4_64="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -O binary kernel8.img"
+inspect64="objdump --release --target=aarch64-unknown-none -- -h -f -s -C"
 
 [build]
 target=["armv7a-none-eabi", "aarch64-unknown-none"]
@@ -14,7 +15,7 @@ target=["armv7a-none-eabi", "aarch64-unknown-none"]
 runner="qemu-system-arm -m 1G -M raspi2b -serial stdio -kernel"
 rustflags=[
     "-C", "force-unwind-tables=false",
-    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=-Tlink32.x",
     "-C", "link-arg=-s"
 ]
 

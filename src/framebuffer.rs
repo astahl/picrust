@@ -1,10 +1,10 @@
 pub struct Framebuffer {
     ptr: *mut u8,
-    size_bytes: u32,
-    width_px: u32,
-    height_px: u32,
-    bits_per_pixel: u32,
-    pitch_bytes: u32,
+    pub size_bytes: u32,
+    pub width_px: u32,
+    pub height_px: u32,
+    pub bits_per_pixel: u32,
+    pub pitch_bytes: u32,
 }
 
 impl Framebuffer {
@@ -15,12 +15,12 @@ impl Framebuffer {
         use PropertyMessageRequest::*;
         let messages = [
             FbSetPhysicalDimensions {
-                width_px: 1920,
-                height_px: 1080,
+                width_px: 1280,
+                height_px: 720,
             },
             FbSetVirtualDimensions {
-                width_px: 1920,
-                height_px: 1080,
+                width_px: 1280,
+                height_px: 720,
             },
             FbSetVirtualOffset { x_px: 0, y_px: 0 },
             FbSetDepth { bpp: 32 },
@@ -59,7 +59,7 @@ impl Framebuffer {
         }
     }
 
-    pub fn set_pixel_a8r8g8b8(&self, x: u32, y: u32, value: u32) {
+    pub fn set_pixel_a8b8g8r8(&self, x: u32, y: u32, value: u32) {
         let bytes_per_pixel = self.bits_per_pixel >> 3;
         if x < self.width_px && y < self.height_px {
             unsafe {
