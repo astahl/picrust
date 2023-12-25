@@ -102,6 +102,34 @@ pub extern "C" fn kernel_main() {
         Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_end) as usize).to_be_bytes()));
        // Uart0::put_hex_bytes(&((__rodata_end - __rodata_start).to_be_bytes()));
     }
+
+    Uart0::puts("ARM Memory\n");
+    if let Some(arm_memory) = peripherals::Hardware::get_arm_memory() {
+        Uart0::put_hex_bytes(&(arm_memory.base_address).to_be_bytes());
+        Uart0::put_hex_bytes(&(arm_memory.size).to_be_bytes());
+    }
+
+    Uart0::puts("VC Memory\n");
+    if let Some(vc_memory) = peripherals::Hardware::get_vc_memory() {
+        Uart0::put_hex_bytes(&(vc_memory.base_address).to_be_bytes());
+        Uart0::put_hex_bytes(&(vc_memory.size).to_be_bytes());
+    }
+
+    Uart0::puts("Board Info");
+    if let Some(board_info) = peripherals::Hardware::get_board_info() {
+        Uart0::puts("\nModel ");
+        Uart0::put_uint(board_info.model as u64);
+        Uart0::puts("\nRev ");
+        Uart0::put_uint(board_info.revision as u64);
+        Uart0::puts("\nSerial ");
+        Uart0::put_uint(board_info.serial);
+    }
+
+    Uart0::puts("\nMAC ");
+    if let Some(mac) = peripherals::Hardware::get_mac_address() {
+        Uart0::put_hex_bytes(&mac);
+    }
+
     // Uart0::put_uint(core as u64);
     Uart0::puts("Hallo\n");
     // peripherals::led_off();

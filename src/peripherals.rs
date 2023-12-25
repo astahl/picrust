@@ -454,6 +454,12 @@ pub mod mailbox {
         Null = 0,
         VcGetFirmwareRevision = 0x00000001,
         HwGetBoardModel = 0x00010001,
+        HwGetBoardRevision = 0x00010002,
+        HwGetBoardMacAddress = 0x00010003,
+        HwGetBoardSerial = 0x00010004,
+        HwGetArmMemory = 0x00010005,
+        HwGetVcMemory = 0x00010006,
+        // HwGetClocks = 0x00010007,
         GetEdidBlock {
             block_number: u32
         } = 0x00030020,
@@ -493,6 +499,12 @@ pub mod mailbox {
         HwGetBoardModel {
             board_model: u32,
         } = 0x00010001,
+        HwGetBoardRevision { board_revision: u32 }= 0x00010002,
+        HwGetBoardMacAddress { board_mac_address: [u8;6] }= 0x00010003,
+        HwGetBoardSerial { board_serial: u64 } = 0x00010004,
+        HwGetArmMemory { base_address: u32, size: u32 } = 0x00010005,
+        HwGetVcMemory { base_address: u32, size: u32 } = 0x00010006,
+        // HwGetClocks = 0x00010007,
         GetEdidBlock {
             block_number: u32,
             status: u32,
@@ -567,12 +579,13 @@ pub mod mailbox {
             match self {
                 Self::Null | Self::FbReleaseBuffer => 0,
 
-                Self::FbGetPitch
+                Self::HwGetBoardModel
+                | Self::HwGetBoardRevision
+                | Self::FbGetPitch
                 | Self::FbGetDepth
                 | Self::FbTestDepth { .. }
                 | Self::FbSetDepth { .. } 
                 | Self::VcGetFirmwareRevision
-                | Self::HwGetBoardModel
                 | Self::FbGetPixelOrder 
                 | Self::FbTestPixelOrder { .. } 
                 | Self::FbSetPixelOrder { .. } 
@@ -581,7 +594,12 @@ pub mod mailbox {
                 | Self::FbSetAlphaMode { .. }
                 => 4,
 
-                Self::FbGetPhysicalDimensions
+                Self::HwGetBoardMacAddress => 6,
+
+                Self::HwGetBoardSerial
+                | Self::HwGetArmMemory
+                | Self::HwGetVcMemory
+                | Self::FbGetPhysicalDimensions
                 | Self::FbGetVirtualDimensions
                 | Self::FbAllocateBuffer { .. }
                 | Self::FbTestPhysicalDimensions { .. }
@@ -758,6 +776,112 @@ pub mod mailbox {
                 buffer = rest;
             }
             Ok(response)
+        }
+    }
+}
+
+pub struct Hardware();
+
+pub struct Memory {
+    pub base_address: usize,
+    pub size: usize,
+}
+
+pub struct BoardInfo {
+    pub model: u32,
+    pub revision: u32,
+    pub serial: u64,
+}
+
+impl Hardware {
+    pub fn get_arm_memory() -> Option<Memory>{
+        let mut mb = mailbox::Mailbox::<256>::new();
+        let request = [
+            mailbox::PropertyMessageRequest::HwGetArmMemory,
+            mailbox::PropertyMessageRequest::Null
+        ];
+        if let Ok(response) = mb.request(8, &request) {
+            match response[0] {
+                mailbox::PropertyMessageResponse::HwGetArmMemory { base_address, size } => 
+                    Some(Memory{
+                        base_address: base_address as usize,
+                        size: size as usize
+                    })
+                ,
+                _ => None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_vc_memory() -> Option<Memory>{
+        let mut mb = mailbox::Mailbox::<256>::new();
+        let request = [
+            mailbox::PropertyMessageRequest::HwGetVcMemory,
+            mailbox::PropertyMessageRequest::Null
+        ];
+        if let Ok(response) = mb.request(8, &request) {
+            match response[0] {
+                mailbox::PropertyMessageResponse::HwGetVcMemory { base_address, size } => 
+                    Some(Memory{
+                        base_address: base_address as usize,
+                        size: size as usize
+                    })
+                ,
+                _ => None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_board_info() -> Option<BoardInfo>{
+        use mailbox::PropertyMessageRequest::*;
+        let mut mb = mailbox::Mailbox::<256>::new();
+        let request = [
+            HwGetBoardModel,
+            HwGetBoardRevision,
+            HwGetBoardSerial,
+            Null
+        ];
+        if let Ok(response) = mb.request(8, &request) {
+            use mailbox::PropertyMessageResponse::*;
+            let mut result = BoardInfo{model: 0, revision: 0, serial: 0 };
+            let mut iter = response.iter();
+            result.model = match iter.next() {
+                Some(HwGetBoardModel { board_model }) => *board_model,
+                _ => 0,
+            };
+            result.revision = match iter.next() {
+                Some(HwGetBoardRevision { board_revision }) => *board_revision,
+                _ => 0,
+            };
+            result.serial = match iter.next() {
+                Some(HwGetBoardSerial { board_serial }) => *board_serial,
+                _ => 0,
+            };
+            Some(result)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mac_address() -> Option<[u8;6]>{
+        use mailbox::PropertyMessageRequest::*;
+        let mut mb = mailbox::Mailbox::<256>::new();
+        let request = [
+            HwGetBoardMacAddress,
+            Null
+        ];
+        if let Ok(response) = mb.request(8, &request) {
+            use mailbox::PropertyMessageResponse::*;
+            match response[0] {
+                HwGetBoardMacAddress { board_mac_address } => Some(board_mac_address),
+                _ => None
+            }
+        } else {
+            None
         }
     }
 }
