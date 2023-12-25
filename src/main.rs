@@ -53,23 +53,42 @@ pub extern "C" fn kernel_main() {
 
     let font = unsafe { core::slice::from_raw_parts(core::ptr::addr_of!(__font_start), core::ptr::addr_of!(__font_end).offset_from(core::ptr::addr_of!(__font_start)).unsigned_abs()) };
 
-    if let Some(framebuffer) = framebuffer::Framebuffer::new() {
-        for y in 0..framebuffer.height_px {
-            for x in 0..framebuffer.width_px {
-                let char_index = (x / 8) as usize;
-                let char_subpixel = (x % 8, y % 8);
-                let char = font[char_index % font.len()];
-                if (char << ((8 - char_subpixel.1) * 8 + char_subpixel.0)) & (1_u64 << 63) == 0 {
-                    framebuffer.set_pixel_a8b8g8r8(x, y, 0xFF000000);
+    let text = b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+    let mapping = |c: u8| -> u8 {
+        match c {
+            0 => b' ',
+            b' '..=b'?' => c,
+            b'@'..=b'_' => c as u8 - b'@', 
+            b'a'..=b'z' => c as u8 - b'`' | 0x80,
+            _ => 255
+        }
+    };
+
+    if let Some(framebuffer) = framebuffer::Framebuffer::new(1280, 720) {
+        let repeat = (5,6);
+        let offset = (40,48);
+        let size = (framebuffer.width_px - 2 * offset.0, framebuffer.height_px - 2 * offset.1);
+        let columns = size.0 as usize / (repeat.0 * 8);
+        for y in 0..size.1 {
+            let yy = y as usize / repeat.1; 
+            for x in 0..size.0 {
+                let xx = x as usize / repeat.0;
+                let char_index = (xx / 8, yy / 8);
+                let linear_index = char_index.1 * columns + char_index.0;
+                let ch = text.get(linear_index).copied().unwrap_or_default();
+                let char = font[mapping(ch) as usize % font.len()];
+                let char_subpixel = (xx % 8, yy % 8);
+                if (char << ((7 - char_subpixel.1) * 8 + char_subpixel.0)) & (1_u64 << 63) == 0 {
+                    framebuffer.set_pixel_a8b8g8r8(x + offset.0, y + offset.1, 0xFF0000AA);
                 } else {
-                    framebuffer.set_pixel_a8b8g8r8(x, y, 0xFFFFFFFF);
+                    framebuffer.set_pixel_a8b8g8r8(x + offset.0, y + offset.1, 0xFFFFFFFF);
                 }
             }
         }
         for y in 400..800 {
             for x in 400..800 {
                 let x = x + (core_num * 400) as u32;
-                framebuffer.set_pixel_a8b8g8r8(x, y, 0xFF00FF00);
+                framebuffer.set_pixel_a8b8g8r8(x, y, 0xFF00AA00);
                // crate::peripherals::delay(100000);
             }
         }
@@ -116,7 +135,7 @@ fn get_core_num() -> usize {
 
 global_asm!(
     ".section .font",
-    ".incbin \"901447-08.bin\""
+    ".incbin \"901447-10.bin\""
 );
 
 #[cfg(target_arch = "arm")]

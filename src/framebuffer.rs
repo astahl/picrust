@@ -8,19 +8,19 @@ pub struct Framebuffer {
 }
 
 impl Framebuffer {
-    pub fn new() -> Option<Self> {
+    pub fn new(width: u32, height: u32) -> Option<Self> {
         use crate::peripherals::mailbox::*;
         let mut mailbox = Mailbox::<256>::new();
 
         use PropertyMessageRequest::*;
         let messages = [
             FbSetPhysicalDimensions {
-                width_px: 1280,
-                height_px: 720,
+                width_px: width,
+                height_px: height,
             },
             FbSetVirtualDimensions {
-                width_px: 1280,
-                height_px: 720,
+                width_px: width,
+                height_px: height,
             },
             FbSetVirtualOffset { x_px: 0, y_px: 0 },
             FbSetDepth { bpp: 32 },
