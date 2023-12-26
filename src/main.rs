@@ -5,7 +5,7 @@ mod framebuffer;
 mod monitor;
 mod peripherals;
 
-use core::arch::global_asm;
+use core::{arch::global_asm, iter::zip};
 
 #[panic_handler]
 fn on_panic(_info: &core::panic::PanicInfo) -> ! {
@@ -102,34 +102,24 @@ pub extern "C" fn kernel_main() {
         Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_end) as usize).to_be_bytes()));
        // Uart0::put_hex_bytes(&((__rodata_end - __rodata_start).to_be_bytes()));
     }
-
-    Uart0::puts("ARM Memory\n");
+    
+    let mut str_buffer = StringBuffer::<256>::new();
+    use core::fmt::Write;
     if let Some(arm_memory) = peripherals::Hardware::get_arm_memory() {
-        Uart0::put_hex_bytes(&(arm_memory.base_address).to_be_bytes());
-        Uart0::put_hex_bytes(&(arm_memory.size).to_be_bytes());
+        writeln!(str_buffer, "ARM Memory {:#X} {:#X}", arm_memory.base_address, arm_memory.size).unwrap();
     }
-
-    Uart0::puts("VC Memory\n");
     if let Some(vc_memory) = peripherals::Hardware::get_vc_memory() {
-        Uart0::put_hex_bytes(&(vc_memory.base_address).to_be_bytes());
-        Uart0::put_hex_bytes(&(vc_memory.size).to_be_bytes());
+        writeln!(str_buffer, "VC Memory {:#X} {:#X}", vc_memory.base_address, vc_memory.size).unwrap();
     }
-
-    Uart0::puts("Board Info");
     if let Some(board_info) = peripherals::Hardware::get_board_info() {
-        Uart0::puts("\nModel ");
-        Uart0::put_uint(board_info.model as u64);
-        Uart0::puts("\nRev ");
-        Uart0::put_uint(board_info.revision as u64);
-        Uart0::puts("\nSerial ");
-        Uart0::put_uint(board_info.serial);
+        writeln!(str_buffer, "Board Model {} Rev {} Serial {}", board_info.model, board_info.revision, board_info.serial).unwrap();
     }
-
-    Uart0::puts("\nMAC ");
+    
     if let Some(mac) = peripherals::Hardware::get_mac_address() {
-        Uart0::put_hex_bytes(&mac);
+        writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     }
-
+    
+    Uart0::puts(str_buffer.str());
     // Uart0::put_uint(core as u64);
     Uart0::puts("Hallo\n");
     // peripherals::led_off();
@@ -211,3 +201,38 @@ global_asm!(
     // In case it does return, halt the master core too
     "b       1b"
 );
+
+
+struct StringBuffer<const CAPACITY: usize> {
+    data: [u8; CAPACITY],
+    len: usize
+}
+
+impl<const CAPACITY: usize> StringBuffer<CAPACITY> {
+    pub fn new() -> Self {
+        Self { data: [0; CAPACITY], len: 0 }
+    }
+
+    pub fn str(&self) -> &str {
+        unsafe { core::str::from_utf8_unchecked(&self.data.split_at(self.len).0) }
+    }
+
+    pub fn reset(&mut self) {
+        self.len = 0;
+    }
+}
+
+impl<const CAPACITY: usize> core::fmt::Write for StringBuffer<CAPACITY> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let new_length = s.len() + self.len;
+        if CAPACITY < new_length {
+            Err(core::fmt::Error{})
+        } else {
+            unsafe {
+                core::ptr::copy_nonoverlapping(s.as_ptr(), self.data.as_mut_ptr().add(self.len), s.len());
+            }
+            self.len = new_length;
+            Ok({})
+        }
+    }
+}   
