@@ -10,7 +10,7 @@ use core::arch::global_asm;
 #[panic_handler]
 fn on_panic(_info: &core::panic::PanicInfo) -> ! {
     loop {
-        hal::led::blink_led();
+        hal::led::status_blink();
     }
 }
 
@@ -33,7 +33,7 @@ unsafe fn clear_bss() {
 
 fn initialize_global() {
     unsafe { clear_bss(); }
-    hal::led::led_on();
+    hal::led::status_set(true);
 }
 
 const FONT: [u64; 6] = [
@@ -52,8 +52,6 @@ pub extern "C" fn kernel_main() {
         0 => initialize_global(),
         _ => {}
     }
-
-    hal::led::led_on();
     
     use peripherals::uart::Uart0;
     Uart0::init();
@@ -121,7 +119,7 @@ pub extern "C" fn kernel_main() {
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();
 
-    hal::led::led_off();
+    hal::led::status_set(false);
     loop {
         core::hint::spin_loop();
     }
