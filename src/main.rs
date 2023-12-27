@@ -1,15 +1,17 @@
 #![no_std]
 #![no_main]
 
-mod framebuffer;
-mod monitor;
 mod peripherals;
+mod hal;
+mod monitor;
 
-use core::{arch::global_asm, iter::zip};
+use core::arch::global_asm;
 
 #[panic_handler]
 fn on_panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
+    loop {
+        hal::led::blink_led();
+    }
 }
 
 extern "C" {
@@ -31,7 +33,7 @@ unsafe fn clear_bss() {
 
 fn initialize_global() {
     unsafe { clear_bss(); }
-    peripherals::led_on();
+    hal::led::led_on();
 }
 
 const FONT: [u64; 6] = [
@@ -51,6 +53,25 @@ pub extern "C" fn kernel_main() {
         _ => {}
     }
 
+    hal::led::led_on();
+    
+    use peripherals::uart::Uart0;
+    Uart0::init();
+    unsafe { 
+        Uart0::put_hex_bytes(&(FONT.as_ptr() as usize).to_be_bytes());
+        Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_start) as usize).to_be_bytes()));
+        Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_end) as usize).to_be_bytes()));
+        // Uart0::put_hex_bytes(&((__rodata_end - __rodata_start).to_be_bytes()));
+    }
+
+    let fb = hal::framebuffer::Framebuffer::new(1280, 720).unwrap();
+
+    for y in 0..fb.height_px {
+        for x in 0..fb.width_px {
+            fb.set_pixel_a8b8g8r8(x, y, 0xff000000 | (x ^ y) | x << 16)
+        }
+    }
+
     let font = unsafe { core::slice::from_raw_parts(core::ptr::addr_of!(__font_start), core::ptr::addr_of!(__font_end).offset_from(core::ptr::addr_of!(__font_start)).unsigned_abs()) };
 
     let text = b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
@@ -64,75 +85,49 @@ pub extern "C" fn kernel_main() {
         }
     };
 
-    if let Some(framebuffer) = framebuffer::Framebuffer::new(1280, 720) {
-        let repeat = (5,6);
-        let offset = (40,48);
-        let size = (framebuffer.width_px - 2 * offset.0, framebuffer.height_px - 2 * offset.1);
-        let columns = size.0 as usize / (repeat.0 * 8);
-        for y in 0..size.1 {
-            let yy = y as usize / repeat.1; 
-            for x in 0..size.0 {
-                let xx = x as usize / repeat.0;
-                let char_index = (xx / 8, yy / 8);
-                let linear_index = char_index.1 * columns + char_index.0;
-                let ch = text.get(linear_index).copied().unwrap_or_default();
-                let char = font[mapping(ch) as usize % font.len()];
-                let char_subpixel = (xx % 8, yy % 8);
-                if (char << ((7 - char_subpixel.1) * 8 + char_subpixel.0)) & (1_u64 << 63) == 0 {
-                    framebuffer.set_pixel_a8b8g8r8(x + offset.0, y + offset.1, 0xFF0000AA);
-                } else {
-                    framebuffer.set_pixel_a8b8g8r8(x + offset.0, y + offset.1, 0xFFFFFFFF);
-                }
-            }
-        }
-        for y in 400..800 {
-            for x in 400..800 {
-                let x = x + (core_num * 400) as u32;
-                framebuffer.set_pixel_a8b8g8r8(x, y, 0xFF00AA00);
-               // crate::peripherals::delay(100000);
-            }
-        }
-    }
-    
-    use peripherals::uart::Uart0;
-    Uart0::init();
-    unsafe { 
-        Uart0::put_hex_bytes(&(FONT.as_ptr() as usize).to_be_bytes());
-        Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_start) as usize).to_be_bytes()));
-        Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_end) as usize).to_be_bytes()));
-       // Uart0::put_hex_bytes(&((__rodata_end - __rodata_start).to_be_bytes()));
-    }
-    
-    let mut str_buffer = StringBuffer::<256>::new();
+    fb.write_text(text, font, mapping);
+
+    let mut str_buffer = StringBuffer::<2048>::new();
     use core::fmt::Write;
-    if let Some(arm_memory) = peripherals::Hardware::get_arm_memory() {
+    writeln!(str_buffer, "Hello! {}", 123).unwrap();
+    if let Some(arm_memory) = hal::info::get_arm_memory() {
         writeln!(str_buffer, "ARM Memory {:#X} {:#X}", arm_memory.base_address, arm_memory.size).unwrap();
     }
-    if let Some(vc_memory) = peripherals::Hardware::get_vc_memory() {
+    if let Some(vc_memory) = hal::info::get_vc_memory() {
         writeln!(str_buffer, "VC Memory {:#X} {:#X}", vc_memory.base_address, vc_memory.size).unwrap();
     }
-    if let Some(board_info) = peripherals::Hardware::get_board_info() {
-        writeln!(str_buffer, "Board Model {} Rev {} Serial {}", board_info.model, board_info.revision, board_info.serial).unwrap();
+    if let Some(board_info) = hal::info::get_board_info() {
+        writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
     }
-    
-    if let Some(mac) = peripherals::Hardware::get_mac_address() {
+    if let Some(mac) = hal::info::get_mac_address() {
         writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     }
+
+    for edid in hal::display::EdidIterator::new() {
+        writeln!(str_buffer, "EDID BLOCK {}", edid.0).unwrap();
+        for byte in edid.1 {
+            write!(str_buffer, "{:02X} ", byte).unwrap();
+        }
+    }
+    writeln!(str_buffer, "Bye!").unwrap();
+    let text = str_buffer.str().as_bytes();
     
+    fb.write_text(text, font, mapping);
+
     Uart0::puts(str_buffer.str());
     // Uart0::put_uint(core as u64);
     Uart0::puts("Hallo\n");
-    // peripherals::led_off();
+    // 
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();
 
+    hal::led::led_off();
     loop {
         core::hint::spin_loop();
-        if core_num == 0 {
-            peripherals::blink_led();
-        }
     }
 }
+
+
 
 fn get_core_num() -> usize {
     let mut core_num: usize;
@@ -202,6 +197,12 @@ global_asm!(
     "b       1b"
 );
 
+pub fn delay(mut count: usize) {
+    while count > 0 {
+        count -= 1;
+        core::hint::spin_loop();
+    }
+}
 
 struct StringBuffer<const CAPACITY: usize> {
     data: [u8; CAPACITY],

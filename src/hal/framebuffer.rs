@@ -83,4 +83,27 @@ impl Framebuffer {
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         unsafe { core::slice::from_raw_parts_mut(self.ptr, self.size_bytes as usize) }
     }
+
+    pub fn write_text(&self, text: &[u8], font: &[u64], mapping: impl Fn(u8) -> u8) {
+        let repeat = (2,2);
+        let offset = (40,48);
+        let size = (self.width_px - 2 * offset.0, self.height_px - 2 * offset.1);
+        let columns = size.0 as usize / (repeat.0 * 8);
+        for y in 0..size.1 {
+            let yy = y as usize / repeat.1; 
+            for x in 0..size.0 {
+                let xx = x as usize / repeat.0;
+                let char_index = (xx / 8, yy / 8);
+                let linear_index = char_index.1 * columns + char_index.0;
+                let ch = text.get(linear_index).copied().unwrap_or_default();
+                let char = font[mapping(ch) as usize % font.len()];
+                let char_subpixel = (xx % 8, yy % 8);
+                if (char << ((7 - char_subpixel.1) * 8 + char_subpixel.0)) & (1_u64 << 63) == 0 {
+                    self.set_pixel_a8b8g8r8(x + offset.0, y + offset.1, 0xFF0000AA);
+                } else {
+                    self.set_pixel_a8b8g8r8(x + offset.0, y + offset.1, 0xFFFFFFFF);
+                }
+            }
+        }
+    }
 }
