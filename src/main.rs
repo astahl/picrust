@@ -55,12 +55,6 @@ pub extern "C" fn kernel_main() {
     
     use peripherals::uart::Uart0;
     Uart0::init();
-    unsafe { 
-        Uart0::put_hex_bytes(&(FONT.as_ptr() as usize).to_be_bytes());
-        Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_start) as usize).to_be_bytes()));
-        Uart0::put_hex_bytes(&((core::ptr::addr_of!(__rodata_end) as usize).to_be_bytes()));
-        // Uart0::put_hex_bytes(&((__rodata_end - __rodata_start).to_be_bytes()));
-    }
 
     let fb = hal::framebuffer::Framebuffer::new(1280, 720).unwrap();
 
@@ -85,36 +79,36 @@ pub extern "C" fn kernel_main() {
 
     fb.write_text(text, font, mapping);
 
-    let mut str_buffer = StringBuffer::<2048>::new();
+    let mut str_buffer = StringBuffer::<1024>::new();
     use core::fmt::Write;
     writeln!(str_buffer, "Hello! {}", 123).unwrap();
-    if let Some(arm_memory) = hal::info::get_arm_memory() {
-        writeln!(str_buffer, "ARM Memory {:#X} {:#X}", arm_memory.base_address, arm_memory.size).unwrap();
-    }
-    if let Some(vc_memory) = hal::info::get_vc_memory() {
-        writeln!(str_buffer, "VC Memory {:#X} {:#X}", vc_memory.base_address, vc_memory.size).unwrap();
-    }
-    if let Some(board_info) = hal::info::get_board_info() {
-        writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
-    }
-    if let Some(mac) = hal::info::get_mac_address() {
-        writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
-    }
+    // if let Some(arm_memory) = hal::info::get_arm_memory() {
+    //     writeln!(str_buffer, "ARM Memory {:#X} {:#X}", arm_memory.base_address, arm_memory.size).unwrap();
+    // }
+    // if let Some(vc_memory) = hal::info::get_vc_memory() {
+    //     writeln!(str_buffer, "VC Memory {:#X} {:#X}", vc_memory.base_address, vc_memory.size).unwrap();
+    // }
+    // if let Some(board_info) = hal::info::get_board_info() {
+    //     writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
+    // }
+    // if let Some(mac) = hal::info::get_mac_address() {
+    //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
+    // }
 
-    for edid in hal::display::EdidIterator::new() {
-        writeln!(str_buffer, "EDID BLOCK {}", edid.0).unwrap();
-        for byte in edid.1 {
-            write!(str_buffer, "{:02X} ", byte).unwrap();
-        }
-    }
+    // for edid in hal::display::EdidIterator::new().take(2) {
+    //     writeln!(str_buffer, "EDID BLOCK {}", edid.0).unwrap();
+    //     for byte in edid.1 {
+    //         write!(str_buffer, "{:02X} ", byte).unwrap();
+    //     }
+    // }
     writeln!(str_buffer, "Bye!").unwrap();
     let text = str_buffer.str().as_bytes();
     
     fb.write_text(text, font, mapping);
 
-    Uart0::puts(str_buffer.str());
+    // Uart0::puts(str_buffer.str());
     // Uart0::put_uint(core as u64);
-    Uart0::puts("Hallo\n");
+    // Uart0::puts("Hallo\n");
     // 
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();

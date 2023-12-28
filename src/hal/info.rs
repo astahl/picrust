@@ -13,20 +13,15 @@ pub struct BoardInfo {
 
 pub fn get_arm_memory() -> Option<Memory>{
     let mut mb = mailbox::Mailbox::<256>::new();
-    let request = [
-        mailbox::PropertyMessageRequest::HwGetArmMemory,
-        mailbox::PropertyMessageRequest::Null
-    ];
-    if let Ok(response) = mb.request(8, &request) {
-        match response[0] {
-            mailbox::PropertyMessageResponse::HwGetArmMemory { base_address, size } => 
-                Some(Memory{
-                    base_address: base_address as usize,
-                    size: size as usize
-                })
-            ,
-            _ => None
-        }
+    use mailbox::PropertyMessageRequest::*;
+    mb.push_tag(HwGetArmMemory);
+    mb.push_tag(Null);
+    if mb.submit_messages(8).is_ok() {
+        let (base_address, size): (u32, u32) = mb.pop_values();
+        Some(Memory{
+            base_address: base_address as usize,
+            size: size as usize
+        })
     } else {
         None
     }
@@ -34,20 +29,15 @@ pub fn get_arm_memory() -> Option<Memory>{
 
 pub fn get_vc_memory() -> Option<Memory>{
     let mut mb = mailbox::Mailbox::<256>::new();
-    let request = [
-        mailbox::PropertyMessageRequest::HwGetVcMemory,
-        mailbox::PropertyMessageRequest::Null
-    ];
-    if let Ok(response) = mb.request(8, &request) {
-        match response[0] {
-            mailbox::PropertyMessageResponse::HwGetVcMemory { base_address, size } => 
-                Some(Memory{
-                    base_address: base_address as usize,
-                    size: size as usize
-                })
-            ,
-            _ => None
-        }
+    use mailbox::PropertyMessageRequest::*;
+    mb.push_tag(HwGetVcMemory);
+    mb.push_tag(Null);
+    if mb.submit_messages(8).is_ok() {
+        let (base_address, size): (u32, u32) = mb.pop_values();
+        Some(Memory{
+            base_address: base_address as usize,
+            size: size as usize
+        })
     } else {
         None
     }
@@ -56,29 +46,15 @@ pub fn get_vc_memory() -> Option<Memory>{
 pub fn get_board_info() -> Option<BoardInfo>{
     use mailbox::PropertyMessageRequest::*;
     let mut mb = mailbox::Mailbox::<256>::new();
-    let request = [
-        HwGetBoardModel,
-        HwGetBoardRevision,
-        HwGetBoardSerial,
-        Null
-    ];
-    if let Ok(response) = mb.request(8, &request) {
-        use mailbox::PropertyMessageResponse::*;
-        let mut result = BoardInfo{model: 0, revision: 0, serial: 0 };
-        let mut iter = response.iter();
-        result.model = match iter.next() {
-            Some(HwGetBoardModel { board_model }) => *board_model,
-            _ => 0,
-        };
-        result.revision = match iter.next() {
-            Some(HwGetBoardRevision { board_revision }) => *board_revision,
-            _ => 0,
-        };
-        result.serial = match iter.next() {
-            Some(HwGetBoardSerial { board_serial }) => *board_serial,
-            _ => 0,
-        };
-        Some(result)
+    mb.push_tag(HwGetBoardModel);
+    mb.push_tag(HwGetBoardRevision);
+    mb.push_tag(HwGetBoardSerial);
+    mb.push_tag(Null);
+    if mb.submit_messages(8).is_ok() {
+        let model: u32 = mb.pop_values();
+        let revision: u32 = mb.pop_values();
+        let serial: u64 = mb.pop_values();
+        Some(BoardInfo{model, revision, serial })
     } else {
         None
     }
@@ -87,16 +63,11 @@ pub fn get_board_info() -> Option<BoardInfo>{
 pub fn get_mac_address() -> Option<[u8;6]>{
     use mailbox::PropertyMessageRequest::*;
     let mut mb = mailbox::Mailbox::<256>::new();
-    let request = [
-        HwGetBoardMacAddress,
-        Null
-    ];
-    if let Ok(response) = mb.request(8, &request) {
-        use mailbox::PropertyMessageResponse::*;
-        match response[0] {
-            HwGetBoardMacAddress { board_mac_address } => Some(board_mac_address),
-            _ => None
-        }
+    mb.push_tag(HwGetBoardMacAddress);
+    mb.push_tag(Null);
+    if mb.submit_messages(8).is_ok() {
+        let board_mac_address: [u8;6] = mb.pop_values();
+        Some(board_mac_address)
     } else {
         None
     }

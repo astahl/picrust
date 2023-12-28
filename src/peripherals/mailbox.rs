@@ -1,9 +1,13 @@
+use core::ptr::read_volatile;
+
 use crate::peripherals::mmio;
 use crate::peripherals::mmio::MMIO;
 
 
 #[repr(align(16), C)]
 pub struct Mailbox<const BUFFER_SIZE: usize> {
+    write_offset: usize,
+    read_offset: usize,
     size: u32,
     req_res_code: ReqResCode,
     buffer: [u8; BUFFER_SIZE],
@@ -76,6 +80,7 @@ pub enum AlphaMode {
     Enabled0Transparent = 1,
     Ignored
 }
+
 
 #[repr(u32)]
 #[derive(Copy, Clone)]
@@ -204,46 +209,47 @@ pub enum PropertyMessageResponse {
 }
 
 impl PropertyMessageRequest {
-    const fn value_buffer_len(&self) -> u32 {
+    const fn value_buffer_len(&self) -> (u32, u32) {
         match self {
-            Self::Null | Self::FbReleaseBuffer => 0,
+            Self::Null | Self::FbReleaseBuffer => (0,0),
 
-            Self::HwGetBoardModel
+            Self::HwGetBoardModel 
             | Self::HwGetBoardRevision
             | Self::FbGetPitch
             | Self::FbGetDepth
-            | Self::FbTestDepth { .. }
-            | Self::FbSetDepth { .. } 
             | Self::VcGetFirmwareRevision
             | Self::FbGetPixelOrder 
+            | Self::FbGetAlphaMode => (0,4),
+
+            Self::FbTestDepth { .. }
+            | Self::FbSetDepth { .. } 
             | Self::FbTestPixelOrder { .. } 
             | Self::FbSetPixelOrder { .. } 
-            | Self::FbGetAlphaMode
             | Self::FbTestAlphaMode { .. }
             | Self::FbSetAlphaMode { .. }
-            => 4,
+            => (4,4),
 
-            Self::HwGetBoardMacAddress => 6,
+            Self::HwGetBoardMacAddress => (0,6),
 
             Self::HwGetBoardSerial
             | Self::HwGetArmMemory
             | Self::HwGetVcMemory
             | Self::FbGetPhysicalDimensions
             | Self::FbGetVirtualDimensions
-            | Self::FbAllocateBuffer { .. }
-            | Self::FbTestPhysicalDimensions { .. }
+            | Self::FbGetVirtualOffset
+            | Self::GetOnboardLedStatus
+            => (0,8),
+            Self::FbAllocateBuffer { .. } => (4,8),
+            Self::FbTestPhysicalDimensions { .. }
             | Self::FbSetPhysicalDimensions { .. }
             | Self::FbTestVirtualDimensions { .. }
             | Self::FbSetVirtualDimensions { .. } 
-            | Self::FbGetVirtualOffset
             | Self::FbTestVirtualOffset { .. }
             | Self::FbSetVirtualOffset { .. }
-            | Self::GetOnboardLedStatus
             | Self::TestOnboardLedStatus { .. }
-            | Self::SetOnboardLedStatus { .. } 
-            => 8,
+            | Self::SetOnboardLedStatus { .. } => (8,8),
 
-            Self::GetEdidBlock { .. } => 136
+            Self::GetEdidBlock { .. } => (4, 136)
         }
     }
 
@@ -255,73 +261,75 @@ impl PropertyMessageRequest {
                 4
             },
             _ => {
-                let len = self.value_buffer_len();
+                let (req_len, res_len) = self.value_buffer_len();
+                let max_len = req_len.max(res_len);
                 unsafe {
                     let src: *const u32 = <*const _>::from(self).cast();
                     let dst: *mut u32 = buffer.as_mut_ptr().cast();
                     // copy discriminant
                     core::ptr::write_volatile(dst, *src);
                     // write value buffer length
-                    core::ptr::write_volatile(dst.add(1), len);
+                    core::ptr::write_volatile(dst.add(1), max_len);
                     // write zero req / resp field
                     core::ptr::write_volatile(dst.add(2), 0);
                     // copy value buffer
-                    let padded_length = (len as usize + 3) / 4;
+                    let padded_length = (req_len as usize + 3) / 4;
                     for i in 0..padded_length {
                         core::ptr::write_volatile(dst.add(3 + i), *src.add(1 + i));
                     }
                 }
-                len as usize + 12
+                max_len as usize + 12
             }
         }
     }
 
-    pub const fn copied_len(&self) -> usize {
+    pub fn copied_len(&self) -> usize {
         match self {
             Self::Null => 4,
-            _ => ((self.value_buffer_len() as usize + 3) & !0b11) + 12,
+            _ => {
+                let (req_len, res_len) = self.value_buffer_len();
+                let max_len = req_len.max(res_len);
+                ((max_len as usize + 3) & !0b11) + 12
+            },
         }
     }
 }
 
 impl PropertyMessageResponse {
-    pub fn fill_from(&mut self, buffer: &[u8]) {
+    pub fn fill_from(&mut self, buffer: &[u8]) -> usize {
         unsafe {
-            let ptr = buffer.as_ptr() as *const u32;
-            let mut this = <*mut _>::from(self).cast::<u32>();
-            core::ptr::copy_nonoverlapping(ptr, this, 1);
-            if *ptr == 0 {
-                return;
+            let src: *const u32 = buffer.as_ptr().cast();
+            let dst: *mut u32 = <*mut _>::from(self).cast();
+
+            let discriminant = core::ptr::read_volatile(src);
+            if discriminant == 0 {
+                return 4;
             }
-            let ptr = ptr.add(2);
-            let value_buffer_len = *ptr & 0x7fffffff;
-            let ptr = ptr.add(1);
-            this = this.add(1);
-            let value_ptr = this.cast::<u8>();
-            core::ptr::copy_nonoverlapping(
-                ptr.cast::<u8>(),
-                value_ptr,
-                value_buffer_len as usize,
-            );
+            *dst = discriminant;
+            let value_buffer_len = core::ptr::read_volatile(src.add(1));
+            let req_res_field = core::ptr::read_volatile(src.add(2));
+            let value_len_bytes = req_res_field & 0x7fff_ffff;
+            
+            let src_bytes: *const u8 = src.add(3).cast();
+            let dst_bytes: *mut u8 = dst.add(1).cast();
+            
+            for i in 0..(value_len_bytes as usize) {
+                *dst_bytes.add(i) = core::ptr::read_volatile(src_bytes.add(i));
+            }
+            ((value_buffer_len as usize + 3) & !0b11) + 12 
         }
     }
 
     pub fn peek_len(buffer: &[u8]) -> usize {
+        let src: *const u32 = buffer.as_ptr().cast();
+
         unsafe {
-            let ptr = buffer.as_ptr() as *const u32;
-            if *ptr == 0 {
+            let discriminant = core::ptr::read_volatile(src);
+            if discriminant == 0 {
                 return 4;
             }
-            let ptr = ptr.add(2);
-            let value_buffer_len = *ptr & 0x7fffffff;
-            ((value_buffer_len as usize + 3) & !0b11) + 12
-        }
-    }
-
-    pub const fn tag_name(&self) -> &str {
-        match self {
-            Self::Null => "null",
-            _ => "somethign",
+            let value_buffer_len = core::ptr::read_volatile(src.add(1));
+            ((value_buffer_len as usize + 3) & !0b11) + 12 
         }
     }
 }
@@ -339,10 +347,19 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
 
     pub const fn new() -> Self {
         Self {
+            write_offset: 0,
+            read_offset: 0,
             size: BUFFER_SIZE as u32 * 4 + 8,
             req_res_code: ReqResCode::new(),
             buffer: [0; BUFFER_SIZE],
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.write_offset = 0;
+        self.read_offset = 0;
+        self.req_res_code.clear();
+        self.buffer.fill(0);
     }
 
     fn status() -> MboxStatus {
@@ -380,44 +397,50 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         //assert_eq!(address, read_address as usize);
     }
 
-    pub fn request<const TAG_COUNT: usize>(
-        &mut self,
-        channel: u8,
-        request: &[PropertyMessageRequest; TAG_COUNT],
-    ) -> Result<[PropertyMessageResponse; TAG_COUNT], u32> {
-        self.buffer.fill(0x00);
+    pub fn push_tag(&mut self, request: PropertyMessageRequest) {
+        let (_, dst) = self.buffer.split_at_mut(self.write_offset);
+        self.write_offset += request.copy_to(dst);
+    }
 
-        let mut buffer = self.buffer.as_mut_slice();
-        for req in request {
-            let length = req.copied_len();
-            let (head, rest) = buffer.split_at_mut(length);
-            req.copy_to(head);
-            buffer = rest;
+    pub fn pop_tag(&mut self, response: &mut PropertyMessageResponse) {
+        let (_, src) = self.buffer.split_at_mut(self.read_offset);
+        self.read_offset += response.fill_from(src);
+    }
+
+    pub fn pop_values<T: Copy>(&mut self) -> T {
+        unsafe {
+            let src: *const u32 = self.buffer.as_ptr().add(self.read_offset).cast();
+            let value_buffer_len = core::ptr::read_volatile(src.add(1));
+            let bytes_len = ((value_buffer_len as usize + 3) & !0b11) + 12;
+            self.read_offset += bytes_len;
+            let data: *const T = src.add(3).cast();
+            core::ptr::read_volatile(data)
         }
-        self.req_res_code.clear();
+    }
+
+    pub fn skip_tag(&mut self) {
+        let (_, src) = self.buffer.split_at_mut(self.read_offset);
+        self.read_offset += PropertyMessageResponse::peek_len(src);
+    }
+
+
+    pub fn submit_messages(
+        &mut self,
+        channel: u8
+    ) -> Result<(), u32>{
         // crate::peripherals::uart::Uart0::put_hex_bytes(&self.buffer);
         self.call(channel);
 
         // crate::peripherals::uart::Uart0::put_hex_bytes(&self.req_res_code.raw_value().to_ne_bytes());
         // crate::peripherals::uart::Uart0::putc(b'\n');
         // crate::peripherals::uart::Uart0::put_hex_bytes(&self.buffer);
+        // crate::peripherals::uart::Uart0::putc(b'\n');
+        // crate::peripherals::uart::Uart0::putc(b'\n');
 
-        if !self.req_res_code.is_success() {
-            return Err(self.req_res_code.raw_value());
+        if self.req_res_code.is_success() {
+            Ok(())
+        } else {
+            Err(self.req_res_code.raw_value())
         }
-
-        let mut buffer = self.buffer.as_slice();
-
-        let mut response = [PropertyMessageResponse::Null; TAG_COUNT];
-
-        for res in response.as_mut_slice() {
-            let length = PropertyMessageResponse::peek_len(buffer);
-            // crate::peripherals::uart::put_uint(length as u64);
-            // crate::peripherals::uart::putc(b'\n');
-            let (head, rest) = buffer.split_at(length);
-            res.fill_from(head);
-            buffer = rest;
-        }
-        Ok(response)
     }
 }

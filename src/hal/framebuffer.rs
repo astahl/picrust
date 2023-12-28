@@ -11,49 +11,43 @@ impl Framebuffer {
     pub fn new(width: u32, height: u32) -> Option<Self> {
         use crate::peripherals::mailbox::*;
         let mut mailbox = Mailbox::<256>::new();
-
-        use PropertyMessageRequest::*;
-        let messages = [
-            FbSetPhysicalDimensions {
+        {
+            use PropertyMessageRequest::*;
+            mailbox.push_tag(FbSetPhysicalDimensions {
                 width_px: width,
                 height_px: height,
-            },
-            FbSetVirtualDimensions {
-                width_px: width,
-                height_px: height,
-            },
-            FbSetVirtualOffset { x_px: 0, y_px: 0 },
-            FbSetDepth { bpp: 32 },
-            FbSetPixelOrder { state: PixelOrder::Rgb },
-            FbAllocateBuffer {
+            });
+            mailbox.push_tag(FbSetVirtualDimensions {
+                    width_px: width,
+                    height_px: height,
+                });
+            mailbox.push_tag(FbSetVirtualOffset { x_px: 0, y_px: 0 });
+            mailbox.push_tag(FbSetDepth { bpp: 32 });
+            mailbox.push_tag(FbSetPixelOrder { state: PixelOrder::Rgb });
+            mailbox.push_tag(FbAllocateBuffer {
                 alignment_bytes: 4096,
-            },
-            FbGetPitch,
-            Null,
-        ];
+            });
+            mailbox.push_tag(FbGetPitch);
+            mailbox.push_tag(Null);
+        }
 
-        if let Ok(response) = mailbox.request(8, &messages) {
-            use PropertyMessageResponse::*;
-            return match response {
-                [
-                    FbSetPhysicalDimensions { width_px, height_px}, 
-                    FbSetVirtualDimensions {..}, 
-                    FbSetVirtualOffset { .. },
-                    FbSetDepth { bpp: bits_per_pixel }, 
-                    FbSetPixelOrder { .. },
-                    FbAllocateBuffer {
-                        base_address_bytes,
-                        size_bytes,
-                    },
-                    FbGetPitch { bytes_per_line: pitch_bytes },
-                    Null] => {
-                    let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8; // Convert GPU address to ARM address
-                    Some(Self {
-                        width_px, height_px, ptr, size_bytes, bits_per_pixel, pitch_bytes
-                    })
-                }
-                _ => return None,
-            }
+        if mailbox.submit_messages(8).is_ok() {
+            let (width_px, height_px) = mailbox.pop_values();
+            // FbSetVirtualDimensions {..}, 
+            mailbox.skip_tag();
+            // FbSetVirtualOffset { .. },
+            mailbox.skip_tag();
+            let bits_per_pixel: u32 = mailbox.pop_values();
+            // FbSetPixelOrder { .. },
+            mailbox.skip_tag();
+
+            let (base_address_bytes, size_bytes): (u32, u32) = mailbox.pop_values();
+            let pitch_bytes: u32 = mailbox.pop_values();
+
+            let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
+            Some(Self {
+                width_px, height_px, ptr, size_bytes, bits_per_pixel, pitch_bytes
+            })
         } else {
             return None;
         }

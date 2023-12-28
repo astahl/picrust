@@ -20,28 +20,16 @@ impl core::iter::Iterator for EdidIterator {
         }
         use mailbox::PropertyMessageRequest::*;
         let mut mb = mailbox::Mailbox::<256>::new();
-        let request = [
-            GetEdidBlock { block_number: self.block_num },
-            Null
-        ];
-        if let Ok(response) = mb.request(8, &request) {
-
-            use mailbox::PropertyMessageResponse::*;
-            match response.first() {
-                Some(GetEdidBlock { block_number, status, data }) => {
-                    //crate::peripherals::uart::Uart0::put_hex_bytes(data);
-                    if *status == 0 {
-                        self.block_num += 1;
-                    } else {
-                        self.done = true;
-                    }
-                    Some((*block_number, *data))
-                },
-                _ => {
-                    self.done = true;
-                    None
-                }
+        mb.push_tag(GetEdidBlock { block_number: self.block_num });
+        mb.push_tag(Null);
+        if mb.submit_messages(8).is_ok() {
+            let (block_number, status, data): (u32, u32, [u8; 128]) = mb.pop_values();
+            if status == 0 {
+                self.block_num += 1;
+            } else {
+                self.done = true;
             }
+            Some((block_number, data))
         } else {
             self.done = true;
             None
