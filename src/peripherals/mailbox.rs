@@ -257,16 +257,19 @@ impl PropertyMessageRequest {
             _ => {
                 let len = self.value_buffer_len();
                 unsafe {
-                    let mut ptr = buffer.as_ptr() as *mut u32;
-                    let this = <*const _>::from(self).cast::<u32>();
-                    core::ptr::copy_nonoverlapping(this, ptr, 1);
-                    ptr = ptr.add(1);
-                    *ptr = len;
-                    ptr = ptr.add(1);
-                    *ptr = 0x0;
-                    ptr = ptr.add(1);
-                    let this = this.add(1);
-                    core::ptr::copy_nonoverlapping(this, ptr, (len as usize + 3) / 4);
+                    let src: *const u32 = <*const _>::from(self).cast();
+                    let dst: *mut u32 = buffer.as_mut_ptr().cast();
+                    // copy discriminant
+                    core::ptr::write_volatile(dst, *src);
+                    // write value buffer length
+                    core::ptr::write_volatile(dst.add(1), len);
+                    // write zero req / resp field
+                    core::ptr::write_volatile(dst.add(2), 0);
+                    // copy value buffer
+                    let padded_length = (len as usize + 3) / 4;
+                    for i in 0..padded_length {
+                        core::ptr::write_volatile(dst.add(3 + i), *src.add(1 + i));
+                    }
                 }
                 len as usize + 12
             }
