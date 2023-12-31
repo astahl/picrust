@@ -1,3 +1,12 @@
+use core::fmt::DebugStruct;
+
+pub mod color {
+    pub const BLACK: u32 = 0xff_00_00_00;
+    pub const RED: u32 = 0xff_00_00_ff;
+    pub const GREEN: u32 = 0xff_00_ff_00;
+    pub const BLUE: u32 = 0xff_ff_00_00;
+}
+
 pub struct Framebuffer {
     ptr: *mut u8,
     pub size_bytes: u32,
@@ -62,13 +71,18 @@ impl Framebuffer {
         }
     }
 
+    pub fn clear(&self, abgr: u32) {
+        self.as_mut_pixels().fill(abgr);
+    }
+        
+
     // pub fn as_pixels(&self) -> &[u32] {
     //     unsafe { core::slice::from_raw_parts(self.ptr.cast::<u32>(), self.size_bytes / 4) }
     // }
 
-    // pub fn as_mut_pixels(&self) -> &mut [u32] {
-    //     unsafe { core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes / 4) }
-    // }
+    pub fn as_mut_pixels(&self) -> &mut [u32] {
+        unsafe { core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes as usize >> 2) }
+    }
 
     pub fn as_slice(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self.ptr, self.size_bytes as usize) }

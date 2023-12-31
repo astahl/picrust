@@ -3,6 +3,7 @@
 __rodata_start = .;
 .rodata : {	
     *(.rodata* .gnu.linkonce.r*)
+    . = ALIGN(0x1000);
     __font_start = .;
     *(.font*)
     __font_end = .;

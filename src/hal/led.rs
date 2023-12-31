@@ -4,7 +4,7 @@ use crate::delay;
 pub fn status_set(on: bool) {
     use mailbox::Mailbox;
     use mailbox::PropertyMessageRequest::*;
-    let mut mailbox = Mailbox::<256>::new();
+    let mut mailbox = Mailbox::<32>::new();
     let status = if on { mailbox::LedStatus::On } else { mailbox::LedStatus::Off};
     mailbox.push_tag(SetOnboardLedStatus { pin_number: mailbox::Led::Status, status });
     mailbox.push_tag(Null);
