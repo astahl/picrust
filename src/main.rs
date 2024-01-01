@@ -36,14 +36,6 @@ fn initialize_global() {
     hal::led::status_set(true);
 }
 
-const FONT: [u64; 6] = [
-    0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000, // space
-    0b00010000_00010000_00010000_00010000_00010000_00000000_00010000_00000000, // !
-    0b01010000_01010000_00000000_00000000_00000000_00000000_00000000_00000000, // "
-    0b00101000_01111100_00101000_01010000_11111000_01010000_10100000_00000000, // #
-    0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000, // $
-    0b00001111_00011110_00111100_01111000_11110000_01111000_00111100_00011110,
-    ];
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
@@ -55,6 +47,16 @@ pub extern "C" fn kernel_main() {
     
     use peripherals::uart::Uart0;
     Uart0::init();
+
+    let test = hal::display::EdidBlock::test_block0();
+
+
+    let mut str_buffer = StringBuffer::<1024>::new();
+    Uart0::puts(core::str::from_utf8(&test.manufacturer_id()).unwrap());
+    Uart0::put_uint(test.manufacturer_product_code() as u64);
+    writeln!(str_buffer, "{:?}", test.video_input_parameter()).unwrap();
+    writeln!(str_buffer, "{:?}", test.screen_geometry()).unwrap();
+    Uart0::puts(str_buffer.str());
 
     use hal::framebuffer::color;
     let fb = hal::framebuffer::Framebuffer::new(1280, 720).unwrap();
@@ -85,12 +87,12 @@ pub extern "C" fn kernel_main() {
     if let Some(vc_memory) = hal::info::get_vc_memory() {
         writeln!(str_buffer, "VC Memory {:#X} {:#X}", vc_memory.base_address, vc_memory.size).unwrap();
     }
-    if let Some(board_info) = hal::info::get_board_info() {
-        writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
-    }
-    if let Some(mac) = hal::info::get_mac_address() {
-        writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
-    }
+    // if let Some(board_info) = hal::info::get_board_info() {
+    //     writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
+    // }
+    // if let Some(mac) = hal::info::get_mac_address() {
+    //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
+    // }
 
     for edid in hal::display::EdidIterator::new().take(2) {
         writeln!(str_buffer, "EDID BLOCK {}", edid.0).unwrap();
