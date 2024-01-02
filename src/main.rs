@@ -51,11 +51,16 @@ pub extern "C" fn kernel_main() {
     let test = hal::display::EdidBlock::test_block0();
 
 
-    let mut str_buffer = StringBuffer::<1024>::new();
+    let mut str_buffer = StringBuffer::<2048>::new();
     Uart0::puts(core::str::from_utf8(&test.manufacturer_id()).unwrap());
     Uart0::put_uint(test.manufacturer_product_code() as u64);
-    writeln!(str_buffer, "{:?}", test.video_input_parameter()).unwrap();
-    writeln!(str_buffer, "{:?}", test.screen_geometry()).unwrap();
+    writeln!(str_buffer, "Checksum Ok? {:?}", test.checksum_ok()).unwrap();
+    writeln!(str_buffer, "Video Input Parameter: {:?}", test.video_input_parameter()).unwrap();
+    writeln!(str_buffer, "Screen Geometry: {:?}", test.screen_geometry()).unwrap();
+    writeln!(str_buffer, "Supported Features: {:?}", test.supported_features()).unwrap();
+    writeln!(str_buffer, "{:?}", test.chromaticity_coordinates()).unwrap();
+    writeln!(str_buffer, "{:?}", test.common_timing_support()).unwrap();
+    
     Uart0::puts(str_buffer.str());
 
     use hal::framebuffer::color;

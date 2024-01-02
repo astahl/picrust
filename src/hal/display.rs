@@ -1,3 +1,5 @@
+use core::str::Bytes;
+
 use crate::peripherals::mailbox;
 
 pub struct EdidBlock ([u8;128]);
@@ -70,6 +72,73 @@ pub enum ScreenGeometry {
     SizeInCentimeters{h: u8, v: u8}
 }
 
+
+#[derive(Debug)]
+pub enum DisplayTypeAnalog {
+    Monochrome = 0b00,
+    RGBColor = 0b01,
+    NonRGBColor = 0b10,
+    Undefined = 0b11,
+}
+
+#[derive(Debug)]
+pub enum DisplayTypeDigital {
+    RGB444 = 0b00,
+    RGB444_YCbCr444 = 0b01,
+    RGB444_YCbCr422 = 0b10,
+    RGB444_YCbCr444_YCbCr422 = 0b11,
+}
+
+#[derive(Debug)]
+pub enum DisplayType {
+    Analog (DisplayTypeAnalog),
+    Digital (DisplayTypeDigital)
+}
+
+#[derive(Debug)]
+pub struct SupportedFeatures {
+    dpms_standby_supported: bool,
+    dpms_suspend_supported: bool,
+    dpms_active_off_supported: bool,
+    display_type: DisplayType,
+    s_rgb: bool,
+    preferred_timing_mode: bool,
+    continuous_timings: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct CIEPoint{ x: f32, y: f32 }
+
+#[derive(Debug, Default)]
+pub struct ChromaticityCoordinates {
+    red: CIEPoint,
+    green: CIEPoint,
+    blue: CIEPoint,
+    white: CIEPoint
+}
+
+#[derive(Debug, Default)]
+pub struct CommonLegacyTimingSupport {
+    _720_400_70: bool,
+    _720_400_88: bool,
+    _640_480_60: bool,
+    _640_480_67: bool,
+    _640_480_72: bool,
+    _640_480_75: bool,
+    _800_600_56: bool,
+    _800_600_60: bool,
+    _800_600_72: bool,
+    _800_600_75: bool,
+    _832_624_75: bool,
+    _1024_768_87_interlaced: bool,
+    _1024_768_60: bool,
+    _1024_768_70: bool,
+    _1024_768_75: bool,
+    _1280_1024_75: bool,
+    _1152_870_75: bool,
+}
+
+
 impl EdidBlock {
 
     pub fn test_block0() -> Self {
@@ -82,7 +151,7 @@ impl EdidBlock {
             0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
             0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x1b, 0x21,
             0x50, 0xa0, 0x51, 0x00, 0x1e, 0x30, 0x48, 0x88, 
-            0x35, 0x00, 0x80, 0x68, 0x2c, 0x00, 0x00, 0x18, 
+            0x35, 0x00, 0x80, 0x68, 0x21, 0x00, 0x00, 0x18, 
             0x02, 0x3a, 0x80, 0xd0, 0x72, 0x38, 0x2d, 0x40, 
             0x10, 0x2c, 0x45, 0x80, 0x80, 0x68, 0x21, 0x00, 
             0x00, 0x1e, 0x00, 0x00, 0x00, 0xfc, 0x00, 0x4c, 
@@ -139,14 +208,14 @@ impl EdidBlock {
         if byte & 0x80 == 0x80 {
             unsafe {
                 VideoInputParameter::Digital { 
-                    bit_depth: core::mem::transmute(byte >> 4 & 0b111), 
+                    bit_depth: core::mem::transmute((byte >> 4) & 0b111), 
                     video_interface: core::mem::transmute(byte & 0b1111) 
                 }
             }
         } else {
             unsafe {
                 VideoInputParameter::Analog { 
-                    white_and_sync_levels: core::mem::transmute(byte >> 5 & 0b11),  
+                    white_and_sync_levels: core::mem::transmute((byte >> 5) & 0b11),  
                     blank_to_blank_setup_expected: byte & 0b10000 != 0, 
                     separate_sync_supported: byte & 0b01000 != 0, 
                     composite_sync_on_h_supported: byte & 0b00100 != 0, 
@@ -163,6 +232,79 @@ impl EdidBlock {
             (0, v) => ScreenGeometry::Portrait(v),
             (h, v) => ScreenGeometry::SizeInCentimeters { h, v }
         }
+    }
+
+    pub fn gamma(&self) -> Option<f32> {
+        match self.0[23] {
+            255 => None,
+            val => Some((val as f32 + 100.0) / 100.0)
+        }
+    }
+
+    pub fn supported_features(&self) -> SupportedFeatures {
+        let byte = self.0[24];
+        let is_digital = self.0[20] & 0x80 != 0;
+        SupportedFeatures {
+            dpms_standby_supported: byte & 0x80 != 0,
+            dpms_suspend_supported: byte & 0x40 != 0,
+            dpms_active_off_supported: byte & 0x20 != 0,
+            display_type: unsafe {
+                if is_digital {
+                    DisplayType::Digital(core::mem::transmute((byte >> 3) & 0b11))
+                }
+                else {
+                    DisplayType::Analog(core::mem::transmute((byte >> 3) & 0b11))
+                } 
+                },
+            s_rgb: byte & 0x04 != 0,
+            preferred_timing_mode: byte & 0x02 != 0,
+            continuous_timings: byte & 0x01 != 0,
+        }
+    }
+
+    pub fn chromaticity_coordinates(&self) -> ChromaticityCoordinates {
+        let lsb_byte = self.0[25];
+        let red_x = (lsb_byte >> 6) as u16 & 0b11 | (self.0[27] as u16) << 2;
+        let red_y = (lsb_byte >> 4) as u16 & 0b11 | (self.0[28] as u16) << 2;
+        let green_x = (lsb_byte >> 2) as u16 & 0b11 | (self.0[29] as u16) << 2;
+        let green_y = (lsb_byte >> 0) as u16 & 0b11 | (self.0[30] as u16) << 2;
+
+        let lsb_byte = self.0[26];
+        let blue_x = (lsb_byte >> 6) as u16 & 0b11 | (self.0[31] as u16) << 2;
+        let blue_y = (lsb_byte >> 4) as u16 & 0b11 | (self.0[32] as u16) << 2;
+        let white_x = (lsb_byte >> 2) as u16 & 0b11 | (self.0[33] as u16) << 2;
+        let white_y = (lsb_byte >> 0) as u16 & 0b11 | (self.0[34] as u16) << 2;
+
+        ChromaticityCoordinates {
+            red: CIEPoint { x: red_x as f32 / 1024.0, y: red_y as f32 / 1024.0 },
+            green: CIEPoint { x: green_x as f32 / 1024.0, y: green_y as f32 / 1024.0 },
+            blue: CIEPoint { x: blue_x as f32 / 1024.0, y: blue_y as f32 / 1024.0 },
+            white: CIEPoint { x: white_x as f32 / 1024.0, y: white_y as f32 / 1024.0 },
+        }
+    }
+
+    pub fn common_timing_support(&self) -> CommonLegacyTimingSupport {
+        let byte_low = self.0[35];
+        let byte_mid = self.0[36];
+        let byte_up = self.0[37];
+        CommonLegacyTimingSupport { 
+            _720_400_70: byte_low & 0x80 != 0,
+            _720_400_88: byte_low & 0x40 != 0,
+            _640_480_60: byte_low & 0x20 != 0, 
+            _640_480_67: byte_low & 0x10 != 0,
+            _640_480_72: byte_low & 0x08 != 0, 
+            _640_480_75: byte_low & 0x04 != 0, 
+            _800_600_56: byte_low & 0x02 != 0, 
+            _800_600_60: byte_low & 0x01 != 0,
+            _800_600_72: byte_mid & 0x80 != 0, 
+            _800_600_75: byte_mid & 0x40 != 0, 
+            _832_624_75: byte_mid & 0x20 != 0, 
+            _1024_768_87_interlaced: byte_mid & 0x10 != 0, 
+            _1024_768_60: byte_mid & 0x08 != 0, 
+            _1024_768_70: byte_mid & 0x04 != 0,
+            _1024_768_75: byte_mid & 0x02 != 0, 
+            _1280_1024_75: byte_mid & 0x01 != 0, 
+            _1152_870_75: byte_up & 0x80 != 0 }
     }
 }
 
