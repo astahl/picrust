@@ -138,6 +138,143 @@ pub struct CommonLegacyTimingSupport {
     _1152_870_75: bool,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub enum StandardTimingImageAspectRatio {
+    #[default] _16_10,
+    _4_3,
+    _5_4,
+    _16_9,
+}
+
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct StandardTimingInformation {
+    x_resolution: u16,
+    image_aspect_ratio: StandardTimingImageAspectRatio,
+    vertical_frequency: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SignalInterfaceType {
+    NonInterlaced,
+    Interlaced,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum StereoMode {
+    None = 0b00_0,
+    Nope = 0b00_1, // bit set but don't care
+    FieldSequentialRightDuringStereoSync = 0b01_0,
+    FieldSequentialLeftDuringStereoSync = 0b10_0,
+    TwoWayInterleavedRightOnEvenLines = 0b01_1,
+    TwoWayInterleavedLeftOnEvenLines = 0b10_1,
+    FourWayInterleaved = 0b11_0,
+    SideBySideInterleaved = 0b11_1
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub enum Polarity {
+    Negative,
+    Positive
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Sync {
+    AnalogComposite {
+        bipolar: bool,
+        serrations_hsync_during_vsync: bool,
+        sync_on_red_and_blue_lines_additionally_to_green: bool
+    },
+    DigitalComposite {
+        serrations_hsync_during_vsync: bool,
+        horizontal_sync_polarity: Polarity,
+    },
+    DigitalSeparate {
+        vertical_sync_polarity: Polarity,
+        horizontal_sync_polarity: Polarity
+    }
+
+}
+
+
+#[derive(Clone, Copy)]
+pub struct DescriptorText([u8;13]);
+
+impl core::fmt::Debug for DescriptorText {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.to_str())
+    }
+}
+
+impl From<&[u8]> for DescriptorText {
+    fn from(value: &[u8]) -> Self {
+        Self(value.try_into().unwrap())
+    }
+}
+
+impl DescriptorText {
+    fn to_str(&self) -> &str {
+        // actually it's Codepage 437, but let's just assume it's ascii
+        core::str::from_utf8(self.0.as_slice()).unwrap().trim_end()
+    } 
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ExtendedTimingInformation {
+    // GTF = GeneralizedTimingFormula
+    DefaultGtf,
+    NoTimingInformation,
+    SecondaryGtfSupported {
+        // 0 - 510 khz
+        start_frequency_2khz: u8,
+        // 0 - 127.5
+        gtf_c_0_5: u8,
+        gtf_m: u16,
+        gtf_k: u8,
+        gtf_j_0_5: u8,
+    },
+    Cvt {
+        cvt_version_major: u8,
+        cvt_version_minor: u8,
+        maximum_pixel_clock_reduction_250khz: u8,
+        maximum_active_pixels_per_line: u16,
+        // todo continue here
+    },
+    Unknown(u8)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Descriptor {
+    Unknown(u8),
+    DetailedTiming {
+        pixel_clock_10khz: u16,
+        horizontal_active_pixels: u16,
+        horizontal_blanking_pixels: u16,
+        vertical_active_lines: u16,
+        vertical_blanking_lines: u16,
+        horizontal_front_porch_pixels: u16,
+        horizontal_sync_pulse_width_pixels: u16,
+        vertical_front_porch_lines: u8,
+        vertical_sync_pulse_width_lines: u8,
+        horizontal_image_size_mm: u16,
+        vertical_image_size_mm: u16,
+        horizontal_border_pixels: u8,
+        vertical_border_lines: u8,
+        signal_interface_type: SignalInterfaceType,
+        stereo_mode: StereoMode,
+        sync: Sync
+    },
+    DisplaySerialNumber (DescriptorText),
+    DisplayName (DescriptorText),
+    UnspecifiedText (DescriptorText),
+    RangeLimits {
+        vertical_field_rate_min_max: (u16,u16),
+        horizontal_line_rate_min_max: (u16,u16),
+        maximum_pixel_clock_10mhz: u8, 
+        extended_timing_information: ExtendedTimingInformation
+    }
+}
 
 impl EdidBlock {
 
@@ -226,11 +363,12 @@ impl EdidBlock {
     }
 
     pub fn screen_geometry(&self) -> ScreenGeometry {
-        match (self.0[21], self.0[22]) {
-            (0, 0) => ScreenGeometry::Undefined,
-            (h, 0) => ScreenGeometry::Landscape(h),
-            (0, v) => ScreenGeometry::Portrait(v),
-            (h, v) => ScreenGeometry::SizeInCentimeters { h, v }
+        let bytes: [u8; 2] = self.0[21..=22].try_into().unwrap();
+        match bytes {
+            [0, 0] => ScreenGeometry::Undefined, 
+            [h, 0] => ScreenGeometry::Landscape(h),
+            [0, v] => ScreenGeometry::Portrait(v),
+            [h, v] => ScreenGeometry::SizeInCentimeters { h, v },
         }
     }
 
@@ -305,6 +443,102 @@ impl EdidBlock {
             _1024_768_75: byte_mid & 0x02 != 0, 
             _1280_1024_75: byte_mid & 0x01 != 0, 
             _1152_870_75: byte_up & 0x80 != 0 }
+    }
+
+    pub fn standard_timing_information(&self) -> [Option<StandardTimingInformation>; 8] {
+        let mut result = [None; 8];
+        for i in 0..8 {
+            let byte0 = self.0[38 + i * 2];
+            let byte1 = self.0[39 + i * 2];
+            result[i] = match (byte0, byte1) {
+                (0x01, 0x01) => None,
+                _ => {
+                    Some(StandardTimingInformation {
+                        x_resolution: (byte0 as u16 + 31) * 8, 
+                        image_aspect_ratio: unsafe { core::mem::transmute(byte1 >> 6)} , 
+                        vertical_frequency: byte1 & 0x3F + 60 
+                    })
+                }
+            }
+        }
+        result
+    }
+
+    pub fn descriptors(&self) -> [Option<Descriptor>; 4] {
+        let mut result = [None; 4];
+        for (i, bytes) in self.0.split_at(54).1.chunks_exact(18).enumerate() {
+            let byte0 = bytes[0];
+            let byte1 = bytes[1];
+            result[i] = match (byte0, byte1) {
+                (0, 0) => {
+                    match bytes[3] {
+                        0x10 => None,
+                        0xFF => Some(Descriptor::DisplaySerialNumber(bytes[5..=17].try_into().unwrap())),
+                        0xFE => Some(Descriptor::UnspecifiedText(bytes[5..=17].try_into().unwrap())),
+                        0xFC => Some(Descriptor::DisplayName(bytes[5..=17].try_into().unwrap())),
+                        0xFD => Some({
+                                let vertical_field_rate_min_max = (0, 0);
+                                let horizontal_line_rate_min_max = (0, 0);
+                                Descriptor::RangeLimits { 
+                                    vertical_field_rate_min_max, 
+                                    horizontal_line_rate_min_max, 
+                                    maximum_pixel_clock_10mhz: bytes[9], 
+                                    extended_timing_information: match bytes[10] {
+                                        0 => ExtendedTimingInformation::DefaultGtf,
+                                        1 => ExtendedTimingInformation::NoTimingInformation,
+                                        2 => ExtendedTimingInformation::SecondaryGtfSupported { 
+                                            start_frequency_2khz: bytes[12], gtf_c_0_5: bytes[13], gtf_m: u16::from_le_bytes(bytes[14..=15].try_into().unwrap()), gtf_k: bytes[16], gtf_j_0_5: bytes[17] 
+                                        },
+                                        4 => ExtendedTimingInformation::Cvt { 
+                                            cvt_version_major: bytes[11] >> 4, 
+                                            cvt_version_minor: bytes[11] & 0xf, 
+                                            maximum_pixel_clock_reduction_250khz: bytes[12] >> 2, 
+                                            maximum_active_pixels_per_line: (bytes[12] as u16 & 0b11) << 8 | bytes[13] as u16},
+                                        x => ExtendedTimingInformation::Unknown(x)
+                                    }
+                                }
+                            }),
+                        x => Some(Descriptor::Unknown(x)),
+                    }
+                }
+                _ => Some(Descriptor::DetailedTiming { 
+                    pixel_clock_10khz: u16::from_le_bytes([byte0, byte1]), 
+                    horizontal_active_pixels: u16::from_le_bytes([bytes[2], bytes[4] >> 4]), 
+                    horizontal_blanking_pixels: u16::from_le_bytes([bytes[3], bytes[4] & 0xF]),
+                    vertical_active_lines: u16::from_le_bytes([bytes[5], bytes[7] >> 4]), 
+                    vertical_blanking_lines: u16::from_le_bytes([bytes[6], bytes[7] & 0xF]), 
+                    horizontal_front_porch_pixels: u16::from_le_bytes([bytes[8], bytes[11] >> 6]), 
+                    horizontal_sync_pulse_width_pixels: u16::from_le_bytes([bytes[9], (bytes[11] >> 4) & 0b11 ]), 
+                    vertical_front_porch_lines: (bytes[11] & 0b1100) << 2 | bytes[10] >> 4, 
+                    vertical_sync_pulse_width_lines: (bytes[11] & 0b11) << 4 | bytes[10] & 0x0F, 
+                    horizontal_image_size_mm: u16::from_le_bytes([bytes[12], bytes[14] >> 4]), 
+                    vertical_image_size_mm: u16::from_le_bytes([bytes[13], bytes[14] & 0xF]), 
+                    horizontal_border_pixels: bytes[15], 
+                    vertical_border_lines: bytes[16], 
+                    signal_interface_type: if bytes[17] & 0x80 == 0 { SignalInterfaceType::NonInterlaced } else { SignalInterfaceType::Interlaced }, 
+                    stereo_mode: unsafe { core::mem::transmute(bytes[17] >> 4 & 0b110 | bytes[17] & 0b1)}, 
+                    sync: {
+                        let bitmap = bytes[17];
+                        match bitmap >> 4 & 1 {
+                            0 => Sync::AnalogComposite { 
+                                bipolar: bitmap >> 3 & 1 == 1, 
+                                serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1, 
+                                sync_on_red_and_blue_lines_additionally_to_green: bitmap >> 1 & 1 == 1 },
+                            _ => match bitmap >> 3 & 1 {
+                                0 => Sync::DigitalComposite {
+                                    serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1, 
+                                    horizontal_sync_polarity: if bitmap >> 1 & 1 == 1 { Polarity::Positive } else { Polarity::Negative }
+                                }, 
+                                _ => Sync::DigitalSeparate { 
+                                    vertical_sync_polarity: if bitmap >> 2 & 1 == 1 { Polarity::Positive } else { Polarity::Negative },
+                                    horizontal_sync_polarity: if bitmap >> 1 & 1 == 1 { Polarity::Positive } else { Polarity::Negative } }
+                            }
+                        }
+                    } })
+                
+            }
+        }
+        result
     }
 }
 
