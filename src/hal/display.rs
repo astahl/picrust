@@ -221,6 +221,15 @@ impl DescriptorText {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum AspectRatioPreference {
+    ar_4_3 = 0b000,
+    ar_16_9 = 0b001, 
+    ar_16_10 = 0b010,
+    ar_5_4 = 0b011,
+    ar_15_9 = 0b100
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ExtendedTimingInformation {
     // GTF = GeneralizedTimingFormula
     DefaultGtf,
@@ -239,7 +248,19 @@ pub enum ExtendedTimingInformation {
         cvt_version_minor: u8,
         maximum_pixel_clock_reduction_250khz: u8,
         maximum_active_pixels_per_line: u16,
-        // todo continue here
+        ar_4_3: bool,
+        ar_16_9: bool,
+        ar_16_10: bool,
+        ar_5_4: bool,
+        ar_15_9: bool,
+        preferred_aspect_ratio: AspectRatioPreference,
+        preferred_reduced_blanking: bool,
+        standard_blanking: bool,
+        scaling_support_horizontal_shrink: bool,
+        scaling_support_horizontal_stretch: bool,
+        scaling_support_vertical_shrink: bool,
+        scaling_support_vertical_stretch: bool,
+        preferred_vertical_refresh_rate: u8
     },
     Unknown(u8)
 }
@@ -269,8 +290,8 @@ pub enum Descriptor {
     DisplayName (DescriptorText),
     UnspecifiedText (DescriptorText),
     RangeLimits {
-        vertical_field_rate_min_max: (u16,u16),
-        horizontal_line_rate_min_max: (u16,u16),
+        vertical_field_rate_hz_min_max: (u16,u16),
+        horizontal_line_rate_khz_min_max: (u16,u16),
         maximum_pixel_clock_10mhz: u8, 
         extended_timing_information: ExtendedTimingInformation
     }
@@ -477,11 +498,17 @@ impl EdidBlock {
                         0xFE => Some(Descriptor::UnspecifiedText(bytes[5..=17].try_into().unwrap())),
                         0xFC => Some(Descriptor::DisplayName(bytes[5..=17].try_into().unwrap())),
                         0xFD => Some({
-                                let vertical_field_rate_min_max = (0, 0);
-                                let horizontal_line_rate_min_max = (0, 0);
+                                let mut vertical_field_rate_hz_min_max = (bytes[5] as u16, bytes[6] as u16);
+                                let mut horizontal_line_rate_khz_min_max = (bytes[7] as u16, bytes[8] as u16);
+                                
+                                vertical_field_rate_hz_min_max.1 += (bytes[4] & 1) as u16 * 255;
+                                vertical_field_rate_hz_min_max.0 += (bytes[4] >> 1 & 1) as u16 * 255;
+                                horizontal_line_rate_khz_min_max.1 += (bytes[4] >> 2 & 1) as u16 * 255;
+                                horizontal_line_rate_khz_min_max.0 += (bytes[4] >> 3 & 1) as u16 * 255;
+
                                 Descriptor::RangeLimits { 
-                                    vertical_field_rate_min_max, 
-                                    horizontal_line_rate_min_max, 
+                                    vertical_field_rate_hz_min_max, 
+                                    horizontal_line_rate_khz_min_max, 
                                     maximum_pixel_clock_10mhz: bytes[9], 
                                     extended_timing_information: match bytes[10] {
                                         0 => ExtendedTimingInformation::DefaultGtf,
@@ -493,7 +520,21 @@ impl EdidBlock {
                                             cvt_version_major: bytes[11] >> 4, 
                                             cvt_version_minor: bytes[11] & 0xf, 
                                             maximum_pixel_clock_reduction_250khz: bytes[12] >> 2, 
-                                            maximum_active_pixels_per_line: (bytes[12] as u16 & 0b11) << 8 | bytes[13] as u16},
+                                            maximum_active_pixels_per_line: (bytes[12] as u16 & 0b11) << 8 | bytes[13] as u16,
+                                            ar_4_3: bytes[14] & 0x80 != 0,
+                                            ar_16_9: bytes[14] & 0x40 != 0,
+                                            ar_16_10: bytes[14] & 0x20 != 0,
+                                            ar_5_4: bytes[14] & 0x10 != 0,
+                                            ar_15_9: bytes[14] & 0x08 != 0,
+                                            preferred_aspect_ratio: unsafe { core::mem::transmute(bytes[15] >> 5) },
+                                            preferred_reduced_blanking: bytes[15] & 0x10 != 0,
+                                            standard_blanking: bytes[15] & 0x08 != 0,
+                                            scaling_support_horizontal_shrink: bytes[16] & 0x80 != 0,
+                                            scaling_support_horizontal_stretch: bytes[16] & 0x40 != 0,
+                                            scaling_support_vertical_shrink: bytes[16] & 0x20 != 0,
+                                            scaling_support_vertical_stretch: bytes[16] & 0x10 != 0,
+                                            preferred_vertical_refresh_rate: bytes[17], },
+                                        
                                         x => ExtendedTimingInformation::Unknown(x)
                                     }
                                 }
