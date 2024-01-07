@@ -47,7 +47,7 @@ pub extern "C" fn kernel_main() {
     use peripherals::uart::Uart0;
     Uart0::init();
 
-    let test = hal::display::EdidBlock::test_block0();
+    let test = hal::display::EdidBlock::test_block();
 
 
     let mut str_buffer = StringBuffer::<4096>::new();
@@ -62,6 +62,33 @@ pub extern "C" fn kernel_main() {
     writeln!(str_buffer, "{:?}", test.standard_timing_information()).unwrap();
     writeln!(str_buffer, "{:?}", test.descriptors()).unwrap();
     
+    Uart0::puts(str_buffer.str());
+
+
+    str_buffer.reset();
+    let test = hal::display::CtaExtensionBlock::test_block();
+    writeln!(str_buffer, "Checksum Ok? {:?}", test.checksum_ok()).unwrap();
+    writeln!(str_buffer, "Support underscan? {:?}", test.support_underscan()).unwrap();
+    writeln!(str_buffer, "Support basic_audio? {:?}", test.support_basic_audio()).unwrap();
+    writeln!(str_buffer, "Support ycbcr_444? {:?}", test.support_ycbcr_444()).unwrap();
+    writeln!(str_buffer, "Support ycbcr_422? {:?}", test.support_ycbcr_422()).unwrap();
+    writeln!(str_buffer, "Native format count: {:?}", test.native_format_count()).unwrap();
+    for db in test.data_blocks() {
+        match db {
+            hal::display::CtaDataBlock::None => {},
+            hal::display::CtaDataBlock::Audio { audio_blocks } => for block in audio_blocks {
+                writeln!(str_buffer, "{:?}", block).unwrap();
+            },
+            hal::display::CtaDataBlock::Video { video_blocks } => for block in video_blocks {
+                writeln!(str_buffer, "{:?}", block).unwrap();
+            },
+            a => writeln!(str_buffer, "{:?}", a).unwrap(),
+            hal::display::CtaDataBlock::VesaDisplayTransferCharacteristic => {},
+            hal::display::CtaDataBlock::VideoFormat => {},
+            hal::display::CtaDataBlock::Extended => {},
+        }
+        
+    }
     Uart0::puts(str_buffer.str());
 
     use hal::framebuffer::color;

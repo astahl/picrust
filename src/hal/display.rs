@@ -297,9 +297,11 @@ pub enum Descriptor {
     }
 }
 
+
+
 impl EdidBlock {
 
-    pub fn test_block0() -> Self {
+    pub fn test_block() -> Self {
         let edid0: [u8; 128] = [
             0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
             0x05, 0xe3, 0x09, 0x19, 0x01, 0x01, 0x01, 0x01,
@@ -320,13 +322,9 @@ impl EdidBlock {
             ];
         EdidBlock(edid0)
     }
-
+    
     pub fn checksum_ok(&self) -> bool {
-        let mut sum: u8 = 0;
-        for byte in self.0 {
-            sum = sum.wrapping_add(byte);
-        }
-        sum == 0
+        self.0.iter().copied().reduce(u8::wrapping_add) == Some(0)
     }
 
     pub fn manufacturer_id(&self) -> [u8; 3] {
@@ -582,6 +580,254 @@ impl EdidBlock {
         result
     }
 }
+
+
+#[derive(Debug, Clone, Copy)]
+pub enum CtaDataBlock<'a> {
+    None,
+    Audio { audio_blocks: CtaAudioIterator<'a> },
+    Video { video_blocks: CtaVideoIterator<'a> },
+    VendorSpecific { ieee_registration_id: [u8; 3], payload: &'a [u8] },
+    SpeakerAllocation {
+        rear_left_and_right_center: bool,
+        front_left_and_right_center: bool,
+        rear_center: bool,
+        rear_left_and_right: bool,
+        front_center: bool,
+        low_frequency_effects: bool,
+        front_left_and_right: bool
+    },
+    VesaDisplayTransferCharacteristic,
+    VideoFormat,
+    Extended
+}
+
+impl<'a> CtaDataBlock<'a> {
+    pub fn new(block: &'a [u8]) -> Self {
+        let block_type = block[0] >> 5;
+        let len = block[0] & 0x1f;
+        let bytes = block.split_at(1).1.split_at(len as usize).0;
+        match block_type {
+            1 => Self::Audio { audio_blocks: CtaAudioIterator { bytes } },
+            2 => Self::Video { video_blocks: CtaVideoIterator { bytes }},
+            3 => {
+                let (head, tail) = bytes.split_at(3);
+                Self::VendorSpecific { ieee_registration_id: head.try_into().unwrap(), payload: tail }
+            },
+            4 => Self::SpeakerAllocation {
+                rear_left_and_right_center: bytes[0] & 0x40 != 0,
+                front_left_and_right_center: bytes[0] & 0x20 != 0,
+                rear_center: bytes[0] & 0x10 != 0,
+                rear_left_and_right: bytes[0] & 0x08 != 0,
+                front_center: bytes[0] & 0x04 != 0,
+                low_frequency_effects: bytes[0] & 0x02 != 0,
+                front_left_and_right: bytes[0] & 0x01 != 0,
+            },
+            5 => Self::VesaDisplayTransferCharacteristic,
+            6 => Self::VideoFormat,
+            7 => Self::Extended,
+            _ => Self::None
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CtaDataBlockIterator<'a> {
+    bytes: &'a[u8],
+}
+
+impl<'a> Iterator for CtaDataBlockIterator<'a> {
+    type Item = CtaDataBlock<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bytes.is_empty() {
+            None
+        } else {
+            let header = self.bytes.first().unwrap();
+            let len = header & 0x1F;
+            if len == 0 {
+                None
+            } else {
+                let (block, rest) = self.bytes.split_at(len as usize + 1);
+                self.bytes = rest;
+                Some(CtaDataBlock::new(block))
+            }
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub enum AudioFormat {
+    Reserved,
+    LinearPulseCodeModulation,
+    Ac3,
+    Mpeg1Layer1_2,
+    Mp3Mpeg1Layer3,
+    Mpeg2,
+    AacLc,
+    Dts,
+    Atrac,
+    Sacd,
+    DdPlus,
+    DtsHd,
+    MatMlpDolbyTrueHd,
+    DstAudio,
+    WmaPro,
+    Extension
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CtaShortAudioDescriptor {
+    audio_format: AudioFormat,
+    num_channels: u8,
+    sr_192: bool,
+    sr_176: bool,
+    sr_96: bool,
+    sr_88: bool,
+    sr_48: bool,
+    sr_44_1: bool,
+    sr_32: bool,
+}
+
+impl CtaShortAudioDescriptor {
+    pub fn from_bytes(bytes: [u8; 3]) -> Self {
+
+        CtaShortAudioDescriptor{ 
+            audio_format: unsafe { core::mem::transmute(bytes[0] >> 3) }, 
+            num_channels: (bytes[0] & 0b111) + 1, 
+            sr_192: bytes[1] & 0x40 != 0, 
+            sr_176: bytes[1] & 0x20 != 0, 
+            sr_96: bytes[1] & 0x10 != 0, 
+            sr_88: bytes[1] & 0x08 != 0, 
+            sr_48: bytes[1] & 0x04 != 0, 
+            sr_44_1: bytes[1] & 0x02 != 0, 
+            sr_32: bytes[1] & 0x01 != 0 
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub struct CtaAudioIterator<'a> {
+    bytes: &'a[u8],
+}
+
+impl Iterator for CtaAudioIterator<'_> {
+    type Item = CtaShortAudioDescriptor;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bytes.is_empty() {
+            None
+        } else {
+            let (block, rest) = self.bytes.split_at(3);
+            self.bytes = rest;
+            Some(CtaShortAudioDescriptor::from_bytes(block.try_into().unwrap()))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CtaShortVideoDescriptor {
+    native: bool,
+    video_identification_code: u8,
+}
+
+impl CtaShortVideoDescriptor {
+    pub fn from_bytes(bytes: [u8; 1]) -> Self {
+        CtaShortVideoDescriptor{ 
+            native: bytes[0] & 0x80 != 0,
+            video_identification_code: bytes[0] & 0x7F,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub struct CtaVideoIterator<'a> {
+    bytes: &'a[u8],
+}
+
+impl Iterator for CtaVideoIterator<'_> {
+    type Item = CtaShortVideoDescriptor;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.bytes.is_empty() {
+            None
+        } else {
+            let (block, rest) = self.bytes.split_at(1);
+            self.bytes = rest;
+            Some(CtaShortVideoDescriptor::from_bytes(block.try_into().unwrap()))
+        }
+    }
+}
+
+pub struct CtaExtensionBlock([u8; 128]);
+impl CtaExtensionBlock {
+    pub fn test_block() -> Self {
+        let edid1: [u8; 128] = [
+            0x02, 0x03, 0x26, 0x70, 0x4e, 0x13, 0x04, 0x1f,
+            0x10, 0x20, 0x21, 0x22, 0x14, 0x05, 0x11, 0x02, 
+            0x15, 0x06, 0x01, 0x26, 0x09, 0x07, 0x03, 0x15,
+            0x07, 0x50, 0x83, 0x01, 0x00, 0x00, 0x67, 0x03,
+            0x0c, 0x00, 0x20, 0x00, 0xb8, 0x2d, 0x01, 0x1d, 
+            0x80, 0x3e, 0x73, 0x38, 0x2d, 0x40, 0x7e, 0x2c,
+            0x45, 0x80, 0x80, 0x68, 0x21, 0x00, 0x00, 0x1e,
+            0x01, 0x1d, 0x80, 0xd0, 0x72, 0x1c, 0x16, 0x20, 
+            0x10, 0x2c, 0x25, 0x80, 0x80, 0x68, 0x21, 0x00, 
+            0x00, 0x9e, 0x01, 0x1d, 0x00, 0xbc, 0x52, 0xd0, 
+            0x1e, 0x20, 0xb8, 0x28, 0x55, 0x40, 0x80, 0x68, 
+            0x21, 0x00, 0x00, 0x1e, 0x8c, 0x0a, 0xd0, 0x90, 
+            0x20, 0x40, 0x31, 0x20, 0x0c, 0x40, 0x55, 0x00, 
+            0x90, 0x2c, 0x11, 0x00, 0x00, 0x18, 0x00, 0x00, 
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b        
+            ];
+        Self(edid1)
+    }
+
+    pub fn checksum_ok(&self) -> bool {
+        self.0.iter().copied().reduce(u8::wrapping_add) == Some(0)
+    }
+
+    pub fn cta_revision(&self) -> u8 {
+        self.0[1]
+    }
+
+    pub fn dtd_offset(&self) -> u8 {
+        self.0[2]
+    }
+
+    pub fn support_underscan(&self) -> bool {
+        self.0[3] & 0x80 != 0
+    }
+
+    pub fn support_basic_audio(&self) -> bool {
+        self.0[3] & 0x40 != 0
+    }
+
+    pub fn support_ycbcr_444(&self) -> bool {
+        self.0[3] & 0x20 != 0
+    }
+
+    pub fn support_ycbcr_422(&self) -> bool {
+        self.0[3] & 0x10 != 0
+    }
+
+    pub fn native_format_count(&self) -> u8 {
+        self.0[3] & 0xF
+    }
+
+    pub fn data_blocks(&self) -> CtaDataBlockIterator {
+        let front = self.0.split_at(self.dtd_offset() as usize).0;
+        let data_block_slice = front.split_at(4).1;
+
+        CtaDataBlockIterator{
+            bytes: data_block_slice
+        }
+    }
+}
+
 
 pub struct EdidIterator {
     block_num: u32,
