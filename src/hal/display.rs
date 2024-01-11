@@ -1,9 +1,51 @@
-use core::str::Bytes;
+use core::fmt::{Display, Debug};
 
 use crate::peripherals::mailbox;
 
-pub struct EdidBlock ([u8;128]);
 
+#[derive(Debug)]
+pub enum Edid {
+    Edid(EdidBlock),
+    CtaExtensionRev3(CtaExtensionBlock),
+    Unknown
+}
+
+impl Edid {
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        match bytes {
+            [0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, ..] => Self::Edid(EdidBlock(bytes.try_into().unwrap())),
+            [0x02, 0x03, ..] => Self::CtaExtensionRev3(CtaExtensionBlock(bytes.try_into().unwrap())),
+            _ => Self::Unknown
+        }
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        match self {
+            Edid::Edid(b) => b.0.as_slice(),
+            Edid::CtaExtensionRev3(b) => b.0.as_slice(),
+            Edid::Unknown => &[],
+        }
+    }
+
+    pub fn checksum_ok(&self) -> bool {
+        self.bytes().iter().copied().reduce(u8::wrapping_add) == Some(0)
+    }
+}
+
+impl Display for Edid {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Edid::Edid(edid) => {
+                write!(f, "EDID {}", core::str::from_utf8(edid.manufacturer_id().as_slice()).unwrap())
+            },
+            Edid::CtaExtensionRev3(cta) => 
+            write!(f, "Cta Rev {}", cta.cta_revision()),
+            Edid::Unknown => write!(f, "[Empty or unknown EDID]"),
+        }
+    }
+}
+
+pub struct EdidBlock ([u8;128]);
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -322,10 +364,6 @@ impl EdidBlock {
             ];
         EdidBlock(edid0)
     }
-    
-    pub fn checksum_ok(&self) -> bool {
-        self.0.iter().copied().reduce(u8::wrapping_add) == Some(0)
-    }
 
     pub fn manufacturer_id(&self) -> [u8; 3] {
         let mut letters = [b'@'; 3];
@@ -579,10 +617,29 @@ impl EdidBlock {
         }
         result
     }
+
+    fn extension_len(&self) -> u8 {
+        self.0[126]
+    }
+}
+
+impl Debug for EdidBlock {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EdidBlock")
+            .field("Video Input Parameter", &self.video_input_parameter())
+            .field("Screen Geometry", &self.screen_geometry())
+            .field("Supported Features", &self.supported_features())
+            .field("Chromaticity Coordinates", &self.chromaticity_coordinates())
+            .field("Common Timing Support", &self.common_timing_support())
+            .field("Standard Timing Information", &self.standard_timing_information())
+            .field("Descriptors", &self.descriptors())
+            .finish_non_exhaustive()
+    }
 }
 
 
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Clone, Copy)]
 pub enum CtaDataBlock<'a> {
     None,
     Audio { audio_blocks: CtaAudioIterator<'a> },
@@ -786,10 +843,6 @@ impl CtaExtensionBlock {
         Self(edid1)
     }
 
-    pub fn checksum_ok(&self) -> bool {
-        self.0.iter().copied().reduce(u8::wrapping_add) == Some(0)
-    }
-
     pub fn cta_revision(&self) -> u8 {
         self.0[1]
     }
@@ -828,40 +881,101 @@ impl CtaExtensionBlock {
     }
 }
 
+impl Debug for CtaExtensionBlock {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CtaExtensionBlock")
+            .field("Support underscan", &self.support_underscan())
+            .field("Support basic_audio", &self.support_basic_audio())
+            .field("Support ycbcr_444", &self.support_ycbcr_444())
+            .field("Support ycbcr_422", &self.support_ycbcr_422())
+            .field("Native format count", &self.native_format_count());
+        f.debug_set().entries(self.data_blocks()).finish()
+    }
+}
+
+impl Debug for CtaDataBlock<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Audio { audio_blocks } => f.debug_list().entries(*audio_blocks).finish(),
+            Self::Video { video_blocks } => f.debug_list().entries(*video_blocks).finish(),
+            Self::VendorSpecific { ieee_registration_id, payload } => f.debug_struct("VendorSpecific").field("ieee_registration_id", ieee_registration_id).field("payload", payload).finish(),
+            Self::SpeakerAllocation { rear_left_and_right_center, front_left_and_right_center, rear_center, rear_left_and_right, front_center, low_frequency_effects, front_left_and_right } => f.debug_struct("SpeakerAllocation").field("rear_left_and_right_center", rear_left_and_right_center).field("front_left_and_right_center", front_left_and_right_center).field("rear_center", rear_center).field("rear_left_and_right", rear_left_and_right).field("front_center", front_center).field("low_frequency_effects", low_frequency_effects).field("front_left_and_right", front_left_and_right).finish(),
+            Self::VesaDisplayTransferCharacteristic => write!(f, "VesaDisplayTransferCharacteristic"),
+            Self::VideoFormat => write!(f, "VideoFormat"),
+            Self::Extended => write!(f, "Extended"),
+        }
+    }
+}
+
 
 pub struct EdidIterator {
-    block_num: u32,
-    done: bool
+    block_num: u8,
+    block_total: u8,
 }
 
 impl EdidIterator {
     pub fn new() -> Self {
-        Self {block_num: 0, done: false}
+        Self {block_num: 0, block_total: 1}
     }
 }
 
 impl core::iter::Iterator for EdidIterator {
-    type Item = (u32, [u8;128]);
+    type Item = Edid;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.done {
+        if self.block_num == self.block_total {
             return None;
         }
         use mailbox::PropertyMessageRequest::*;
         let mut mb = mailbox::Mailbox::<256>::new();
-        mb.push_tag(GetEdidBlock { block_number: self.block_num });
+        mb.push_tag(GetEdidBlock { block_number: self.block_num as u32 });
         mb.push_tag(Null);
         if mb.submit_messages(8).is_ok() {
-            let (block_number, status, data): (u32, u32, [u8; 128]) = mb.pop_values();
+            let (_block_number, status, data): (u32, u32, [u8; 128]) = mb.pop_values();
             if status == 0 {
+                let block = Edid::from_bytes(&data);
+                match &block {
+                    Edid::Edid(edid) => {
+                        self.block_total = 1 + edid.extension_len();
+                    },
+                    _ => {},
+                } 
                 self.block_num += 1;
+                Some(block)
             } else {
-                self.done = true;
+                None
             }
-            Some((block_number, data))
         } else {
-            self.done = true;
             None
+        }
+    }
+}
+
+pub struct MockEdidIterator {
+    block_num: u8,
+    block_total: u8,
+}
+
+impl MockEdidIterator {
+    pub fn new() -> Self {
+        Self {block_num: 0, block_total: 2}
+    }
+}
+
+impl core::iter::Iterator for MockEdidIterator {
+    type Item = Edid;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.block_num == self.block_total {
+            return None;
+        }
+        
+        self.block_num += 1;
+        match self.block_num {
+            1 => Some(Edid::Edid(EdidBlock::test_block())),
+            2 => Some(Edid::CtaExtensionRev3(CtaExtensionBlock::test_block())),
+            _ => None
         }
     }
 }
