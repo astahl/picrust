@@ -3,7 +3,6 @@ use core::ptr::read_volatile;
 use crate::peripherals::mmio;
 use crate::peripherals::mmio::MMIO;
 
-
 #[repr(align(16), C)]
 pub struct Mailbox<const BUFFER_SIZE: usize> {
     write_offset: usize,
@@ -56,21 +55,21 @@ impl MboxStatus {
 #[derive(Copy, Clone)]
 pub enum LedStatus {
     Off = 0,
-    On = 1
+    On = 1,
 }
 
 #[repr(u32)]
 #[derive(Copy, Clone)]
 pub enum Led {
     Status = 42,
-    Power = 130
+    Power = 130,
 }
 
 #[repr(u32)]
 #[derive(Copy, Clone)]
 pub enum PixelOrder {
     Bgr = 0,
-    Rgb = 1
+    Rgb = 1,
 }
 
 #[repr(u32)]
@@ -78,9 +77,8 @@ pub enum PixelOrder {
 pub enum AlphaMode {
     Enabled0Opaque = 0,
     Enabled0Transparent = 1,
-    Ignored
+    Ignored,
 }
-
 
 #[repr(u32)]
 #[derive(Copy, Clone)]
@@ -94,10 +92,8 @@ pub enum PropertyMessageRequest {
     HwGetArmMemory = 0x00010005,
     HwGetVcMemory = 0x00010006,
     // HwGetClocks = 0x00010007,
-    GetEdidBlock {
-        block_number: u32
-    } = 0x00030020,
-    GetOnboardLedStatus  = 0x00030041,
+    GetEdidBlock { block_number: u32 } = 0x00030020,
+    GetOnboardLedStatus = 0x00030041,
     TestOnboardLedStatus { pin_number: Led, status: LedStatus } = 0x00034041,
     SetOnboardLedStatus { pin_number: Led, status: LedStatus } = 0x00038041,
     FbAllocateBuffer { alignment_bytes: u32 } = 0x00040001,
@@ -133,16 +129,28 @@ pub enum PropertyMessageResponse {
     HwGetBoardModel {
         board_model: u32,
     } = 0x00010001,
-    HwGetBoardRevision { board_revision: u32 }= 0x00010002,
-    HwGetBoardMacAddress { board_mac_address: [u8;6] }= 0x00010003,
-    HwGetBoardSerial { board_serial: u64 } = 0x00010004,
-    HwGetArmMemory { base_address: u32, size: u32 } = 0x00010005,
-    HwGetVcMemory { base_address: u32, size: u32 } = 0x00010006,
+    HwGetBoardRevision {
+        board_revision: u32,
+    } = 0x00010002,
+    HwGetBoardMacAddress {
+        board_mac_address: [u8; 6],
+    } = 0x00010003,
+    HwGetBoardSerial {
+        board_serial: u64,
+    } = 0x00010004,
+    HwGetArmMemory {
+        base_address: u32,
+        size: u32,
+    } = 0x00010005,
+    HwGetVcMemory {
+        base_address: u32,
+        size: u32,
+    } = 0x00010006,
     // HwGetClocks = 0x00010007,
     GetEdidBlock {
         block_number: u32,
         status: u32,
-        data: [u8; 128]
+        data: [u8; 128],
     } = 0x00030020,
     GetOnboardLedStatus {
         pin_number: Led,
@@ -194,42 +202,62 @@ pub enum PropertyMessageResponse {
     FbSetDepth {
         bpp: u32,
     } = 0x00048005,
-    FbGetPixelOrder { state: PixelOrder } = 0x00040006,
-    FbTestPixelOrder { state: PixelOrder } = 0x00044006,
-    FbSetPixelOrder { state: PixelOrder } = 0x00048006,
-    FbGetAlphaMode { state: AlphaMode } = 0x00040007,
-    FbTestAlphaMode { state: AlphaMode } = 0x00044007,
-    FbSetAlphaMode { state: AlphaMode } = 0x00048007,
+    FbGetPixelOrder {
+        state: PixelOrder,
+    } = 0x00040006,
+    FbTestPixelOrder {
+        state: PixelOrder,
+    } = 0x00044006,
+    FbSetPixelOrder {
+        state: PixelOrder,
+    } = 0x00048006,
+    FbGetAlphaMode {
+        state: AlphaMode,
+    } = 0x00040007,
+    FbTestAlphaMode {
+        state: AlphaMode,
+    } = 0x00044007,
+    FbSetAlphaMode {
+        state: AlphaMode,
+    } = 0x00048007,
     FbGetPitch {
         bytes_per_line: u32,
     } = 0x00040008,
-    FbGetVirtualOffset { x_px: u32, y_px: u32 } = 0x00040009,
-    FbTestVirtualOffset { x_px: u32, y_px: u32 } = 0x00044009,
-    FbSetVirtualOffset { x_px: u32, y_px: u32 } = 0x00048009,
+    FbGetVirtualOffset {
+        x_px: u32,
+        y_px: u32,
+    } = 0x00040009,
+    FbTestVirtualOffset {
+        x_px: u32,
+        y_px: u32,
+    } = 0x00044009,
+    FbSetVirtualOffset {
+        x_px: u32,
+        y_px: u32,
+    } = 0x00048009,
 }
 
 impl PropertyMessageRequest {
     const fn value_buffer_len(&self) -> (u32, u32) {
         match self {
-            Self::Null | Self::FbReleaseBuffer => (0,0),
+            Self::Null | Self::FbReleaseBuffer => (0, 0),
 
-            Self::HwGetBoardModel 
+            Self::HwGetBoardModel
             | Self::HwGetBoardRevision
             | Self::FbGetPitch
             | Self::FbGetDepth
             | Self::VcGetFirmwareRevision
-            | Self::FbGetPixelOrder 
-            | Self::FbGetAlphaMode => (0,4),
+            | Self::FbGetPixelOrder
+            | Self::FbGetAlphaMode => (0, 4),
 
             Self::FbTestDepth { .. }
-            | Self::FbSetDepth { .. } 
-            | Self::FbTestPixelOrder { .. } 
-            | Self::FbSetPixelOrder { .. } 
+            | Self::FbSetDepth { .. }
+            | Self::FbTestPixelOrder { .. }
+            | Self::FbSetPixelOrder { .. }
             | Self::FbTestAlphaMode { .. }
-            | Self::FbSetAlphaMode { .. }
-            => (4,4),
+            | Self::FbSetAlphaMode { .. } => (4, 4),
 
-            Self::HwGetBoardMacAddress => (0,6),
+            Self::HwGetBoardMacAddress => (0, 6),
 
             Self::HwGetBoardSerial
             | Self::HwGetArmMemory
@@ -237,19 +265,18 @@ impl PropertyMessageRequest {
             | Self::FbGetPhysicalDimensions
             | Self::FbGetVirtualDimensions
             | Self::FbGetVirtualOffset
-            | Self::GetOnboardLedStatus
-            => (0,8),
-            Self::FbAllocateBuffer { .. } => (4,8),
+            | Self::GetOnboardLedStatus => (0, 8),
+            Self::FbAllocateBuffer { .. } => (4, 8),
             Self::FbTestPhysicalDimensions { .. }
             | Self::FbSetPhysicalDimensions { .. }
             | Self::FbTestVirtualDimensions { .. }
-            | Self::FbSetVirtualDimensions { .. } 
+            | Self::FbSetVirtualDimensions { .. }
             | Self::FbTestVirtualOffset { .. }
             | Self::FbSetVirtualOffset { .. }
             | Self::TestOnboardLedStatus { .. }
-            | Self::SetOnboardLedStatus { .. } => (8,8),
+            | Self::SetOnboardLedStatus { .. } => (8, 8),
 
-            Self::GetEdidBlock { .. } => (4, 136)
+            Self::GetEdidBlock { .. } => (4, 136),
         }
     }
 
@@ -290,7 +317,7 @@ impl PropertyMessageRequest {
                 let (req_len, res_len) = self.value_buffer_len();
                 let max_len = req_len.max(res_len);
                 ((max_len as usize + 3) & !0b11) + 12
-            },
+            }
         }
     }
 }
@@ -309,14 +336,14 @@ impl PropertyMessageResponse {
             let value_buffer_len = core::ptr::read_volatile(src.add(1));
             let req_res_field = core::ptr::read_volatile(src.add(2));
             let value_len_bytes = req_res_field & 0x7fff_ffff;
-            
+
             let src_bytes: *const u8 = src.add(3).cast();
             let dst_bytes: *mut u8 = dst.add(1).cast();
-            
+
             for i in 0..(value_len_bytes as usize) {
                 *dst_bytes.add(i) = core::ptr::read_volatile(src_bytes.add(i));
             }
-            ((value_buffer_len as usize + 3) & !0b11) + 12 
+            ((value_buffer_len as usize + 3) & !0b11) + 12
         }
     }
 
@@ -329,21 +356,19 @@ impl PropertyMessageResponse {
                 return 4;
             }
             let value_buffer_len = core::ptr::read_volatile(src.add(1));
-            ((value_buffer_len as usize + 3) & !0b11) + 12 
+            ((value_buffer_len as usize + 3) & !0b11) + 12
         }
     }
 }
 
 const MBOX_BASE: usize = 0xB880; //0x201000;
 impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
-
     const MBOX_READ: MMIO<MBOX_BASE, 0x00> = MMIO();
     const MBOX_POLL: MMIO<MBOX_BASE, 0x10> = MMIO();
     const MBOX_SENDER: MMIO<MBOX_BASE, 0x14> = MMIO();
     const MBOX_STATUS: MMIO<MBOX_BASE, 0x18> = MMIO();
     const MBOX_CONFIG: MMIO<MBOX_BASE, 0x1C> = MMIO();
     const MBOX_WRITE: MMIO<MBOX_BASE, 0x20> = MMIO();
-
 
     pub const fn new() -> Self {
         Self {
@@ -389,9 +414,8 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
     }
 
     fn call(&self, channel: u8) {
-        
         let address = core::ptr::addr_of!(self.size) as usize >> 4;
-        
+
         Self::write(channel, address as u32);
         let _read_address = Self::read(channel);
         //assert_eq!(address, read_address as usize);
@@ -423,11 +447,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         self.read_offset += PropertyMessageResponse::peek_len(src);
     }
 
-
-    pub fn submit_messages(
-        &mut self,
-        channel: u8
-    ) -> Result<(), u32>{
+    pub fn submit_messages(&mut self, channel: u8) -> Result<(), u32> {
         // crate::peripherals::uart::Uart0::put_hex_bytes(&self.buffer);
         self.call(channel);
 

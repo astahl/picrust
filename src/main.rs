@@ -1,10 +1,10 @@
 #![no_std]
 #![no_main]
 
-mod peripherals;
+mod buffer;
 mod hal;
 mod monitor;
-mod buffer;
+mod peripherals;
 use core::arch::global_asm;
 
 #[panic_handler]
@@ -23,7 +23,6 @@ extern "C" {
     static __font_end: u64;
 }
 
-
 unsafe fn clear_bss() {
     let from = core::ptr::addr_of_mut!(__bss_start);
     let to = core::ptr::addr_of_mut!(__bss_end);
@@ -32,10 +31,11 @@ unsafe fn clear_bss() {
 }
 
 fn initialize_global() {
-    unsafe { clear_bss(); }
+    unsafe {
+        clear_bss();
+    }
     hal::led::status_set(true);
 }
-
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
@@ -44,7 +44,7 @@ pub extern "C" fn kernel_main() {
         0 => initialize_global(),
         _ => {}
     }
-    
+
     use peripherals::uart::Uart0;
     Uart0::init();
     let mut str_buffer = buffer::Ring::<u8>::new();
@@ -53,16 +53,23 @@ pub extern "C" fn kernel_main() {
     let fb = hal::framebuffer::Framebuffer::new(1920, 1080).unwrap();
     fb.clear(color::BLACK);
 
-    let font = unsafe { core::slice::from_raw_parts(core::ptr::addr_of!(__font_start), core::ptr::addr_of!(__font_end).offset_from(core::ptr::addr_of!(__font_start)).unsigned_abs()) };
+    let font = unsafe {
+        core::slice::from_raw_parts(
+            core::ptr::addr_of!(__font_start),
+            core::ptr::addr_of!(__font_end)
+                .offset_from(core::ptr::addr_of!(__font_start))
+                .unsigned_abs(),
+        )
+    };
 
     let text = b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
     let mapping = |c: u8| -> u8 {
         match c {
             0 => b' ',
             b' '..=b'?' => c,
-            b'@'..=b'_' => c as u8 - b'@', 
+            b'@'..=b'_' => c as u8 - b'@',
             b'a'..=b'z' => c as u8 - b'`' | 0x80,
-            _ => 255
+            _ => 255,
         }
     };
     fb.clear(color::BLUE);
@@ -71,12 +78,27 @@ pub extern "C" fn kernel_main() {
 
     //let mut str_buffer = StringBuffer::<1024>::new();
     use core::fmt::Write;
-    writeln!(str_buffer, "Framebuffer: {} {} {}", fb.width_px, fb.height_px, fb.bits_per_pixel).unwrap();
+    writeln!(
+        str_buffer,
+        "Framebuffer: {} {} {}",
+        fb.width_px, fb.height_px, fb.bits_per_pixel
+    )
+    .unwrap();
     if let Some(arm_memory) = hal::info::get_arm_memory() {
-        writeln!(str_buffer, "ARM Memory {:#X} {:#X}", arm_memory.base_address, arm_memory.size).unwrap();
+        writeln!(
+            str_buffer,
+            "ARM Memory {:#X} {:#X}",
+            arm_memory.base_address, arm_memory.size
+        )
+        .unwrap();
     }
     if let Some(vc_memory) = hal::info::get_vc_memory() {
-        writeln!(str_buffer, "VC Memory {:#X} {:#X}", vc_memory.base_address, vc_memory.size).unwrap();
+        writeln!(
+            str_buffer,
+            "VC Memory {:#X} {:#X}",
+            vc_memory.base_address, vc_memory.size
+        )
+        .unwrap();
     }
     // if let Some(board_info) = hal::info::get_board_info() {
     //     writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
@@ -85,7 +107,7 @@ pub extern "C" fn kernel_main() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }
 
-    for edid in hal::display::MockEdidIterator::new() {
+    for edid in hal::display::EdidIterator::new() {
         writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
         // for byte in edid.bytes() {
         //     write!(str_buffer, "{:02X} ", byte).unwrap();
@@ -99,7 +121,7 @@ pub extern "C" fn kernel_main() {
     // Uart0::puts(str_buffer.str());
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
-    // 
+    //
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();
 
@@ -108,7 +130,6 @@ pub extern "C" fn kernel_main() {
         core::hint::spin_loop();
     }
 }
-
 
 fn get_core_num() -> usize {
     let mut core_num: usize;
@@ -127,10 +148,7 @@ fn get_core_num() -> usize {
     core_num & 0b11
 }
 
-global_asm!(
-    ".section .font",
-    ".incbin \"901447-10.bin\""
-);
+global_asm!(".section .font", ".incbin \"901447-10.bin\"");
 
 #[cfg(target_arch = "arm")]
 global_asm!(
@@ -153,27 +171,24 @@ global_asm!(
     "b halt"
 );
 
-
 #[cfg(target_arch = "aarch64")]
 global_asm!(
-".section \".text.boot\"",  // Make sure the linker puts this at the start of the kernel image
-".global _start",  // Execution starts here
-"_start:",
+    ".section \".text.boot\"", // Make sure the linker puts this at the start of the kernel image
+    ".global _start",          // Execution starts here
+    "_start:",
     // Check processor ID is zero (executing on main core), else hang
     "mrs     x1, mpidr_el1",
     "and     x1, x1, #3",
     "cbz     x1, 2f",
     // We're not on the main core, so hang in an infinite wait loop
-"1:  wfe",
+    "1:  wfe",
     "b       1b",
-"2:",  // We're on the main core!
-
+    "2:", // We're on the main core!
     // Set stack to start below our code
     "ldr     x1, =_start",
     "mov     sp, x1",
-    
     // Jump to our main() routine in C (make sure it doesn't return)
-"4:  bl      kernel_main",
+    "4:  bl      kernel_main",
     // In case it does return, halt the master core too
     "b       1b"
 );
@@ -184,5 +199,3 @@ pub fn delay(mut count: usize) {
         core::hint::spin_loop();
     }
 }
-
-

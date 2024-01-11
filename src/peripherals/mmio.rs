@@ -6,7 +6,7 @@ pub fn read_from(ptr: *const u32) -> u32 {
     unsafe { core::ptr::read_volatile(ptr) }
 }
 
-pub struct  MMIO<const BASE: usize, const OFFSET: usize>();
+pub struct MMIO<const BASE: usize, const OFFSET: usize>();
 impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
     const ADDRESS: usize = crate::peripherals::BCM_HOST.peripheral_address + BASE + OFFSET;
 

@@ -83,7 +83,6 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
         }
     }
 
-
     pub fn put_hex_bytes(buffer: &[u8]) {
         for chunk in buffer.chunks(16) {
             for chunk in chunk.chunks(4) {
@@ -157,7 +156,6 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
         UartFlags(Self::FLAG_REGISTER.read())
     }
 }
-
 
 pub struct UartStatus(u32);
 impl UartStatus {

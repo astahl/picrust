@@ -1,7 +1,7 @@
 use crate::delay;
 use crate::peripherals::mmio::MMIO;
 
-pub struct Gpio ();
+pub struct Gpio();
 
 const GPIO_BASE: usize = 0x200000;
 impl Gpio {

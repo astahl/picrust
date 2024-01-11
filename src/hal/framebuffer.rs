@@ -27,12 +27,14 @@ impl Framebuffer {
                 height_px: height,
             });
             mailbox.push_tag(FbSetVirtualDimensions {
-                    width_px: width,
-                    height_px: height,
-                });
+                width_px: width,
+                height_px: height,
+            });
             mailbox.push_tag(FbSetVirtualOffset { x_px: 0, y_px: 0 });
             mailbox.push_tag(FbSetDepth { bpp: 32 });
-            mailbox.push_tag(FbSetPixelOrder { state: PixelOrder::Rgb });
+            mailbox.push_tag(FbSetPixelOrder {
+                state: PixelOrder::Rgb,
+            });
             mailbox.push_tag(FbAllocateBuffer {
                 alignment_bytes: 4096,
             });
@@ -42,7 +44,7 @@ impl Framebuffer {
 
         if mailbox.submit_messages(8).is_ok() {
             let (width_px, height_px) = mailbox.pop_values();
-            // FbSetVirtualDimensions {..}, 
+            // FbSetVirtualDimensions {..},
             mailbox.skip_tag();
             // FbSetVirtualOffset { .. },
             mailbox.skip_tag();
@@ -55,7 +57,12 @@ impl Framebuffer {
 
             let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
             Some(Self {
-                width_px, height_px, ptr, size_bytes, bits_per_pixel, pitch_bytes
+                width_px,
+                height_px,
+                ptr,
+                size_bytes,
+                bits_per_pixel,
+                pitch_bytes,
             })
         } else {
             return None;
@@ -66,7 +73,10 @@ impl Framebuffer {
         let bytes_per_pixel = self.bits_per_pixel >> 3;
         if x < self.width_px && y < self.height_px {
             unsafe {
-                *self.ptr.add((self.pitch_bytes * y + x * bytes_per_pixel) as usize).cast::<u32>() = value;
+                *self
+                    .ptr
+                    .add((self.pitch_bytes * y + x * bytes_per_pixel) as usize)
+                    .cast::<u32>() = value;
             }
         }
     }
@@ -74,14 +84,15 @@ impl Framebuffer {
     pub fn clear(&self, abgr: u32) {
         self.as_mut_pixels().fill(abgr);
     }
-        
 
     // pub fn as_pixels(&self) -> &[u32] {
     //     unsafe { core::slice::from_raw_parts(self.ptr.cast::<u32>(), self.size_bytes / 4) }
     // }
 
     pub fn as_mut_pixels(&self) -> &mut [u32] {
-        unsafe { core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes as usize >> 2) }
+        unsafe {
+            core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes as usize >> 2)
+        }
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -93,12 +104,12 @@ impl Framebuffer {
     }
 
     pub fn write_text(&self, text: &[u8], font: &[u64], mapping: impl Fn(u8) -> u8) {
-        let repeat = (2,2);
-        let offset = (40,48);
+        let repeat = (2, 2);
+        let offset = (40, 48);
         let size = (self.width_px - 2 * offset.0, self.height_px - 2 * offset.1);
         let columns = size.0 as usize / (repeat.0 * 8);
         for y in 0..size.1 {
-            let yy = y as usize / repeat.1; 
+            let yy = y as usize / repeat.1;
             for x in 0..size.0 {
                 let xx = x as usize / repeat.0;
                 let char_index = (xx / 8, yy / 8);

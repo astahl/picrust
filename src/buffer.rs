@@ -1,7 +1,6 @@
 pub enum BufferError {
-    Overflow
+    Overflow,
 }
-
 
 pub struct Ring<T> {
     read: u16,
@@ -63,14 +62,17 @@ impl<T> Ring<T> {
 
     pub fn as_slices(&self) -> (&[T], &[T]) {
         if self.read <= self.write {
-            (&self.data[self.read as usize .. self.write as usize], &[])
+            (&self.data[self.read as usize..self.write as usize], &[])
         } else {
-            (&self.data[self.read as usize ..], &self.data[.. self.write as usize])
+            (
+                &self.data[self.read as usize..],
+                &self.data[..self.write as usize],
+            )
         }
     }
 }
 
-impl <T: Default + Copy> Ring<T> {
+impl<T: Default + Copy> Ring<T> {
     pub fn new() -> Self {
         Self {
             read: 0,
@@ -88,21 +90,16 @@ impl <T: Default + Copy> Ring<T> {
     }
 }
 
-
-
-
 impl core::fmt::Write for Ring<u8> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        s.bytes().try_for_each(|byte| {
-            self.put(byte).map_err(|_| core::fmt::Error)
-        })
+        s.bytes()
+            .try_for_each(|byte| self.put(byte).map_err(|_| core::fmt::Error))
     }
 }
 
 impl core::fmt::Write for Ring<char> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        s.chars().try_for_each(|char| {
-            self.put(char).map_err(|_| core::fmt::Error)
-        })
+        s.chars()
+            .try_for_each(|char| self.put(char).map_err(|_| core::fmt::Error))
     }
 }
