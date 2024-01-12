@@ -50,7 +50,7 @@ pub extern "C" fn kernel_main() {
     let mut str_buffer = buffer::Ring::<u8>::new();
 
     use hal::framebuffer::color;
-    let fb = hal::framebuffer::Framebuffer::new(1920, 1080).unwrap();
+    let fb = hal::framebuffer::Framebuffer::new(1280, 720).unwrap();
     fb.clear(color::BLACK);
 
     let font = unsafe {
@@ -76,7 +76,6 @@ pub extern "C" fn kernel_main() {
     fb.write_text(text, font, mapping);
     fb.clear(color::RED);
 
-    //let mut str_buffer = StringBuffer::<1024>::new();
     use core::fmt::Write;
     writeln!(
         str_buffer,
@@ -107,8 +106,8 @@ pub extern "C" fn kernel_main() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }
 
-    for edid in hal::display::EdidIterator::new() {
-        writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
+    for edid in hal::display::MockEdidIterator::new() {
+        writeln!(str_buffer, "EDID BLOCK {:#?}", edid).unwrap();
         // for byte in edid.bytes() {
         //     write!(str_buffer, "{:02X} ", byte).unwrap();
         // }
@@ -118,7 +117,7 @@ pub extern "C" fn kernel_main() {
     fb.clear(color::GREEN);
     fb.write_text(text.0, font, mapping);
 
-    // Uart0::puts(str_buffer.str());
+    Uart0::puts(core::str::from_utf8(text.0).unwrap());
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //

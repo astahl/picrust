@@ -35,22 +35,6 @@ impl Edid {
     }
 }
 
-impl Display for Edid {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Edid::Edid(edid) => {
-                write!(
-                    f,
-                    "EDID {}",
-                    core::str::from_utf8(edid.manufacturer_id().as_slice()).unwrap()
-                )
-            }
-            Edid::CtaExtensionRev3(cta) => write!(f, "Cta Rev {}", cta.cta_revision()),
-            Edid::Unknown => write!(f, "[Empty or unknown EDID]"),
-        }
-    }
-}
-
 pub struct EdidBlock([u8; 128]);
 
 #[repr(u8)]
@@ -344,6 +328,154 @@ pub enum Descriptor {
     },
 }
 
+impl Descriptor {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 18 {
+            return None;
+        }
+        let byte0 = bytes[0];
+        let byte1 = bytes[1];
+        match (byte0, byte1) {
+            (0, 0) => match bytes[3] {
+                0x10 => None,
+                0xFF => Some(Descriptor::DisplaySerialNumber(
+                    bytes[5..=17].try_into().unwrap(),
+                )),
+                0xFE => Some(Descriptor::UnspecifiedText(
+                    bytes[5..=17].try_into().unwrap(),
+                )),
+                0xFC => Some(Descriptor::DisplayName(bytes[5..=17].try_into().unwrap())),
+                0xFD => Some({
+                    let mut vertical_field_rate_hz_min_max = (bytes[5] as u16, bytes[6] as u16);
+                    let mut horizontal_line_rate_khz_min_max =
+                        (bytes[7] as u16, bytes[8] as u16);
+
+                    vertical_field_rate_hz_min_max.1 += (bytes[4] & 1) as u16 * 255;
+                    vertical_field_rate_hz_min_max.0 += (bytes[4] >> 1 & 1) as u16 * 255;
+                    horizontal_line_rate_khz_min_max.1 += (bytes[4] >> 2 & 1) as u16 * 255;
+                    horizontal_line_rate_khz_min_max.0 += (bytes[4] >> 3 & 1) as u16 * 255;
+
+                    Descriptor::RangeLimits {
+                        vertical_field_rate_hz_min_max,
+                        horizontal_line_rate_khz_min_max,
+                        maximum_pixel_clock_10mhz: bytes[9],
+                        extended_timing_information: match bytes[10] {
+                            0 => ExtendedTimingInformation::DefaultGtf,
+                            1 => ExtendedTimingInformation::NoTimingInformation,
+                            2 => ExtendedTimingInformation::SecondaryGtfSupported {
+                                start_frequency_2khz: bytes[12],
+                                gtf_c_0_5: bytes[13],
+                                gtf_m: u16::from_le_bytes(bytes[14..=15].try_into().unwrap()),
+                                gtf_k: bytes[16],
+                                gtf_j_0_5: bytes[17],
+                            },
+                            4 => ExtendedTimingInformation::Cvt {
+                                cvt_version_major: bytes[11] >> 4,
+                                cvt_version_minor: bytes[11] & 0xf,
+                                maximum_pixel_clock_reduction_250khz: bytes[12] >> 2,
+                                maximum_active_pixels_per_line: (bytes[12] as u16 & 0b11) << 8
+                                    | bytes[13] as u16,
+                                ar_4_3: bytes[14] & 0x80 != 0,
+                                ar_16_9: bytes[14] & 0x40 != 0,
+                                ar_16_10: bytes[14] & 0x20 != 0,
+                                ar_5_4: bytes[14] & 0x10 != 0,
+                                ar_15_9: bytes[14] & 0x08 != 0,
+                                preferred_aspect_ratio: unsafe {
+                                    core::mem::transmute(bytes[15] >> 5)
+                                },
+                                preferred_reduced_blanking: bytes[15] & 0x10 != 0,
+                                standard_blanking: bytes[15] & 0x08 != 0,
+                                scaling_support_horizontal_shrink: bytes[16] & 0x80 != 0,
+                                scaling_support_horizontal_stretch: bytes[16] & 0x40 != 0,
+                                scaling_support_vertical_shrink: bytes[16] & 0x20 != 0,
+                                scaling_support_vertical_stretch: bytes[16] & 0x10 != 0,
+                                preferred_vertical_refresh_rate: bytes[17],
+                            },
+
+                            x => ExtendedTimingInformation::Unknown(x),
+                        },
+                    }
+                }),
+                x => Some(Descriptor::Unknown(x)),
+            },
+            _ => Some(Descriptor::DetailedTiming {
+                pixel_clock_10khz: u16::from_le_bytes([byte0, byte1]),
+                horizontal_active_pixels: u16::from_le_bytes([bytes[2], bytes[4] >> 4]),
+                horizontal_blanking_pixels: u16::from_le_bytes([bytes[3], bytes[4] & 0xF]),
+                vertical_active_lines: u16::from_le_bytes([bytes[5], bytes[7] >> 4]),
+                vertical_blanking_lines: u16::from_le_bytes([bytes[6], bytes[7] & 0xF]),
+                horizontal_front_porch_pixels: u16::from_le_bytes([bytes[8], bytes[11] >> 6]),
+                horizontal_sync_pulse_width_pixels: u16::from_le_bytes([
+                    bytes[9],
+                    (bytes[11] >> 4) & 0b11,
+                ]),
+                vertical_front_porch_lines: (bytes[11] & 0b1100) << 2 | bytes[10] >> 4,
+                vertical_sync_pulse_width_lines: (bytes[11] & 0b11) << 4 | bytes[10] & 0x0F,
+                horizontal_image_size_mm: u16::from_le_bytes([bytes[12], bytes[14] >> 4]),
+                vertical_image_size_mm: u16::from_le_bytes([bytes[13], bytes[14] & 0xF]),
+                horizontal_border_pixels: bytes[15],
+                vertical_border_lines: bytes[16],
+                signal_interface_type: if bytes[17] & 0x80 == 0 {
+                    SignalInterfaceType::NonInterlaced
+                } else {
+                    SignalInterfaceType::Interlaced
+                },
+                stereo_mode: unsafe {
+                    core::mem::transmute(bytes[17] >> 4 & 0b110 | bytes[17] & 0b1)
+                },
+                sync: {
+                    let bitmap = bytes[17];
+                    match bitmap >> 4 & 1 {
+                        0 => Sync::AnalogComposite {
+                            bipolar: bitmap >> 3 & 1 == 1,
+                            serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1,
+                            sync_on_red_and_blue_lines_additionally_to_green: bitmap >> 1 & 1
+                                == 1,
+                        },
+                        _ => match bitmap >> 3 & 1 {
+                            0 => Sync::DigitalComposite {
+                                serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1,
+                                horizontal_sync_polarity: if bitmap >> 1 & 1 == 1 {
+                                    Polarity::Positive
+                                } else {
+                                    Polarity::Negative
+                                },
+                            },
+                            _ => Sync::DigitalSeparate {
+                                vertical_sync_polarity: if bitmap >> 2 & 1 == 1 {
+                                    Polarity::Positive
+                                } else {
+                                    Polarity::Negative
+                                },
+                                horizontal_sync_polarity: if bitmap >> 1 & 1 == 1 {
+                                    Polarity::Positive
+                                } else {
+                                    Polarity::Negative
+                                },
+                            },
+                        },
+                    }
+                },
+            }),
+        }
+    }
+}
+
+pub struct DescriptorIterator<'a> (&'a [u8]);
+
+impl Iterator for DescriptorIterator<'_> {
+    type Item = Descriptor;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.len() < 18 {
+            return None;
+        }
+        let (head, tail) = self.0.split_at(18);
+        self.0 = tail;
+        Descriptor::from_bytes(head)
+    }
+}
+
 impl EdidBlock {
     pub fn test_block() -> Self {
         let edid0: [u8; 128] = [
@@ -530,131 +662,9 @@ impl EdidBlock {
 
     pub fn descriptors(&self) -> [Option<Descriptor>; 4] {
         let mut result = [None; 4];
-        for (i, bytes) in self.0.split_at(54).1.chunks_exact(18).enumerate() {
-            let byte0 = bytes[0];
-            let byte1 = bytes[1];
-            result[i] = match (byte0, byte1) {
-                (0, 0) => match bytes[3] {
-                    0x10 => None,
-                    0xFF => Some(Descriptor::DisplaySerialNumber(
-                        bytes[5..=17].try_into().unwrap(),
-                    )),
-                    0xFE => Some(Descriptor::UnspecifiedText(
-                        bytes[5..=17].try_into().unwrap(),
-                    )),
-                    0xFC => Some(Descriptor::DisplayName(bytes[5..=17].try_into().unwrap())),
-                    0xFD => Some({
-                        let mut vertical_field_rate_hz_min_max = (bytes[5] as u16, bytes[6] as u16);
-                        let mut horizontal_line_rate_khz_min_max =
-                            (bytes[7] as u16, bytes[8] as u16);
-
-                        vertical_field_rate_hz_min_max.1 += (bytes[4] & 1) as u16 * 255;
-                        vertical_field_rate_hz_min_max.0 += (bytes[4] >> 1 & 1) as u16 * 255;
-                        horizontal_line_rate_khz_min_max.1 += (bytes[4] >> 2 & 1) as u16 * 255;
-                        horizontal_line_rate_khz_min_max.0 += (bytes[4] >> 3 & 1) as u16 * 255;
-
-                        Descriptor::RangeLimits {
-                            vertical_field_rate_hz_min_max,
-                            horizontal_line_rate_khz_min_max,
-                            maximum_pixel_clock_10mhz: bytes[9],
-                            extended_timing_information: match bytes[10] {
-                                0 => ExtendedTimingInformation::DefaultGtf,
-                                1 => ExtendedTimingInformation::NoTimingInformation,
-                                2 => ExtendedTimingInformation::SecondaryGtfSupported {
-                                    start_frequency_2khz: bytes[12],
-                                    gtf_c_0_5: bytes[13],
-                                    gtf_m: u16::from_le_bytes(bytes[14..=15].try_into().unwrap()),
-                                    gtf_k: bytes[16],
-                                    gtf_j_0_5: bytes[17],
-                                },
-                                4 => ExtendedTimingInformation::Cvt {
-                                    cvt_version_major: bytes[11] >> 4,
-                                    cvt_version_minor: bytes[11] & 0xf,
-                                    maximum_pixel_clock_reduction_250khz: bytes[12] >> 2,
-                                    maximum_active_pixels_per_line: (bytes[12] as u16 & 0b11) << 8
-                                        | bytes[13] as u16,
-                                    ar_4_3: bytes[14] & 0x80 != 0,
-                                    ar_16_9: bytes[14] & 0x40 != 0,
-                                    ar_16_10: bytes[14] & 0x20 != 0,
-                                    ar_5_4: bytes[14] & 0x10 != 0,
-                                    ar_15_9: bytes[14] & 0x08 != 0,
-                                    preferred_aspect_ratio: unsafe {
-                                        core::mem::transmute(bytes[15] >> 5)
-                                    },
-                                    preferred_reduced_blanking: bytes[15] & 0x10 != 0,
-                                    standard_blanking: bytes[15] & 0x08 != 0,
-                                    scaling_support_horizontal_shrink: bytes[16] & 0x80 != 0,
-                                    scaling_support_horizontal_stretch: bytes[16] & 0x40 != 0,
-                                    scaling_support_vertical_shrink: bytes[16] & 0x20 != 0,
-                                    scaling_support_vertical_stretch: bytes[16] & 0x10 != 0,
-                                    preferred_vertical_refresh_rate: bytes[17],
-                                },
-
-                                x => ExtendedTimingInformation::Unknown(x),
-                            },
-                        }
-                    }),
-                    x => Some(Descriptor::Unknown(x)),
-                },
-                _ => Some(Descriptor::DetailedTiming {
-                    pixel_clock_10khz: u16::from_le_bytes([byte0, byte1]),
-                    horizontal_active_pixels: u16::from_le_bytes([bytes[2], bytes[4] >> 4]),
-                    horizontal_blanking_pixels: u16::from_le_bytes([bytes[3], bytes[4] & 0xF]),
-                    vertical_active_lines: u16::from_le_bytes([bytes[5], bytes[7] >> 4]),
-                    vertical_blanking_lines: u16::from_le_bytes([bytes[6], bytes[7] & 0xF]),
-                    horizontal_front_porch_pixels: u16::from_le_bytes([bytes[8], bytes[11] >> 6]),
-                    horizontal_sync_pulse_width_pixels: u16::from_le_bytes([
-                        bytes[9],
-                        (bytes[11] >> 4) & 0b11,
-                    ]),
-                    vertical_front_porch_lines: (bytes[11] & 0b1100) << 2 | bytes[10] >> 4,
-                    vertical_sync_pulse_width_lines: (bytes[11] & 0b11) << 4 | bytes[10] & 0x0F,
-                    horizontal_image_size_mm: u16::from_le_bytes([bytes[12], bytes[14] >> 4]),
-                    vertical_image_size_mm: u16::from_le_bytes([bytes[13], bytes[14] & 0xF]),
-                    horizontal_border_pixels: bytes[15],
-                    vertical_border_lines: bytes[16],
-                    signal_interface_type: if bytes[17] & 0x80 == 0 {
-                        SignalInterfaceType::NonInterlaced
-                    } else {
-                        SignalInterfaceType::Interlaced
-                    },
-                    stereo_mode: unsafe {
-                        core::mem::transmute(bytes[17] >> 4 & 0b110 | bytes[17] & 0b1)
-                    },
-                    sync: {
-                        let bitmap = bytes[17];
-                        match bitmap >> 4 & 1 {
-                            0 => Sync::AnalogComposite {
-                                bipolar: bitmap >> 3 & 1 == 1,
-                                serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1,
-                                sync_on_red_and_blue_lines_additionally_to_green: bitmap >> 1 & 1
-                                    == 1,
-                            },
-                            _ => match bitmap >> 3 & 1 {
-                                0 => Sync::DigitalComposite {
-                                    serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1,
-                                    horizontal_sync_polarity: if bitmap >> 1 & 1 == 1 {
-                                        Polarity::Positive
-                                    } else {
-                                        Polarity::Negative
-                                    },
-                                },
-                                _ => Sync::DigitalSeparate {
-                                    vertical_sync_polarity: if bitmap >> 2 & 1 == 1 {
-                                        Polarity::Positive
-                                    } else {
-                                        Polarity::Negative
-                                    },
-                                    horizontal_sync_polarity: if bitmap >> 1 & 1 == 1 {
-                                        Polarity::Positive
-                                    } else {
-                                        Polarity::Negative
-                                    },
-                                },
-                            },
-                        }
-                    },
-                }),
+        if let Some(bytes) = self.0.get(54..=125) {
+            for (i, desc) in DescriptorIterator(bytes).enumerate() {
+                result[i] = Some(desc);
             }
         }
         result
@@ -930,6 +940,11 @@ impl CtaExtensionBlock {
             bytes: data_block_slice,
         }
     }
+
+    pub fn descriptors(&self) -> DescriptorIterator {
+        let bytes = self.0.get(self.dtd_offset() as usize..);
+        DescriptorIterator(bytes.unwrap_or_default()) 
+    }
 }
 
 impl Debug for CtaExtensionBlock {
@@ -940,7 +955,8 @@ impl Debug for CtaExtensionBlock {
             .field("Support ycbcr_444", &self.support_ycbcr_444())
             .field("Support ycbcr_422", &self.support_ycbcr_422())
             .field("Native format count", &self.native_format_count());
-        f.debug_set().entries(self.data_blocks()).finish()
+        f.debug_set().entries(self.data_blocks());
+        f.debug_set().entries(self.descriptors()).finish()
     }
 }
 
