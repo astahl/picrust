@@ -33,7 +33,7 @@ impl Framebuffer {
             mailbox.push_tag(FbSetVirtualOffset { x_px: 0, y_px: 0 });
             mailbox.push_tag(FbSetDepth { bpp: 32 });
             mailbox.push_tag(FbSetPixelOrder {
-                state: PixelOrder::Rgb,
+                state: PixelOrder::Bgr,
             });
             mailbox.push_tag(FbAllocateBuffer {
                 alignment_bytes: 4096,

@@ -1,10 +1,46 @@
+use core::fmt::{Display, Write};
+
 use crate::peripherals::mailbox;
+
+
+pub struct ByteSize (pub usize);
+
+impl Display for ByteSize {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        const MASK: usize = 0x3ff;
+        const NAMES: [&'static str; 7] = ["Exbibyte", "Pebibyte", "Tebibyte", "Gibibyte", "Mebibyte", "Kibibyte", "Byte"];
+        let separator = "+";
+        let mut needs_separator = false;
+        f.write_char('(');
+        for i in 0..7 {
+            let val = (self.0 >> ((6 - i) * 10)) & MASK;
+            if val != 0 {
+                write!(f, "{}{} {}", if needs_separator { separator } else { "" }, val, NAMES[i])?;
+                needs_separator = true;
+            }
+            if val > 1 {
+                f.write_char('s')?;
+            }
+        }
+        f.write_char(')');
+        Ok(())
+
+    }
+}
 
 pub struct Memory {
     pub base_address: usize,
-    pub size: usize,
+    pub size: ByteSize,
 }
 
+impl Display for Memory {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Memory[{} starting at 0x{:x}]", self.size, self.base_address)
+    }
+}
+
+
+#[derive(Debug)]
 pub struct BoardInfo {
     pub model: u32,
     pub revision: u32,
@@ -20,7 +56,7 @@ pub fn get_arm_memory() -> Option<Memory> {
         let (base_address, size): (u32, u32) = mb.pop_values();
         Some(Memory {
             base_address: base_address as usize,
-            size: size as usize,
+            size: ByteSize(size as usize),
         })
     } else {
         None
@@ -36,7 +72,7 @@ pub fn get_vc_memory() -> Option<Memory> {
         let (base_address, size): (u32, u32) = mb.pop_values();
         Some(Memory {
             base_address: base_address as usize,
-            size: size as usize,
+            size: ByteSize(size as usize),
         })
     } else {
         None

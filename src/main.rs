@@ -7,6 +7,8 @@ mod monitor;
 mod peripherals;
 use core::arch::global_asm;
 
+use crate::hal::display::Resolution;
+
 #[panic_handler]
 fn on_panic(_info: &core::panic::PanicInfo) -> ! {
     loop {
@@ -79,6 +81,10 @@ pub extern "C" fn kernel_main() {
     fb.clear(color::RED);
 
     use core::fmt::Write;
+    let mut supported_resolutions = [Resolution::default(); 128];
+    let count = hal::display::Resolution::supported(supported_resolutions.as_mut_slice(), 0);
+    writeln!(str_buffer, "Supported {:?}", supported_resolutions.get(0..count)).unwrap();
+    writeln!(str_buffer, "Requested Resolution {:?}", resolution).unwrap();
     writeln!(
         str_buffer,
         "Framebuffer: {} {} {}",
@@ -88,16 +94,16 @@ pub extern "C" fn kernel_main() {
     if let Some(arm_memory) = hal::info::get_arm_memory() {
         writeln!(
             str_buffer,
-            "ARM Memory {:#X} {:#X}",
-            arm_memory.base_address, arm_memory.size
+            "ARM {}",
+            arm_memory
         )
         .unwrap();
     }
     if let Some(vc_memory) = hal::info::get_vc_memory() {
         writeln!(
             str_buffer,
-            "VC Memory {:#X} {:#X}",
-            vc_memory.base_address, vc_memory.size
+            "VC {}",
+            vc_memory
         )
         .unwrap();
     }
@@ -108,8 +114,8 @@ pub extern "C" fn kernel_main() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }
     
-    for edid in hal::display::MockEdidIterator::new() {
-        writeln!(str_buffer, "EDID BLOCK {:#?}", edid).unwrap();
+    for edid in hal::display::EdidIterator::new() {
+        writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
         // for byte in edid.bytes() {
         //     write!(str_buffer, "{:02X} ", byte).unwrap();
         // }

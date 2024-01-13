@@ -1,49 +1,251 @@
-use core::{fmt::{Debug, Display}, iter::{empty, Empty}, convert::identity};
+use core::{fmt::{Debug, Display}, mem::MaybeUninit};
+
 
 use crate::peripherals::mailbox;
 
-#[derive(Debug, Clone, Copy)]
+pub struct BufferedIterator<T, const CAPACITY: usize> {
+    index: usize,
+    len: usize,
+    buffer: [core::mem::MaybeUninit<T>; CAPACITY]
+}
+
+impl<T, const CAPACITY: usize> BufferedIterator<T, CAPACITY> {
+    pub fn new() -> Self {
+        Self {
+            index: 0,
+            len: 0,
+            buffer: core::array::from_fn(|_|core::mem::MaybeUninit::<T>::uninit())
+        }
+    }
+
+    pub fn push(&mut self, value: T) {
+        if self.len < CAPACITY {
+            self.buffer[self.len].write(value);
+            self.len += 1;
+        }
+    }
+}
+
+impl<T, const CAPACITY: usize> Iterator for BufferedIterator<T, CAPACITY> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index == self.len {
+            None
+        } else {
+            let result = unsafe { self.buffer[self.index].assume_init_read() };
+            self.index += 1;
+            Some(result)
+        }
+    }
+}
+
+
+fn gcd<T> (mut a: T, mut b: T) -> T where T: core::ops::Rem<T, Output = T> + PartialEq + Copy {
+    let zero = a % a;
+    while b != zero {
+        let remainder = a % b;
+        a = core::mem::replace(&mut b, remainder);
+    }
+    a
+}
+
+#[derive(Copy, Clone)]
+pub struct Fract<T>(T, T);
+
+impl<T> Fract<T> {
+    pub fn inverted_copy(&self) -> Self where T: Copy {
+        Self(self.1, self.0)
+    }
+
+    pub fn invert(&mut self) {
+        core::mem::swap(&mut self.0, &mut self.1);
+    }
+}
+
+impl<T> Fract<T> where T: core::ops::Rem<T, Output = T> + PartialEq + Copy + core::ops::Div<Output = T> {
+    pub fn reduced(a: T, b: T) -> Self {
+        let d = gcd(a, b);
+        Self(a / d, b / d)
+    }
+
+    pub fn reduced_copy(&self) -> Self {
+        Self::reduced(self.0, self.1)
+    }
+}
+
+impl<T> Display for Fract<T> where T: Display {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}:{}", self.0, self.1)
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct Resolution {
     pub horizontal: usize,
     pub vertical: usize,
-    pub refresh_rate: usize,
+    pub refresh_rate: f32,
+    pub interlaced: bool,
+    pub aspect_ratio: Fract<u16>
 }
 
 impl Default for Resolution {
     fn default() -> Self {
-        Self { horizontal: 1280, vertical: 720, refresh_rate: 60 }
+        Self { horizontal: 1280, vertical: 720, refresh_rate: 60.0, interlaced: false, aspect_ratio: Fract(16, 9) }
+    }
+}
+
+impl Display for Resolution {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}x{}{}{} {}", self.horizontal, self.vertical, if self.interlaced {"i"} else {"p"}, self.refresh_rate, self.aspect_ratio)
+    }
+}
+
+impl Debug for Resolution {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
 impl Resolution {
+
+    fn from_legacy_timing(legacy_timing: CommonLegacyTimingSupport) -> BufferedIterator<Self, 17> {
+        let mut result = BufferedIterator::<Self, 17>::new();
+        
+        let aspect_ratio = Fract(4,3);
+        let interlaced = false;
+        if legacy_timing._1024_768_60 {
+            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 60.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._1024_768_70 {
+            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 70.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._1024_768_75 {
+            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 75.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._1024_768_87_interlaced {
+            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 87.0, interlaced: true, aspect_ratio });
+        }
+        if legacy_timing._1152_870_75 {
+            result.push(Self{ horizontal: 1152, vertical: 870, refresh_rate: 75.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._1280_1024_75 {
+            result.push(Self{ horizontal: 1280, vertical: 1024, refresh_rate: 75.0, interlaced, aspect_ratio: Fract(5,4) });
+        }
+        if legacy_timing._640_480_60 {
+            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 60.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._640_480_67 {
+            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 67.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._640_480_72 {
+            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 72.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._640_480_75 {
+            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 75.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._720_400_70 {
+            result.push(Self{ horizontal: 720, vertical: 400, refresh_rate: 70.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._720_400_88 {
+            result.push(Self{ horizontal: 720, vertical: 400, refresh_rate: 88.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._800_600_56 {
+            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 56.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._800_600_60 {
+            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 60.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._800_600_72 {
+            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 72.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._800_600_75 {
+            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 75.0, interlaced, aspect_ratio });
+        }
+        if legacy_timing._832_624_75 {
+            result.push(Self{ horizontal: 832, vertical: 624, refresh_rate: 75.0, interlaced, aspect_ratio });
+        }
+        result
+    }
+
+    fn from_standard_timing(standard_timing: StandardTimingInformation) -> Self {
+        let aspect_ratio = match standard_timing.image_aspect_ratio {
+            StandardTimingImageAspectRatio::_16_10 => Fract(16,10),
+            StandardTimingImageAspectRatio::_4_3 => Fract(4,3),
+            StandardTimingImageAspectRatio::_5_4 => Fract(5,4),
+            StandardTimingImageAspectRatio::_16_9 => Fract(16,9),
+        };
+        Self {
+            horizontal: standard_timing.x_resolution as usize,
+            vertical: (standard_timing.x_resolution * aspect_ratio.1) as usize / aspect_ratio.0 as usize,
+            refresh_rate: standard_timing.vertical_frequency as f32,
+            interlaced: false,
+            aspect_ratio,
+        }
+    }
+
     fn from_descriptor(descriptor: Descriptor) -> Option<Self> {
         match descriptor {
             Descriptor::DetailedTiming { 
-                pixel_clock_10khz: _, 
+                pixel_clock_10khz, 
                 horizontal_active_pixels, 
-                horizontal_blanking_pixels : _, 
+                horizontal_blanking_pixels, 
                 vertical_active_lines, 
-                vertical_blanking_lines: _, 
+                vertical_blanking_lines, 
                 horizontal_front_porch_pixels: _, 
                 horizontal_sync_pulse_width_pixels: _, 
                 vertical_front_porch_lines: _, 
                 vertical_sync_pulse_width_lines: _, 
-                horizontal_image_size_mm: _, 
-                vertical_image_size_mm: _, 
+                horizontal_image_size_mm, 
+                vertical_image_size_mm, 
                 horizontal_border_pixels: _, 
                 vertical_border_lines: _, 
-                signal_interface_type: _, 
+                signal_interface_type, 
                 stereo_mode: _, 
                 sync: _ } => {
+                    let total_horizontal_pixels = (horizontal_active_pixels + horizontal_blanking_pixels) as usize;
+                    let total_vertical_lines = (vertical_active_lines + vertical_blanking_lines) as usize;
+                    let total_pixels = total_horizontal_pixels * total_vertical_lines;
+                    let pixel_clock_hz = pixel_clock_10khz as usize * 10_000;
+                    let refresh_rate = pixel_clock_hz as f32 / total_pixels as f32;
                     Some(Self{ 
                         horizontal: horizontal_active_pixels as usize, 
                         vertical: vertical_active_lines as usize, 
-                        refresh_rate: 60 })
+                        refresh_rate,
+                        interlaced: match signal_interface_type {
+                            SignalInterfaceType::Interlaced => true,
+                            _ => false
+                        },
+                        aspect_ratio: Fract::reduced(horizontal_image_size_mm, vertical_image_size_mm)
+                    })
                 }
             _ => None
         }
     }
 
+    pub fn supported(buffer: &mut [Self], offset: usize) -> usize {
+        let mut count = 0;
+        let mut add = |res| {
+            buffer[count + offset] = res;
+            count += 1;
+        };
+        MockEdidIterator::new().for_each(|edid| {
+            match &edid {
+                Edid::Edid(edid_block) => {
+                    edid_block.descriptors_iter().filter_map(Self::from_descriptor).for_each(&mut add);
+                    edid_block.standard_timing_information().iter().filter_map(|sti| {
+                        sti.map(Self::from_standard_timing)   
+                    }).for_each(&mut add);
+                    Self::from_legacy_timing(edid_block.common_timing_support()).for_each(&mut add);
+                },
+                Edid::CtaExtensionRev3(cta_block) => {
+                    cta_block.descriptors().filter_map(Self::from_descriptor).for_each(&mut add);
+                }
+                Edid::Unknown => {},
+            };
+        });
+        count
+    } 
 
     pub fn preferred() -> Option<Self> {
         EdidIterator::new().find_map(|edid| {
@@ -528,6 +730,12 @@ impl Iterator for DescriptorIterator<'_> {
         let (head, tail) = self.0.split_at(18);
         self.0 = tail;
         Descriptor::from_bytes(head)
+    }
+}
+
+impl DescriptorIterator<'_> {
+    pub fn empty() -> Self {
+        Self(&[])
     }
 }
 
