@@ -1,6 +1,61 @@
-use core::fmt::{Debug, Display};
+use core::{fmt::{Debug, Display}, iter::{empty, Empty}, convert::identity};
 
 use crate::peripherals::mailbox;
+
+#[derive(Debug, Clone, Copy)]
+pub struct Resolution {
+    pub horizontal: usize,
+    pub vertical: usize,
+    pub refresh_rate: usize,
+}
+
+impl Default for Resolution {
+    fn default() -> Self {
+        Self { horizontal: 1280, vertical: 720, refresh_rate: 60 }
+    }
+}
+
+impl Resolution {
+    fn from_descriptor(descriptor: Descriptor) -> Option<Self> {
+        match descriptor {
+            Descriptor::DetailedTiming { 
+                pixel_clock_10khz: _, 
+                horizontal_active_pixels, 
+                horizontal_blanking_pixels : _, 
+                vertical_active_lines, 
+                vertical_blanking_lines: _, 
+                horizontal_front_porch_pixels: _, 
+                horizontal_sync_pulse_width_pixels: _, 
+                vertical_front_porch_lines: _, 
+                vertical_sync_pulse_width_lines: _, 
+                horizontal_image_size_mm: _, 
+                vertical_image_size_mm: _, 
+                horizontal_border_pixels: _, 
+                vertical_border_lines: _, 
+                signal_interface_type: _, 
+                stereo_mode: _, 
+                sync: _ } => {
+                    Some(Self{ 
+                        horizontal: horizontal_active_pixels as usize, 
+                        vertical: vertical_active_lines as usize, 
+                        refresh_rate: 60 })
+                }
+            _ => None
+        }
+    }
+
+
+    pub fn preferred() -> Option<Self> {
+        EdidIterator::new().find_map(|edid| {
+            match edid {
+                Edid::Edid(edid_block) => edid_block.descriptors_iter().find_map(Self::from_descriptor),
+                Edid::CtaExtensionRev3(cta_block) => cta_block.descriptors().find_map(Self::from_descriptor),
+                Edid::Unknown => None,
+            }
+        })
+    } 
+}
+
 
 #[derive(Debug)]
 pub enum Edid {
@@ -668,6 +723,10 @@ impl EdidBlock {
             }
         }
         result
+    }
+
+    pub fn descriptors_iter(&self) -> DescriptorIterator {
+        DescriptorIterator(self.0.get(54..=125).unwrap())
     }
 
     fn extension_len(&self) -> u8 {

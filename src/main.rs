@@ -50,7 +50,9 @@ pub extern "C" fn kernel_main() {
     let mut str_buffer = buffer::Ring::<u8>::new();
 
     use hal::framebuffer::color;
-    let fb = hal::framebuffer::Framebuffer::new(1280, 720).unwrap();
+    let resolution = hal::display::Resolution::preferred().unwrap_or_default();
+
+    let fb = hal::framebuffer::Framebuffer::new(resolution.horizontal as u32, resolution.vertical as u32).unwrap();
     fb.clear(color::BLACK);
 
     let font = unsafe {
@@ -105,7 +107,7 @@ pub extern "C" fn kernel_main() {
     // if let Some(mac) = hal::info::get_mac_address() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }
-
+    
     for edid in hal::display::MockEdidIterator::new() {
         writeln!(str_buffer, "EDID BLOCK {:#?}", edid).unwrap();
         // for byte in edid.bytes() {
