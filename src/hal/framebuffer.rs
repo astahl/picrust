@@ -104,7 +104,7 @@ impl Framebuffer {
     }
 
     pub fn write_text(&self, text: &[u8], font: &[u64], mapping: impl Fn(u8) -> u8) {
-        let repeat = (1, 1);
+        let repeat = (2, 2);
         let offset = (40, 48);
         let size = (self.width_px - 2 * offset.0, self.height_px - 2 * offset.1);
         let columns = size.0 as usize / (repeat.0 * 8);

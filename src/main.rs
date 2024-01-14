@@ -107,9 +107,9 @@ pub extern "C" fn kernel_main() {
         )
         .unwrap();
     }
-    // if let Some(board_info) = hal::info::get_board_info() {
-    //     writeln!(str_buffer, "Board Model: {} Revision: {:x} Serial: {}", board_info.model, board_info.revision, board_info.serial).unwrap();
-    // }
+    if let Some(board_info) = hal::info::get_board_info() {
+        writeln!(str_buffer, "{}", board_info.revision).unwrap();
+    }
     // if let Some(mac) = hal::info::get_mac_address() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }

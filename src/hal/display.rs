@@ -229,7 +229,7 @@ impl Resolution {
             buffer[count + offset] = res;
             count += 1;
         };
-        MockEdidIterator::new().for_each(|edid| {
+        EdidIterator::new().for_each(|edid| {
             match &edid {
                 Edid::Edid(edid_block) => {
                     edid_block.descriptors_iter().filter_map(Self::from_descriptor).for_each(&mut add);
