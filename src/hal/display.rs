@@ -1,12 +1,14 @@
-use core::{fmt::{Debug, Display}, mem::MaybeUninit};
-
+use core::{
+    fmt::{Debug, Display},
+    mem::MaybeUninit,
+};
 
 use crate::peripherals::mailbox;
 
 pub struct BufferedIterator<T, const CAPACITY: usize> {
     index: usize,
     len: usize,
-    buffer: [core::mem::MaybeUninit<T>; CAPACITY]
+    buffer: [core::mem::MaybeUninit<T>; CAPACITY],
 }
 
 impl<T, const CAPACITY: usize> BufferedIterator<T, CAPACITY> {
@@ -14,7 +16,7 @@ impl<T, const CAPACITY: usize> BufferedIterator<T, CAPACITY> {
         Self {
             index: 0,
             len: 0,
-            buffer: core::array::from_fn(|_|core::mem::MaybeUninit::<T>::uninit())
+            buffer: core::array::from_fn(|_| core::mem::MaybeUninit::<T>::uninit()),
         }
     }
 
@@ -40,8 +42,10 @@ impl<T, const CAPACITY: usize> Iterator for BufferedIterator<T, CAPACITY> {
     }
 }
 
-
-fn gcd<T> (mut a: T, mut b: T) -> T where T: core::ops::Rem<T, Output = T> + PartialEq + Copy {
+fn gcd<T>(mut a: T, mut b: T) -> T
+where
+    T: core::ops::Rem<T, Output = T> + PartialEq + Copy,
+{
     let zero = a % a;
     while b != zero {
         let remainder = a % b;
@@ -54,7 +58,10 @@ fn gcd<T> (mut a: T, mut b: T) -> T where T: core::ops::Rem<T, Output = T> + Par
 pub struct Fract<T>(T, T);
 
 impl<T> Fract<T> {
-    pub fn inverted_copy(&self) -> Self where T: Copy {
+    pub fn inverted_copy(&self) -> Self
+    where
+        T: Copy,
+    {
         Self(self.1, self.0)
     }
 
@@ -63,7 +70,10 @@ impl<T> Fract<T> {
     }
 }
 
-impl<T> Fract<T> where T: core::ops::Rem<T, Output = T> + PartialEq + Copy + core::ops::Div<Output = T> {
+impl<T> Fract<T>
+where
+    T: core::ops::Rem<T, Output = T> + PartialEq + Copy + core::ops::Div<Output = T>,
+{
     pub fn reduced(a: T, b: T) -> Self {
         let d = gcd(a, b);
         Self(a / d, b / d)
@@ -74,7 +84,10 @@ impl<T> Fract<T> where T: core::ops::Rem<T, Output = T> + PartialEq + Copy + cor
     }
 }
 
-impl<T> Display for Fract<T> where T: Display {
+impl<T> Display for Fract<T>
+where
+    T: Display,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}:{}", self.0, self.1)
     }
@@ -86,18 +99,32 @@ pub struct Resolution {
     pub vertical: usize,
     pub refresh_rate: f32,
     pub interlaced: bool,
-    pub aspect_ratio: Fract<u16>
+    pub aspect_ratio: Fract<u16>,
 }
 
 impl Default for Resolution {
     fn default() -> Self {
-        Self { horizontal: 1280, vertical: 720, refresh_rate: 60.0, interlaced: false, aspect_ratio: Fract(16, 9) }
+        Self {
+            horizontal: 1280,
+            vertical: 720,
+            refresh_rate: 60.0,
+            interlaced: false,
+            aspect_ratio: Fract(16, 9),
+        }
     }
 }
 
 impl Display for Resolution {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}x{}{}{} {}", self.horizontal, self.vertical, if self.interlaced {"i"} else {"p"}, self.refresh_rate, self.aspect_ratio)
+        write!(
+            f,
+            "{}x{}{}{} {}",
+            self.horizontal,
+            self.vertical,
+            if self.interlaced { "i" } else { "p" },
+            self.refresh_rate,
+            self.aspect_ratio
+        )
     }
 }
 
@@ -108,76 +135,178 @@ impl Debug for Resolution {
 }
 
 impl Resolution {
-
     fn from_legacy_timing(legacy_timing: CommonLegacyTimingSupport) -> BufferedIterator<Self, 17> {
         let mut result = BufferedIterator::<Self, 17>::new();
-        
-        let aspect_ratio = Fract(4,3);
+
+        let aspect_ratio = Fract(4, 3);
         let interlaced = false;
         if legacy_timing._1024_768_60 {
-            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 60.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 1024,
+                vertical: 768,
+                refresh_rate: 60.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._1024_768_70 {
-            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 70.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 1024,
+                vertical: 768,
+                refresh_rate: 70.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._1024_768_75 {
-            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 75.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 1024,
+                vertical: 768,
+                refresh_rate: 75.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._1024_768_87_interlaced {
-            result.push(Self{ horizontal: 1024, vertical: 768, refresh_rate: 87.0, interlaced: true, aspect_ratio });
+            result.push(Self {
+                horizontal: 1024,
+                vertical: 768,
+                refresh_rate: 87.0,
+                interlaced: true,
+                aspect_ratio,
+            });
         }
         if legacy_timing._1152_870_75 {
-            result.push(Self{ horizontal: 1152, vertical: 870, refresh_rate: 75.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 1152,
+                vertical: 870,
+                refresh_rate: 75.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._1280_1024_75 {
-            result.push(Self{ horizontal: 1280, vertical: 1024, refresh_rate: 75.0, interlaced, aspect_ratio: Fract(5,4) });
+            result.push(Self {
+                horizontal: 1280,
+                vertical: 1024,
+                refresh_rate: 75.0,
+                interlaced,
+                aspect_ratio: Fract(5, 4),
+            });
         }
         if legacy_timing._640_480_60 {
-            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 60.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 640,
+                vertical: 480,
+                refresh_rate: 60.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._640_480_67 {
-            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 67.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 640,
+                vertical: 480,
+                refresh_rate: 67.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._640_480_72 {
-            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 72.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 640,
+                vertical: 480,
+                refresh_rate: 72.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._640_480_75 {
-            result.push(Self{ horizontal: 640, vertical: 480, refresh_rate: 75.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 640,
+                vertical: 480,
+                refresh_rate: 75.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._720_400_70 {
-            result.push(Self{ horizontal: 720, vertical: 400, refresh_rate: 70.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 720,
+                vertical: 400,
+                refresh_rate: 70.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._720_400_88 {
-            result.push(Self{ horizontal: 720, vertical: 400, refresh_rate: 88.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 720,
+                vertical: 400,
+                refresh_rate: 88.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._800_600_56 {
-            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 56.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 800,
+                vertical: 600,
+                refresh_rate: 56.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._800_600_60 {
-            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 60.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 800,
+                vertical: 600,
+                refresh_rate: 60.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._800_600_72 {
-            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 72.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 800,
+                vertical: 600,
+                refresh_rate: 72.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._800_600_75 {
-            result.push(Self{ horizontal: 800, vertical: 600, refresh_rate: 75.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 800,
+                vertical: 600,
+                refresh_rate: 75.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         if legacy_timing._832_624_75 {
-            result.push(Self{ horizontal: 832, vertical: 624, refresh_rate: 75.0, interlaced, aspect_ratio });
+            result.push(Self {
+                horizontal: 832,
+                vertical: 624,
+                refresh_rate: 75.0,
+                interlaced,
+                aspect_ratio,
+            });
         }
         result
     }
 
     fn from_standard_timing(standard_timing: StandardTimingInformation) -> Self {
         let aspect_ratio = match standard_timing.image_aspect_ratio {
-            StandardTimingImageAspectRatio::_16_10 => Fract(16,10),
-            StandardTimingImageAspectRatio::_4_3 => Fract(4,3),
-            StandardTimingImageAspectRatio::_5_4 => Fract(5,4),
-            StandardTimingImageAspectRatio::_16_9 => Fract(16,9),
+            StandardTimingImageAspectRatio::_16_10 => Fract(16, 10),
+            StandardTimingImageAspectRatio::_4_3 => Fract(4, 3),
+            StandardTimingImageAspectRatio::_5_4 => Fract(5, 4),
+            StandardTimingImageAspectRatio::_16_9 => Fract(16, 9),
         };
         Self {
             horizontal: standard_timing.x_resolution as usize,
-            vertical: (standard_timing.x_resolution * aspect_ratio.1) as usize / aspect_ratio.0 as usize,
+            vertical: (standard_timing.x_resolution * aspect_ratio.1) as usize
+                / aspect_ratio.0 as usize,
             refresh_rate: standard_timing.vertical_frequency as f32,
             interlaced: false,
             aspect_ratio,
@@ -186,40 +315,43 @@ impl Resolution {
 
     fn from_descriptor(descriptor: Descriptor) -> Option<Self> {
         match descriptor {
-            Descriptor::DetailedTiming { 
-                pixel_clock_10khz, 
-                horizontal_active_pixels, 
-                horizontal_blanking_pixels, 
-                vertical_active_lines, 
-                vertical_blanking_lines, 
-                horizontal_front_porch_pixels: _, 
-                horizontal_sync_pulse_width_pixels: _, 
-                vertical_front_porch_lines: _, 
-                vertical_sync_pulse_width_lines: _, 
-                horizontal_image_size_mm, 
-                vertical_image_size_mm, 
-                horizontal_border_pixels: _, 
-                vertical_border_lines: _, 
-                signal_interface_type, 
-                stereo_mode: _, 
-                sync: _ } => {
-                    let total_horizontal_pixels = (horizontal_active_pixels + horizontal_blanking_pixels) as usize;
-                    let total_vertical_lines = (vertical_active_lines + vertical_blanking_lines) as usize;
-                    let total_pixels = total_horizontal_pixels * total_vertical_lines;
-                    let pixel_clock_hz = pixel_clock_10khz as usize * 10_000;
-                    let refresh_rate = pixel_clock_hz as f32 / total_pixels as f32;
-                    Some(Self{ 
-                        horizontal: horizontal_active_pixels as usize, 
-                        vertical: vertical_active_lines as usize, 
-                        refresh_rate,
-                        interlaced: match signal_interface_type {
-                            SignalInterfaceType::Interlaced => true,
-                            _ => false
-                        },
-                        aspect_ratio: Fract::reduced(horizontal_image_size_mm, vertical_image_size_mm)
-                    })
-                }
-            _ => None
+            Descriptor::DetailedTiming {
+                pixel_clock_10khz,
+                horizontal_active_pixels,
+                horizontal_blanking_pixels,
+                vertical_active_lines,
+                vertical_blanking_lines,
+                horizontal_front_porch_pixels: _,
+                horizontal_sync_pulse_width_pixels: _,
+                vertical_front_porch_lines: _,
+                vertical_sync_pulse_width_lines: _,
+                horizontal_image_size_mm,
+                vertical_image_size_mm,
+                horizontal_border_pixels: _,
+                vertical_border_lines: _,
+                signal_interface_type,
+                stereo_mode: _,
+                sync: _,
+            } => {
+                let total_horizontal_pixels =
+                    (horizontal_active_pixels + horizontal_blanking_pixels) as usize;
+                let total_vertical_lines =
+                    (vertical_active_lines + vertical_blanking_lines) as usize;
+                let total_pixels = total_horizontal_pixels * total_vertical_lines;
+                let pixel_clock_hz = pixel_clock_10khz as usize * 10_000;
+                let refresh_rate = pixel_clock_hz as f32 / total_pixels as f32;
+                Some(Self {
+                    horizontal: horizontal_active_pixels as usize,
+                    vertical: vertical_active_lines as usize,
+                    refresh_rate,
+                    interlaced: match signal_interface_type {
+                        SignalInterfaceType::Interlaced => true,
+                        _ => false,
+                    },
+                    aspect_ratio: Fract::reduced(horizontal_image_size_mm, vertical_image_size_mm),
+                })
+            }
+            _ => None,
         }
     }
 
@@ -232,32 +364,41 @@ impl Resolution {
         EdidIterator::new().for_each(|edid| {
             match &edid {
                 Edid::Edid(edid_block) => {
-                    edid_block.descriptors_iter().filter_map(Self::from_descriptor).for_each(&mut add);
-                    edid_block.standard_timing_information().iter().filter_map(|sti| {
-                        sti.map(Self::from_standard_timing)   
-                    }).for_each(&mut add);
+                    edid_block
+                        .descriptors_iter()
+                        .filter_map(Self::from_descriptor)
+                        .for_each(&mut add);
+                    edid_block
+                        .standard_timing_information()
+                        .iter()
+                        .filter_map(|sti| sti.map(Self::from_standard_timing))
+                        .for_each(&mut add);
                     Self::from_legacy_timing(edid_block.common_timing_support()).for_each(&mut add);
-                },
-                Edid::CtaExtensionRev3(cta_block) => {
-                    cta_block.descriptors().filter_map(Self::from_descriptor).for_each(&mut add);
                 }
-                Edid::Unknown => {},
+                Edid::CtaExtensionRev3(cta_block) => {
+                    cta_block
+                        .descriptors()
+                        .filter_map(Self::from_descriptor)
+                        .for_each(&mut add);
+                }
+                Edid::Unknown => {}
             };
         });
         count
-    } 
+    }
 
     pub fn preferred() -> Option<Self> {
-        EdidIterator::new().find_map(|edid| {
-            match edid {
-                Edid::Edid(edid_block) => edid_block.descriptors_iter().find_map(Self::from_descriptor),
-                Edid::CtaExtensionRev3(cta_block) => cta_block.descriptors().find_map(Self::from_descriptor),
-                Edid::Unknown => None,
+        EdidIterator::new().find_map(|edid| match edid {
+            Edid::Edid(edid_block) => edid_block
+                .descriptors_iter()
+                .find_map(Self::from_descriptor),
+            Edid::CtaExtensionRev3(cta_block) => {
+                cta_block.descriptors().find_map(Self::from_descriptor)
             }
+            Edid::Unknown => None,
         })
-    } 
+    }
 }
-
 
 #[derive(Debug)]
 pub enum Edid {
@@ -604,8 +745,7 @@ impl Descriptor {
                 0xFC => Some(Descriptor::DisplayName(bytes[5..=17].try_into().unwrap())),
                 0xFD => Some({
                     let mut vertical_field_rate_hz_min_max = (bytes[5] as u16, bytes[6] as u16);
-                    let mut horizontal_line_rate_khz_min_max =
-                        (bytes[7] as u16, bytes[8] as u16);
+                    let mut horizontal_line_rate_khz_min_max = (bytes[7] as u16, bytes[8] as u16);
 
                     vertical_field_rate_hz_min_max.1 += (bytes[4] & 1) as u16 * 255;
                     vertical_field_rate_hz_min_max.0 += (bytes[4] >> 1 & 1) as u16 * 255;
@@ -686,8 +826,7 @@ impl Descriptor {
                         0 => Sync::AnalogComposite {
                             bipolar: bitmap >> 3 & 1 == 1,
                             serrations_hsync_during_vsync: bitmap >> 2 & 1 == 1,
-                            sync_on_red_and_blue_lines_additionally_to_green: bitmap >> 1 & 1
-                                == 1,
+                            sync_on_red_and_blue_lines_additionally_to_green: bitmap >> 1 & 1 == 1,
                         },
                         _ => match bitmap >> 3 & 1 {
                             0 => Sync::DigitalComposite {
@@ -718,7 +857,7 @@ impl Descriptor {
     }
 }
 
-pub struct DescriptorIterator<'a> (&'a [u8]);
+pub struct DescriptorIterator<'a>(&'a [u8]);
 
 impl Iterator for DescriptorIterator<'_> {
     type Item = Descriptor;
@@ -1210,7 +1349,7 @@ impl CtaExtensionBlock {
 
     pub fn descriptors(&self) -> DescriptorIterator {
         let bytes = self.0.get(self.dtd_offset() as usize..);
-        DescriptorIterator(bytes.unwrap_or_default()) 
+        DescriptorIterator(bytes.unwrap_or_default())
     }
 }
 

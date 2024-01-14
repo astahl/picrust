@@ -2,20 +2,27 @@ use core::fmt::{Display, Write};
 
 use crate::peripherals::mailbox;
 
-
-pub struct ByteSize (pub usize);
+pub struct ByteSize(pub usize);
 
 impl Display for ByteSize {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         const MASK: usize = 0x3ff;
-        const NAMES: [&'static str; 7] = ["Exbibyte", "Pebibyte", "Tebibyte", "Gibibyte", "Mebibyte", "Kibibyte", "Byte"];
+        const NAMES: [&'static str; 7] = [
+            "Exbibyte", "Pebibyte", "Tebibyte", "Gibibyte", "Mebibyte", "Kibibyte", "Byte",
+        ];
         let separator = "+";
         let mut needs_separator = false;
         f.write_char('(');
         for i in 0..7 {
             let val = (self.0 >> ((6 - i) * 10)) & MASK;
             if val != 0 {
-                write!(f, "{}{} {}", if needs_separator { separator } else { "" }, val, NAMES[i])?;
+                write!(
+                    f,
+                    "{}{} {}",
+                    if needs_separator { separator } else { "" },
+                    val,
+                    NAMES[i]
+                )?;
                 needs_separator = true;
             }
             if val > 1 {
@@ -24,7 +31,6 @@ impl Display for ByteSize {
         }
         f.write_char(')');
         Ok(())
-
     }
 }
 
@@ -35,17 +41,20 @@ pub struct Memory {
 
 impl Display for Memory {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Memory[{} starting at 0x{:x}]", self.size, self.base_address)
+        write!(
+            f,
+            "Memory[{} starting at 0x{:x}]",
+            self.size, self.base_address
+        )
     }
 }
 
-
 #[derive(Debug)]
 pub enum Type {
-    Pi1A, 
-    Pi1B, 
-    Pi1APlus, 
-    Pi1BPlus, 
+    Pi1A,
+    Pi1B,
+    Pi1APlus,
+    Pi1BPlus,
     Pi2B,
     Alpha,
     CM1,
@@ -65,7 +74,7 @@ pub enum Type {
     CM4,
     CM4S,
     Internal16,
-    Pi5
+    Pi5,
 }
 
 impl Display for Type {
@@ -91,7 +100,7 @@ impl Display for Type {
             Type::CM4 => write!(f, "CM4"),
             Type::CM4S => write!(f, "CM4S"),
             Type::Pi5 => write!(f, "5"),
-            _ => write!(f, "Unknown Model")
+            _ => write!(f, "Unknown Model"),
         }
     }
 }
@@ -114,7 +123,7 @@ pub enum RamSize {
     Gb1,
     Gb2,
     Gb4,
-    Gb8
+    Gb8,
 }
 
 impl Display for RamSize {
@@ -142,14 +151,14 @@ pub enum Processor {
 #[derive(Debug)]
 pub enum Revision {
     Unknown(u32),
-    OldStyle{
+    OldStyle {
         code: u32,
         model: Type,
         revision_bcd: u8,
         memory_size: RamSize,
-        manufacturer: Manufacturer 
+        manufacturer: Manufacturer,
     },
-    NewStyle{
+    NewStyle {
         code: u32,
         overvoltage_prohibited: bool,
         otp_program_prohibited: bool,
@@ -159,47 +168,148 @@ pub enum Revision {
         manufacturer: Manufacturer,
         processor: Processor,
         model: Type,
-        revision: u8
-    }
+        revision: u8,
+    },
 }
 
 impl Revision {
     pub fn from_code(code: u32) -> Self {
-        use Type::*;
-        use RamSize::*;
         use Manufacturer::*;
+        use RamSize::*;
+        use Type::*;
         match code {
-            0x0002 => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x10, memory_size: Mb256, manufacturer: Egoman },
-            0x0003 => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x10, memory_size: Mb256, manufacturer: Egoman },
-            0x0004 => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x20, memory_size: Mb256, manufacturer: SonyUK },
-            0x0005 => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x20, memory_size: Mb256, manufacturer: Qisda },
-            0x0006 => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x20, memory_size: Mb256, manufacturer: Egoman },
-            0x0007 => Self::OldStyle { code, model: Pi1A, revision_bcd: 0x20, memory_size: Mb256, manufacturer: Egoman },
-            0x0008 => Self::OldStyle { code, model: Pi1A, revision_bcd: 0x20, memory_size: Mb256, manufacturer: SonyUK },
-            0x0009 => Self::OldStyle { code, model: Pi1A, revision_bcd: 0x20, memory_size: Mb256, manufacturer: Qisda },
-            0x000d => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x20, memory_size: Mb512, manufacturer: Egoman },
-            0x000e => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x20, memory_size: Mb512, manufacturer: SonyUK },
-            0x000f => Self::OldStyle { code, model: Pi1B, revision_bcd: 0x20, memory_size: Mb512, manufacturer: Egoman },
-            0x0010 => Self::OldStyle { code, model: Pi1BPlus, revision_bcd: 0x12, memory_size: Mb512, manufacturer: SonyUK },
-            0x0011 => Self::OldStyle { code, model: CM1, revision_bcd: 0x10, memory_size: Mb512, manufacturer: SonyUK },
-            0x0012 => Self::OldStyle { code, model: Pi1APlus, revision_bcd: 0x11, memory_size: Mb256, manufacturer: SonyUK },
-            0x0013 => Self::OldStyle { code, model: Pi1BPlus, revision_bcd: 0x12, memory_size: Mb512, manufacturer: Embest },
-            0x0014 => Self::OldStyle { code, model: CM1, revision_bcd: 0x10, memory_size: Mb512, manufacturer: Embest },
-            0x0015 => Self::OldStyle { code, model: Pi1APlus, revision_bcd: 0x11, memory_size: Mb256, manufacturer: Embest },
-            x if x >> 23 & 1 != 0 => {
-                Self::NewStyle { 
-                    code, 
-                    overvoltage_prohibited: x >> 31 & 1 != 0, 
-                    otp_program_prohibited: x >> 30 & 1 != 0, 
-                    otp_reading_prohibited: x >> 29 & 1 != 0, 
-                    warranty_voided: x >> 25 & 1 != 0, 
-                    memory_size: unsafe { core::mem::transmute((x >> 20) as u8 & 0x7) }, 
-                    manufacturer: unsafe { core::mem::transmute((x >> 16) as u8 & 0xF) }, 
-                    processor: unsafe { core::mem::transmute((x >> 12) as u8 & 0xF) },  
-                    model: unsafe { core::mem::transmute((x >> 4) as u8 & 0xFF) },  
-                    revision: unsafe { core::mem::transmute(x as u8 & 0xF) } }
+            0x0002 => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x10,
+                memory_size: Mb256,
+                manufacturer: Egoman,
             },
-            _ => Self::Unknown(code)
+            0x0003 => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x10,
+                memory_size: Mb256,
+                manufacturer: Egoman,
+            },
+            0x0004 => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x20,
+                memory_size: Mb256,
+                manufacturer: SonyUK,
+            },
+            0x0005 => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x20,
+                memory_size: Mb256,
+                manufacturer: Qisda,
+            },
+            0x0006 => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x20,
+                memory_size: Mb256,
+                manufacturer: Egoman,
+            },
+            0x0007 => Self::OldStyle {
+                code,
+                model: Pi1A,
+                revision_bcd: 0x20,
+                memory_size: Mb256,
+                manufacturer: Egoman,
+            },
+            0x0008 => Self::OldStyle {
+                code,
+                model: Pi1A,
+                revision_bcd: 0x20,
+                memory_size: Mb256,
+                manufacturer: SonyUK,
+            },
+            0x0009 => Self::OldStyle {
+                code,
+                model: Pi1A,
+                revision_bcd: 0x20,
+                memory_size: Mb256,
+                manufacturer: Qisda,
+            },
+            0x000d => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x20,
+                memory_size: Mb512,
+                manufacturer: Egoman,
+            },
+            0x000e => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x20,
+                memory_size: Mb512,
+                manufacturer: SonyUK,
+            },
+            0x000f => Self::OldStyle {
+                code,
+                model: Pi1B,
+                revision_bcd: 0x20,
+                memory_size: Mb512,
+                manufacturer: Egoman,
+            },
+            0x0010 => Self::OldStyle {
+                code,
+                model: Pi1BPlus,
+                revision_bcd: 0x12,
+                memory_size: Mb512,
+                manufacturer: SonyUK,
+            },
+            0x0011 => Self::OldStyle {
+                code,
+                model: CM1,
+                revision_bcd: 0x10,
+                memory_size: Mb512,
+                manufacturer: SonyUK,
+            },
+            0x0012 => Self::OldStyle {
+                code,
+                model: Pi1APlus,
+                revision_bcd: 0x11,
+                memory_size: Mb256,
+                manufacturer: SonyUK,
+            },
+            0x0013 => Self::OldStyle {
+                code,
+                model: Pi1BPlus,
+                revision_bcd: 0x12,
+                memory_size: Mb512,
+                manufacturer: Embest,
+            },
+            0x0014 => Self::OldStyle {
+                code,
+                model: CM1,
+                revision_bcd: 0x10,
+                memory_size: Mb512,
+                manufacturer: Embest,
+            },
+            0x0015 => Self::OldStyle {
+                code,
+                model: Pi1APlus,
+                revision_bcd: 0x11,
+                memory_size: Mb256,
+                manufacturer: Embest,
+            },
+            x if x >> 23 & 1 != 0 => Self::NewStyle {
+                code,
+                overvoltage_prohibited: x >> 31 & 1 != 0,
+                otp_program_prohibited: x >> 30 & 1 != 0,
+                otp_reading_prohibited: x >> 29 & 1 != 0,
+                warranty_voided: x >> 25 & 1 != 0,
+                memory_size: unsafe { core::mem::transmute((x >> 20) as u8 & 0x7) },
+                manufacturer: unsafe { core::mem::transmute((x >> 16) as u8 & 0xF) },
+                processor: unsafe { core::mem::transmute((x >> 12) as u8 & 0xF) },
+                model: unsafe { core::mem::transmute((x >> 4) as u8 & 0xFF) },
+                revision: unsafe { core::mem::transmute(x as u8 & 0xF) },
+            },
+            _ => Self::Unknown(code),
         }
     }
 }
@@ -208,12 +318,35 @@ impl Display for Revision {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Revision::Unknown(code) => write!(f, "Unknown Model Revision [{:#x}]", code),
-            Revision::OldStyle { code: _, model, revision_bcd, memory_size, manufacturer: _ } => write!(f, "Model {} {} {}.{}", model, memory_size, revision_bcd >> 4, revision_bcd & 0xf),
-            Revision::NewStyle { code: _, overvoltage_prohibited: _, otp_program_prohibited: _, otp_reading_prohibited: _, warranty_voided: _, memory_size, manufacturer: _, processor: _, model, revision } => write!(f, "Model {} {} 1.{}", model, memory_size, revision),
+            Revision::OldStyle {
+                code: _,
+                model,
+                revision_bcd,
+                memory_size,
+                manufacturer: _,
+            } => write!(
+                f,
+                "Model {} {} {}.{}",
+                model,
+                memory_size,
+                revision_bcd >> 4,
+                revision_bcd & 0xf
+            ),
+            Revision::NewStyle {
+                code: _,
+                overvoltage_prohibited: _,
+                otp_program_prohibited: _,
+                otp_reading_prohibited: _,
+                warranty_voided: _,
+                memory_size,
+                manufacturer: _,
+                processor: _,
+                model,
+                revision,
+            } => write!(f, "Model {} {} 1.{}", model, memory_size, revision),
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct BoardInfo {

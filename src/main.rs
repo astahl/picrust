@@ -54,7 +54,11 @@ pub extern "C" fn kernel_main() {
     use hal::framebuffer::color;
     let resolution = hal::display::Resolution::preferred().unwrap_or_default();
 
-    let fb = hal::framebuffer::Framebuffer::new(resolution.horizontal as u32, resolution.vertical as u32).unwrap();
+    let fb = hal::framebuffer::Framebuffer::new(
+        resolution.horizontal as u32,
+        resolution.vertical as u32,
+    )
+    .unwrap();
     fb.clear(color::BLACK);
 
     let font = unsafe {
@@ -83,7 +87,12 @@ pub extern "C" fn kernel_main() {
     use core::fmt::Write;
     let mut supported_resolutions = [Resolution::default(); 128];
     let count = hal::display::Resolution::supported(supported_resolutions.as_mut_slice(), 0);
-    writeln!(str_buffer, "Supported {:?}", supported_resolutions.get(0..count)).unwrap();
+    writeln!(
+        str_buffer,
+        "Supported {:?}",
+        supported_resolutions.get(0..count)
+    )
+    .unwrap();
     writeln!(str_buffer, "Requested Resolution {:?}", resolution).unwrap();
     writeln!(
         str_buffer,
@@ -92,20 +101,10 @@ pub extern "C" fn kernel_main() {
     )
     .unwrap();
     if let Some(arm_memory) = hal::info::get_arm_memory() {
-        writeln!(
-            str_buffer,
-            "ARM {}",
-            arm_memory
-        )
-        .unwrap();
+        writeln!(str_buffer, "ARM {}", arm_memory).unwrap();
     }
     if let Some(vc_memory) = hal::info::get_vc_memory() {
-        writeln!(
-            str_buffer,
-            "VC {}",
-            vc_memory
-        )
-        .unwrap();
+        writeln!(str_buffer, "VC {}", vc_memory).unwrap();
     }
     if let Some(board_info) = hal::info::get_board_info() {
         writeln!(str_buffer, "{}", board_info.revision).unwrap();
@@ -113,7 +112,7 @@ pub extern "C" fn kernel_main() {
     // if let Some(mac) = hal::info::get_mac_address() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }
-    
+
     for edid in hal::display::EdidIterator::new() {
         writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
         // for byte in edid.bytes() {
