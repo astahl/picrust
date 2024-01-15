@@ -1,6 +1,7 @@
 use core::fmt::DebugStruct;
 
 pub mod color {
+    pub const WHITE: u32 = 0xff_ff_ff_ff;
     pub const BLACK: u32 = 0xff_00_00_00;
     pub const RED: u32 = 0xff_00_00_ff;
     pub const GREEN: u32 = 0xff_00_ff_00;

@@ -5,12 +5,21 @@ mod buffer;
 mod hal;
 mod monitor;
 mod peripherals;
+mod drawing;
 use core::arch::global_asm;
 
 use crate::hal::display::Resolution;
 
 #[panic_handler]
-fn on_panic(_info: &core::panic::PanicInfo) -> ! {
+fn on_panic(info: &core::panic::PanicInfo) -> ! {
+
+    use peripherals::uart::Uart0;
+    if let Some(msg) = info.payload().downcast_ref::<&str>() {
+        Uart0::puts("PANIC: ");
+        Uart0::puts(msg);
+    } else {
+        Uart0::puts("PANIC!");
+    }
     loop {
         hal::led::status_blink();
     }
@@ -49,6 +58,7 @@ pub extern "C" fn kernel_main() {
 
     use peripherals::uart::Uart0;
     Uart0::init();
+    Uart0::puts("start");
     let mut str_buffer = buffer::Ring::<u8>::new();
 
     use hal::framebuffer::color;
@@ -59,6 +69,8 @@ pub extern "C" fn kernel_main() {
         resolution.vertical as u32,
     )
     .unwrap();
+    
+
     fb.clear(color::BLACK);
 
     let font = unsafe {
@@ -121,8 +133,8 @@ pub extern "C" fn kernel_main() {
     }
     writeln!(str_buffer, "Bye!").unwrap();
     let text = str_buffer.as_slices();
-    fb.clear(color::GREEN);
-    fb.write_text(text.0, font, mapping);
+    fb.clear(color::BLACK);
+    //fb.write_text(text.0, font, mapping);
 
     Uart0::puts(core::str::from_utf8(text.0).unwrap());
     // Uart0::put_uint(core as u64);
@@ -130,7 +142,13 @@ pub extern "C" fn kernel_main() {
     //
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();
+    fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
+    let mut canvas = drawing::PixelCanvas::with_slice(300, 300, fb.pitch_bytes as usize / 4, fb.as_mut_pixels()).unwrap();
+    //canvas.clear(color::BLUE);
+    canvas.fill_rect(color::BLUE, (298, 298), (300, 300)).unwrap();
+    canvas.fill_lines(color::RED, 100..=100).unwrap();
 
+    fb.set_pixel_a8b8g8r8(153, 100, color::WHITE);
     hal::led::status_set(false);
     loop {
         core::hint::spin_loop();
