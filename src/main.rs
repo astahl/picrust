@@ -147,6 +147,8 @@ pub extern "C" fn kernel_main() {
     //canvas.clear(color::BLUE);
     canvas.fill_rect(color::BLUE, (298, 298), (300, 300)).unwrap();
     canvas.fill_lines(color::RED, 100..=100).unwrap();
+    canvas.blit8x8(&font[0x06].to_le_bytes(), color::WHITE, color::BLACK, (100, 200)).unwrap();
+    canvas.blit8x8(&font[0x07].to_le_bytes(), color::GREEN, color::RED, (108, 200)).unwrap();
 
     fb.set_pixel_a8b8g8r8(153, 100, color::WHITE);
     hal::led::status_set(false);
