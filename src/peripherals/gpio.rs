@@ -1,4 +1,3 @@
-use crate::delay;
 use crate::peripherals::mmio::MMIO;
 
 pub struct Gpio();
@@ -11,11 +10,11 @@ impl Gpio {
     pub fn init_uart0() {
         // select GPIO Pin Update Disable
         Self::GPPUD.write(0x00000000);
-        delay(150);
+        crate::system::wait_cycles(150);
 
         // select Pin 14 and 15
         Self::GPPUDCLK0.write((1 << 14) | (1 << 15));
-        delay(150);
+        crate::system::wait_cycles(150);
 
         // Commit Pin Update
         Self::GPPUDCLK0.write(0x00000000);

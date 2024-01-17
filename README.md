@@ -51,8 +51,8 @@ raspi2b              Raspberry Pi 2B (revision 1.1)
   * [ ] disassembly
 * Framebuffer
   * [ ] Put a test image onto the framebuffer that indicates if more than one core is being started (if not, we might need to wake them up manually, or use the old_kernel=1 config)
-  * [ ] a simple text mode, using some character ROM dump, e.g. from the PET because it looks nice.
-    * [ ] how to put a binary file into the kernel image, linker perhaps?
+  * [x] a simple text mode, using some character ROM dump, e.g. from the PET because it looks nice.
+    * [x] how to put a binary file into the kernel image, linker perhaps?
   * [ ] text output of RustMon
 * USB / HID to get at keyboard input, probably Interrupt handling, oh my.
 

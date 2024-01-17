@@ -6,7 +6,8 @@ mod hal;
 mod monitor;
 mod peripherals;
 mod drawing;
-use core::arch::global_asm;
+mod system;
+use core::{arch::global_asm, usize};
 
 use crate::hal::display::Resolution;
 
@@ -21,43 +22,27 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
         Uart0::puts("PANIC!");
     }
     loop {
-        hal::led::status_blink();
+        hal::led::status_blink_twice(100);
     }
 }
 
 extern "C" {
-    static mut __bss_start: u8;
-    static mut __bss_end: u8;
     static __rodata_start: usize;
     static __rodata_end: usize;
     static __font_start: u64;
     static __font_end: u64;
 }
 
-unsafe fn clear_bss() {
-    let from = core::ptr::addr_of_mut!(__bss_start);
-    let to = core::ptr::addr_of_mut!(__bss_end);
-    let distance = to.offset_from(from);
-    from.write_bytes(0, distance.unsigned_abs());
-}
-
-fn initialize_global() {
-    unsafe {
-        clear_bss();
-    }
-    hal::led::status_set(true);
-}
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
-    let core_num = get_core_num();
-    match core_num {
-        0 => initialize_global(),
-        _ => {}
-    }
-
     use peripherals::uart::Uart0;
-    Uart0::init();
+    let core_id = system::get_core_num();
+    if core_id == 0 {
+        hal::led::status_set(true);
+        Uart0::init();
+    }
+    Uart0::put_uint(system::current_exception_level() as u64);
     Uart0::puts("start");
     let mut str_buffer = buffer::Ring::<u8>::new();
 
@@ -69,7 +54,6 @@ pub extern "C" fn kernel_main() {
         resolution.vertical as u32,
     )
     .unwrap();
-    
 
     fb.clear(color::BLACK);
 
@@ -87,8 +71,11 @@ pub extern "C" fn kernel_main() {
         match c {
             0 => b' ',
             b' '..=b'?' => c,
-            b'@'..=b'_' => c as u8 - b'@',
+            b'@'..=b'^' => c as u8 - b'@',
             b'a'..=b'z' => c as u8 - b'`' | 0x80,
+            b'{' => b'<',
+            b'}' => b'>',
+            b'_' => 82,
             _ => 255,
         }
     };
@@ -118,84 +105,67 @@ pub extern "C" fn kernel_main() {
     if let Some(vc_memory) = hal::info::get_vc_memory() {
         writeln!(str_buffer, "VC {}", vc_memory).unwrap();
     }
-    if let Some(board_info) = hal::info::get_board_info() {
-        writeln!(str_buffer, "{}", board_info.revision).unwrap();
-    }
+    // if let Some(board_info) = hal::info::get_board_info() {
+    //     writeln!(str_buffer, "{}", board_info.revision).unwrap();
+    // }
     // if let Some(mac) = hal::info::get_mac_address() {
     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
     // }
 
     for edid in hal::display::EdidIterator::new() {
-        writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
+        writeln!(str_buffer, "EDID BLOCK {:#?}", edid).unwrap();
         // for byte in edid.bytes() {
         //     write!(str_buffer, "{:02X} ", byte).unwrap();
         // }
     }
     writeln!(str_buffer, "Bye!").unwrap();
-    let text = str_buffer.as_slices();
+    let (text, _) = str_buffer.as_slices();
     fb.clear(color::BLACK);
-    //fb.write_text(text.0, font, mapping);
+    fb.write_text(text, font, mapping);
 
-    Uart0::puts(core::str::from_utf8(text.0).unwrap());
+    Uart0::puts(core::str::from_utf8(text).unwrap());
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //
     // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     // mon.run();
     fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
-    let mut canvas = drawing::PixelCanvas::with_slice(300, 300, fb.pitch_bytes as usize / 4, fb.as_mut_pixels()).unwrap();
+    let mut canvas = drawing::PixelCanvas::with_slice(fb.width_px as usize, fb.height_px as usize, fb.pitch_bytes as usize / 4, fb.as_mut_pixels()).unwrap();
     //canvas.clear(color::BLUE);
     canvas.fill_rect(color::BLUE, (298, 298), (300, 300)).unwrap();
     canvas.fill_lines(color::RED, 100..=100).unwrap();
-    canvas.blit8x8(&font[0x06].to_le_bytes(), color::WHITE, color::BLACK, (100, 200)).unwrap();
-    canvas.blit8x8(&font[0x07].to_le_bytes(), color::GREEN, color::RED, (108, 200)).unwrap();
-
-    fb.set_pixel_a8b8g8r8(153, 100, color::WHITE);
+    let pixelscale = (5, 6);
+    let cols = canvas.width / (pixelscale.0*8);
+    let rows = canvas.height / (pixelscale.1*8);
+    let mut row_buffer = [0_u64; 256];
+    let mut v_scroll: usize = 0;
     hal::led::status_set(false);
     loop {
-        core::hint::spin_loop();
+        let line_iterator = text.split(|b| *b == b'\n').flat_map(|l| l.chunks(cols)).cycle();
+        canvas.fill_rect(0, (0,0), (cols * 8, rows * 8)).unwrap();
+        for (row_nr, text_line) in line_iterator.skip(v_scroll as usize).take(rows).enumerate() {
+            let mut pre = 0;
+            let mut len = 0;
+            for (dst, src) in row_buffer.iter_mut().zip(text_line) {
+                let val = font[mapping(*src) as usize];
+                if len == 0 && val == 0 {
+                    pre += 1;
+                    continue;
+                }
+                *dst = val;
+                len += 1;
+            }
+            canvas.blit8x8_line(&row_buffer[pre..len+pre], color::WHITE, color::BLACK, (pre * 8, row_nr * 8)).unwrap();   
+        }
+        canvas.scale_in_place(pixelscale.0,pixelscale.1);
+        v_scroll += 1;
+
+        system::wait_msec(500);
     }
 }
 
-fn get_core_num() -> usize {
-    let mut core_num: usize;
-    unsafe {
-        #[cfg(target_arch = "arm")]
-        core::arch::asm!(
-            "mrc p15, #0, {0}, c0, c0, #5",
-            out(reg) core_num
-        );
-        #[cfg(target_arch = "aarch64")]
-        core::arch::asm!(
-            "mrs {0}, mpidr_el1",
-            out(reg) core_num
-        );
-    }
-    core_num & 0b11
-}
 
 global_asm!(".section .font", ".incbin \"901447-10.bin\"");
-
-#[cfg(target_arch = "arm")]
-global_asm!(
-    ".section \".text.boot\"",
-    ".global _start",
-    "_start:",
-    //@ Get core id and halt if not 0 (stop all but one threads)
-    "mrc p15, #0, r1, c0, c0, #5",
-    "and r1, r1, #3",
-    "cmp r1, #0",
-    "bne halt",
-    // //@ Set the stack pointer to start of executable code, grow down)
-    "ldr r1, =_start",
-    "mov sp, r1",
-    //@ Jump to kernel_main
-    "ldr r3, =kernel_main",
-    "blx r3",
-    "halt:",
-    "wfe",
-    "b halt"
-);
 
 #[cfg(target_arch = "aarch64")]
 global_asm!(
@@ -206,22 +176,34 @@ global_asm!(
     "mrs     x1, mpidr_el1",
     "and     x1, x1, #3",
     "cbz     x1, 2f",
-    // We're not on the main core, so hang in an infinite wait loop
-    "1:  wfe",
+    
+    "1:", // We're not on the main core, so hang in an infinite wait loop
+    // wait for event and loop
+    "wfe",
     "b       1b",
+
     "2:", // We're on the main core!
+    
     // Set stack to start below our code
-    "ldr     x1, =_start",
+    "ldr     x1, =__kernel_start",
     "mov     sp, x1",
-    // Jump to our main() routine in C (make sure it doesn't return)
-    "4:  bl      kernel_main",
+
+    // clear bss section
+    "ldr    x1, =__bss_start",
+    // initialize w2 to the remaining size (size is mult of 8 bytes, bss is aligned)
+    "ldr    w2, =__bss_size",
+    // if the w2 is zero, we're done
+    "3: cbz w2, 4f",
+    // store the zero register to x1 and increment x1 by 8 bytes
+    "str xzr, [x1], #8",
+    // decrement the remaining size by 1 and loop
+    "sub w2, w2, #1",
+    "b 3b",
+
+    "4:",
+    // Jump to our kernel_main() routine in rust (make sure it doesn't return)
+    "bl kernel_main",
     // In case it does return, halt the master core too
     "b       1b"
 );
 
-pub fn delay(mut count: usize) {
-    while count > 0 {
-        count -= 1;
-        core::hint::spin_loop();
-    }
-}
