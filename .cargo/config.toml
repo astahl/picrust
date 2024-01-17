@@ -3,7 +3,7 @@ rel="build --release"
 run64="run --release --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 imgpi3_64="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -O binary kernel8.img"
 imgpi4_64="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -O binary kernel8.img"
-inspect64="objdump --release --target=aarch64-unknown-none -- -h -f -s -C"
+inspect64="objdump --release --target=aarch64-unknown-none -- -h -f -s -S -C -d"
 
 [build]
 target=["aarch64-unknown-none"]

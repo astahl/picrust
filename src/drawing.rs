@@ -1,12 +1,10 @@
-use core::arch::aarch64::{vtstq_u8, vst1_u8, vget_high_u8};
-
-
+use core::arch::aarch64::{vget_high_u8, vst1_u8, vtstq_u8};
 
 pub struct PixelCanvas<'a, T> {
     pub width: usize,
     pub height: usize,
     pitch: usize,
-    data: &'a mut [T]
+    data: &'a mut [T],
 }
 
 pub type PixelCanvasU8<'a> = PixelCanvas<'a, u8>;
@@ -19,23 +17,42 @@ pub enum CanvasAccessError {
 }
 
 impl<'a, T> PixelCanvas<'a, T> {
-    pub fn with_slice(width: usize, height: usize, pitch: usize, slice: &'a mut [T]) -> Option<Self> {
+    pub fn with_slice(
+        width: usize,
+        height: usize,
+        pitch: usize,
+        slice: &'a mut [T],
+    ) -> Option<Self> {
         let size = Self::required_size(height, pitch);
         if size <= slice.len() {
             unsafe { Some(Self::with_slice_unchecked(width, height, pitch, slice)) }
         } else {
-            None 
+            None
         }
     }
 
-    pub unsafe fn with_slice_unchecked(width: usize, height: usize, pitch: usize, slice: &'a mut [T]) -> Self {
+    pub unsafe fn with_slice_unchecked(
+        width: usize,
+        height: usize,
+        pitch: usize,
+        slice: &'a mut [T],
+    ) -> Self {
         let size = Self::required_size(height, pitch);
-        Self{ width, height, pitch, data: slice.get_unchecked_mut(0..size) }
+        Self {
+            width,
+            height,
+            pitch,
+            data: slice.get_unchecked_mut(0..size),
+        }
     }
 
-
     pub unsafe fn from_raw_parts(width: usize, height: usize, pitch: usize, ptr: *mut T) -> Self {
-        Self{ width, height, pitch, data: core::slice::from_raw_parts_mut(ptr, Self::required_size(height, pitch)) }
+        Self {
+            width,
+            height,
+            pitch,
+            data: core::slice::from_raw_parts_mut(ptr, Self::required_size(height, pitch)),
+        }
     }
 
     pub fn put(&mut self, value: T, (x, y): (usize, usize)) -> Result<(), CanvasAccessError> {
@@ -69,13 +86,19 @@ impl<'a, T> PixelCanvas<'a, T> {
     }
 }
 
-impl<'a, T> PixelCanvas<'a, T> where T: Clone + Copy {
-    
+impl<'a, T> PixelCanvas<'a, T>
+where
+    T: Clone + Copy,
+{
     pub fn fill(&mut self, value: T) {
         self.data.fill(value);
     }
 
-    pub fn fill_lines<I: core::ops::RangeBounds<usize>>(&mut self, value: T, range: I) -> Result<(), CanvasAccessError>{
+    pub fn fill_lines<I: core::ops::RangeBounds<usize>>(
+        &mut self,
+        value: T,
+        range: I,
+    ) -> Result<(), CanvasAccessError> {
         let mut start_line: usize = match range.start_bound() {
             core::ops::Bound::Included(y) => *y,
             core::ops::Bound::Excluded(y) => y + 1,
@@ -91,7 +114,8 @@ impl<'a, T> PixelCanvas<'a, T> where T: Clone + Copy {
             return Err(CanvasAccessError::UnsortedCoordinates);
         }
 
-        self.check_bounds(0, start_line).and(self.check_bounds(0, end_line - 1))?;
+        self.check_bounds(0, start_line)
+            .and(self.check_bounds(0, end_line - 1))?;
 
         unsafe {
             let lines = end_line - start_line;
@@ -101,13 +125,26 @@ impl<'a, T> PixelCanvas<'a, T> where T: Clone + Copy {
         Ok(())
     }
 
-    pub fn fill_rect(&mut self, value: T, (x0, y0): (usize, usize), (x1, y1): (usize, usize)) -> Result<(), CanvasAccessError>  {
-        self.check_bounds(x0, y0).and(self.check_bounds(x1 - 1, y1 - 1))?;
-        unsafe { self.fill_rect_unchecked(value, (x0, y0), (x1, y1)); }
+    pub fn fill_rect(
+        &mut self,
+        value: T,
+        (x0, y0): (usize, usize),
+        (x1, y1): (usize, usize),
+    ) -> Result<(), CanvasAccessError> {
+        self.check_bounds(x0, y0)
+            .and(self.check_bounds(x1 - 1, y1 - 1))?;
+        unsafe {
+            self.fill_rect_unchecked(value, (x0, y0), (x1, y1));
+        }
         Ok(())
     }
 
-    pub unsafe fn fill_rect_unchecked(&mut self, value: T, (x0, mut y0): (usize, usize), (x1, y1): (usize, usize)) {
+    pub unsafe fn fill_rect_unchecked(
+        &mut self,
+        value: T,
+        (x0, mut y0): (usize, usize),
+        (x1, y1): (usize, usize),
+    ) {
         let len = x1 - x0;
         let mut from_ptr = self.data.as_mut_ptr().add(self.lin(x0, y0));
         loop {
@@ -168,15 +205,32 @@ impl<'a, T> PixelCanvas<'a, T> where T: Clone + Copy {
 }
 
 impl<'a> PixelCanvas<'a, u32> {
-    pub fn blit8x8(&mut self, src: &[u8; 8], on: u32, off: u32, (x, y): (usize, usize)) -> Result<(), CanvasAccessError> {
+    pub fn blit8x8(
+        &mut self,
+        src: &[u8; 8],
+        on: u32,
+        off: u32,
+        (x, y): (usize, usize),
+    ) -> Result<(), CanvasAccessError> {
         self.check_bounds(x + 8, y + 8)?;
-        unsafe {self.blit8x8_unsafe(src, on, off, (x,y));}
+        unsafe {
+            self.blit8x8_unsafe(src, on, off, (x, y));
+        }
         Ok(())
     }
 
-    pub unsafe fn blit8x8_unsafe(&mut self, src: &[u8; 8], on: u32, off: u32, (x, y): (usize, usize)) {
+    pub unsafe fn blit8x8_unsafe(
+        &mut self,
+        src: &[u8; 8],
+        on: u32,
+        off: u32,
+        (x, y): (usize, usize),
+    ) {
         use core::arch::aarch64::*;
-        const MASK: [u8; 16] = [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01];
+        const MASK: [u8; 16] = [
+            0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04,
+            0x02, 0x01,
+        ];
         let mask = vld1q_u8(MASK.as_ptr());
         let v_off = vdupq_n_u32(off);
         let v_on = vdupq_n_u32(on);
@@ -192,7 +246,7 @@ impl<'a> PixelCanvas<'a, u32> {
         let line5 = line4.add(line_step);
         let line6 = line5.add(line_step);
         let line7 = line6.add(line_step);
-        
+
         let val0 = vld4_dup_u8(src.as_ptr());
         let val1 = vld4_dup_u8(src.as_ptr().add(4));
         let vala = vcombine_u8(val0.0, val0.1);
@@ -203,11 +257,11 @@ impl<'a> PixelCanvas<'a, u32> {
         let v23 = vtstq_u8(valb, mask);
         let v45 = vtstq_u8(valc, mask);
         let v67 = vtstq_u8(vald, mask);
-        
+
         let expand_u8_to_u32 = |v: uint8x16_t| -> uint32x4x4_t {
             let v0 = vmovl_u8(vget_low_u8(v));
             let v1 = vmovl_u8(vget_high_u8(v));
-            let a = vmovl_u16(vget_low_u16(v0)); 
+            let a = vmovl_u16(vget_low_u16(v0));
             let b = vmovl_u16(vget_high_u16(v0));
             let c = vmovl_u16(vget_low_u16(v1));
             let d = vmovl_u16(vget_high_u16(v1));
@@ -231,7 +285,7 @@ impl<'a> PixelCanvas<'a, u32> {
         let l5 = uint32x4x2_t(vbslq_u32(v2.2, v_on, v_off), vbslq_u32(v2.3, v_on, v_off));
         let l6 = uint32x4x2_t(vbslq_u32(v3.0, v_on, v_off), vbslq_u32(v3.1, v_on, v_off));
         let l7 = uint32x4x2_t(vbslq_u32(v3.2, v_on, v_off), vbslq_u32(v3.3, v_on, v_off));
-        
+
         vst1q_u32_x2(line0, l0);
         vst1q_u32_x2(line1, l1);
         vst1q_u32_x2(line2, l2);
@@ -242,15 +296,32 @@ impl<'a> PixelCanvas<'a, u32> {
         vst1q_u32_x2(line7, l7);
     }
 
-    pub fn blit8x8_line(&mut self, src: &[u64], on: u32, off: u32, (x, y): (usize, usize)) -> Result<(), CanvasAccessError> {
+    pub fn blit8x8_line(
+        &mut self,
+        src: &[u64],
+        on: u32,
+        off: u32,
+        (x, y): (usize, usize),
+    ) -> Result<(), CanvasAccessError> {
         self.check_bounds(x + 8 * src.len() - 1, y + 7)?;
-        unsafe {self.blit8x8_line_unsafe(src, on, off, (x,y));}
+        unsafe {
+            self.blit8x8_line_unsafe(src, on, off, (x, y));
+        }
         Ok(())
     }
 
-    pub unsafe fn blit8x8_line_unsafe(&mut self, src: &[u64], on: u32, off: u32, (x, y): (usize, usize)) {
+    pub unsafe fn blit8x8_line_unsafe(
+        &mut self,
+        src: &[u64],
+        on: u32,
+        off: u32,
+        (x, y): (usize, usize),
+    ) {
         use core::arch::aarch64::*;
-        const MASK: [u8; 16] = [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01];
+        const MASK: [u8; 16] = [
+            0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04,
+            0x02, 0x01,
+        ];
         let mask = vld1q_u8(MASK.as_ptr());
         let v_off = vdupq_n_u32(off);
         let v_on = vdupq_n_u32(on);
@@ -266,7 +337,7 @@ impl<'a> PixelCanvas<'a, u32> {
         let mut line5 = line4.add(line_step);
         let mut line6 = line5.add(line_step);
         let mut line7 = line6.add(line_step);
-        
+
         for tile in src {
             let bytes = tile.to_le_bytes();
             let val0 = vld4_dup_u8(bytes.as_ptr());
@@ -279,11 +350,11 @@ impl<'a> PixelCanvas<'a, u32> {
             let v23 = vtstq_u8(valb, mask);
             let v45 = vtstq_u8(valc, mask);
             let v67 = vtstq_u8(vald, mask);
-            
+
             let expand_u8_to_u32 = |v: uint8x16_t| -> uint32x4x4_t {
                 let v0 = vmovl_u8(vget_low_u8(v));
                 let v1 = vmovl_u8(vget_high_u8(v));
-                let a = vmovl_u16(vget_low_u16(v0)); 
+                let a = vmovl_u16(vget_low_u16(v0));
                 let b = vmovl_u16(vget_high_u16(v0));
                 let c = vmovl_u16(vget_low_u16(v1));
                 let d = vmovl_u16(vget_high_u16(v1));
@@ -293,12 +364,12 @@ impl<'a> PixelCanvas<'a, u32> {
                 let h = vtstq_u32(d, d);
                 uint32x4x4_t(e, f, g, h)
             };
-    
+
             let v0 = expand_u8_to_u32(v01);
             let v1 = expand_u8_to_u32(v23);
             let v2 = expand_u8_to_u32(v45);
             let v3 = expand_u8_to_u32(v67);
-    
+
             let l0 = uint32x4x2_t(vbslq_u32(v0.0, v_on, v_off), vbslq_u32(v0.1, v_on, v_off));
             let l1 = uint32x4x2_t(vbslq_u32(v0.2, v_on, v_off), vbslq_u32(v0.3, v_on, v_off));
             let l2 = uint32x4x2_t(vbslq_u32(v1.0, v_on, v_off), vbslq_u32(v1.1, v_on, v_off));
@@ -307,7 +378,7 @@ impl<'a> PixelCanvas<'a, u32> {
             let l5 = uint32x4x2_t(vbslq_u32(v2.2, v_on, v_off), vbslq_u32(v2.3, v_on, v_off));
             let l6 = uint32x4x2_t(vbslq_u32(v3.0, v_on, v_off), vbslq_u32(v3.1, v_on, v_off));
             let l7 = uint32x4x2_t(vbslq_u32(v3.2, v_on, v_off), vbslq_u32(v3.3, v_on, v_off));
-            
+
             vst1q_u32_x2(line0, l0);
             vst1q_u32_x2(line1, l1);
             vst1q_u32_x2(line2, l2);
@@ -326,22 +397,31 @@ impl<'a> PixelCanvas<'a, u32> {
             line6 = line6.add(8);
             line7 = line7.add(8);
         }
-
-        
     }
 }
 
 impl<'a> PixelCanvas<'a, u8> {
-    pub fn blit8x8(&mut self, src: &[u8], on: u8, off: u8, (x, y): (usize, usize)) -> Result<(), CanvasAccessError> {
+    pub fn blit8x8(
+        &mut self,
+        src: &[u8],
+        on: u8,
+        off: u8,
+        (x, y): (usize, usize),
+    ) -> Result<(), CanvasAccessError> {
         self.check_bounds(x + 8, y + 8)?;
-        
-        unsafe { self.blit8x8_unsafe(src, on, off, (x,y)); }
+
+        unsafe {
+            self.blit8x8_unsafe(src, on, off, (x, y));
+        }
         Ok(())
     }
-    
+
     pub unsafe fn blit8x8_unsafe(&mut self, src: &[u8], on: u8, off: u8, (x, y): (usize, usize)) {
         use core::arch::aarch64::*;
-        const MASK: [u8; 16] = [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01];
+        const MASK: [u8; 16] = [
+            0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0x80, 0x40, 0x20, 0x10, 0x08, 0x04,
+            0x02, 0x01,
+        ];
         let v_off = vdupq_n_u8(off);
         let v_on = vdupq_n_u8(on);
         let start = self.lin(x, y);
@@ -353,7 +433,7 @@ impl<'a> PixelCanvas<'a, u8> {
         let line5 = line4.add(self.pitch);
         let line6 = line5.add(self.pitch);
         let line7 = line6.add(self.pitch);
-        
+
         let mask = vld1q_dup_u8(MASK.as_ptr());
         let val0 = vld4_dup_u8(src.as_ptr());
         let val1 = vld4_dup_u8(src.as_ptr().add(4));
@@ -369,7 +449,7 @@ impl<'a> PixelCanvas<'a, u8> {
         let v1 = vbslq_u8(v1, v_on, v_off);
         let v2 = vbslq_u8(v2, v_on, v_off);
         let v3 = vbslq_u8(v3, v_on, v_off);
-        
+
         vst1_u8(line0, vget_high_u8(v0));
         vst1_u8(line1, vget_low_u8(v0));
         vst1_u8(line2, vget_high_u8(v1));

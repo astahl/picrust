@@ -27,7 +27,7 @@ pub fn status_get() -> bool {
         let (_, status): (mailbox::Led, mailbox::LedStatus) = mailbox.pop_values();
         match status {
             mailbox::LedStatus::On => true,
-            _ => false
+            _ => false,
         }
     } else {
         false

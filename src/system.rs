@@ -1,4 +1,3 @@
-
 pub fn get_core_num() -> usize {
     let mut core_num: usize;
     unsafe {
@@ -39,7 +38,7 @@ pub fn wait_msec(msec: usize) {
     }
     let expire_at = current_counter + ((frequency / 1000) * msec);
     while current_counter < expire_at {
-        unsafe { 
+        unsafe {
             core::arch::asm!(
                 "mrs {0}, cntpct_el0",
                 out(reg) current_counter
