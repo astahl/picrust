@@ -26,6 +26,6 @@ raspi1=["bcm2835"]
 raspi2b=["bcm2836"]
 raspi3b=["bcm2837"]
 raspi4=["bcm2711"]
-default=["raspi4"]
+default=["raspi3b"]
 
 [dependencies]

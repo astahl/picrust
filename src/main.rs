@@ -3,11 +3,11 @@
 
 mod buffer;
 mod drawing;
+mod exception;
 mod hal;
 mod monitor;
 mod peripherals;
 mod system;
-mod exception;
 use core::{arch::global_asm, str, usize};
 
 use crate::{hal::display::Resolution, peripherals::uart::Uart0Formatter, system::wait_msec};
@@ -36,7 +36,7 @@ extern "C" {
 }
 
 #[no_mangle]
-pub extern "C" fn kernel_main() {
+pub extern "C" fn kernel_main() -> ! {
     use peripherals::uart::Uart0;
     // let core_id = system::get_core_num();
     // if core_id == 0 {
@@ -44,16 +44,10 @@ pub extern "C" fn kernel_main() {
     Uart0::puts("start");
     hal::led::status_set(true);
     hal::led::status_blink_twice(500);
-    if let Err(e) = unsafe {
-        system::mmu_init()
-    } {
-        ("Failed MMU initialisation");
-        hal::led::status_blink_twice(100);
-        hal::led::status_blink_twice(100);
-        return;
+    if cfg!(not(feature = "bcm2711")) {
+        system::mmu_init().unwrap();
     }
-    
-    hal::led::status_blink_twice(1000);
+
     Uart0::put_uint(system::current_exception_level() as u64);
     // Uart0::puts("start");
 
@@ -156,7 +150,7 @@ pub extern "C" fn kernel_main() {
         .fill_rect(color::BLUE, (298, 298), (300, 300))
         .unwrap();
     canvas.fill_lines(color::RED, 100..=100).unwrap();
-    let pixelscale = (5, 6);
+    let pixelscale = (2, 2);
     let cols = canvas.width / (pixelscale.0 * 8);
     let rows = canvas.height / (pixelscale.1 * 8);
     let mut row_buffer = [0_u64; 256];
@@ -189,7 +183,7 @@ pub extern "C" fn kernel_main() {
                 )
                 .unwrap();
         }
-        // canvas.scale_in_place(pixelscale.0, pixelscale.1);
+        canvas.scale_in_place(pixelscale.0, pixelscale.1);
         v_scroll += 1;
 
         system::wait_msec(100);
@@ -207,14 +201,20 @@ global_asm!(
     "mrs     x1, mpidr_el1",
     "and     x1, x1, #3",
     "cbz     x1, 2f",
-    "1:", // We're not on the main core, so hang in an infinite wait loop
+    "stop_core:", // We're not on the main core, so hang in an infinite wait loop
     // wait for event and loop
     "wfe",
-    "b       1b",
+    "bl       stop_core",
     "2:", // We're on the main core!
     // Set stack to start below our code
     "ldr     x1, =__kernel_start",
     // Ensure we end up on Exception Level 1 (starting on EL3)
+    "bl enter_el1",
+);
+
+#[cfg(not(feature = "bcm2711"))]
+global_asm!(
+    "enter_el1:",
     // set up EL1
     "mrs     x0, CurrentEL",
     "and     x0, x0, #12", // clear reserved bits
@@ -231,7 +231,7 @@ global_asm!(
     "eret",
     // running at EL2?
     "5:  cmp     x0, #4",
-    "beq     6f",
+    "beq     start_main",
     "msr     sp_el1, x1",
     // enable CNTP for EL1
     "mrs     x0, cnthctl_el2",
@@ -239,7 +239,7 @@ global_asm!(
     "msr     cnthctl_el2, x0",
     "msr     cntvoff_el2, xzr",
     // enable SIMD/FP in EL1 https://stackoverflow.com/questions/46194098/armv8-changing-from-el3-to-el1-secure#46219711
-    "mov     x0, #3 << 20",
+    "mov     x0, #(3 << 20)",
     "msr     cpacr_el1, x0",
     // enable AArch64 in EL1
     "mov     x0, #(1 << 31)",    // AArch64
@@ -249,6 +249,8 @@ global_asm!(
     // Setup SCTLR access
     "mov     x2, #0x0800",
     "movk    x2, #0x30d0, lsl #16",
+    "orr    x2, x2, #(1 << 12)", // enable I-Cache
+    "orr    x2, x2, #(1 << 2)",  // enable D-Cache
     "msr     sctlr_el1, x2",
     // set up exception handlers
     "ldr     x2, =_vectors",
@@ -256,10 +258,46 @@ global_asm!(
     // change execution level to EL1
     "mov     x2, #0x3c4",
     "msr     spsr_el2, x2",
-    "adr     x2, 6f",
+    "adr     x2, start_main",
     "msr     elr_el2, x2",
     "eret",
-    "6: mov     sp, x1",
+);
+
+#[cfg(feature = "bcm2711")]
+global_asm!(
+    "enter_el1:",
+    "mov     x0, #0x33ff",
+    "msr     cptr_el3, x0", // Disable coprocessor traps to EL3
+    "mov     x0, #3 << 20",
+    "msr     cpacr_el1, x0", // Enable FP/SIMD at EL1
+    // Now get ready to switch from EL3 down to EL1
+    "mov     x0, #0x0800",          // reserved bits for sctlr
+    "movk    x0, #0x30d0, lsl #16", // reserved bits for sctlr
+    "orr    x0, x0, #(1 << 12)",    // enable I-Cache
+    "orr    x0, x0, #(1 << 2)",     // enable D-Cache
+    // keep bit0 0 to disable MMU
+    "msr	sctlr_el1, x0",
+    "mov     x0, #(1 << 31)", // Hypervisor RW
+    "msr     hcr_el2, x0",
+    "mov     x0, #(3 << 4)",      // reserved bits for SCR
+    "orr     x0, x0, #(1 << 10)", // RW
+    "orr     x0, x0, #(1 << 0)",  // NS
+    "msr     scr_el3, x0",
+    "mov     x0, #(7 << 6)",     // mask all
+    "orr     x0, x0, #(1 << 0)", // EL1h
+    "orr     x0, x0, #(1 << 2)", // EL1h
+    "msr     spsr_el3, x0",
+    // set up exception handlers
+    "ldr     x2, =_vectors",
+    "msr     vbar_el1, x2",
+    "adr     x0, start_main",
+    "msr     elr_el3, x0",
+    "eret",
+);
+
+global_asm!(
+    "start_main:",
+    "mov     sp, x1",
     // clear bss section
     "ldr    x1, =__bss_start",
     // initialize w2 to the remaining size (size is mult of 8 bytes, bss is aligned)
@@ -275,7 +313,10 @@ global_asm!(
     // Jump to our kernel_main() routine in rust (make sure it doesn't return)
     "bl kernel_main",
     // In case it does return, halt the master core too
-    "b       1b",
+    "bl stop_core",
+);
+
+global_asm!(
     // important, code has to be properly aligned
     ".align 11",
     "_vectors:",

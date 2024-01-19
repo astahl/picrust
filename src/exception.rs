@@ -1,4 +1,3 @@
-
 #[no_mangle]
 pub extern "C" fn exc_handler(
     exception_type: ExceptionType,
@@ -28,8 +27,6 @@ pub extern "C" fn exc_handler(
         core::hint::spin_loop();
     }
 }
-
-
 
 #[derive(Debug)]
 #[repr(C)]

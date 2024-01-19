@@ -71,7 +71,7 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
     }
 
     pub fn put_hex(byte: u8) {
-        const SYMBOLS: &[u8; 16] = b"0123456789abcdef"; 
+        const SYMBOLS: &[u8; 16] = b"0123456789abcdef";
         let upper = (byte >> 4) & 0xF;
         let lower = byte & 0xF;
         Self::putc(SYMBOLS[upper as usize]);
@@ -98,7 +98,6 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
         Self::putc(b'x');
         if value == 0 {
             Self::putc(b'0');
-            
         } else {
             for b in value.to_be_bytes().into_iter().skip_while(|b| *b == 0) {
                 Self::put_hex(b);

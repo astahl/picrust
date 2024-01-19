@@ -8,10 +8,31 @@ extern "C" {
 #[derive(Debug)]
 pub enum MMUInitError {
     PhysicalAddressRangeAtLeast36bitNotSupported,
-    TranslationGranule4kbSupported
+    TranslationGranule4kbNotSupported,
+    NotImplementedError,
 }
 
-pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
+#[cfg(feature = "bcm2711")]
+pub fn mmu_init() -> Result<(), MMUInitError> {
+    Err(MMUInitError::NotImplementedError)
+}
+
+#[cfg(not(feature = "bcm2711"))]
+pub fn mmu_init() -> Result<(), MMUInitError> {
+    // check for 4k granule and at least 36 bits physical address bus */
+    let mut memory_model_features = 0_usize;
+    // see D19.2.64 for register layout
+    unsafe {
+        asm!("mrs {}, id_aa64mmfr0_el1", out(reg) memory_model_features);
+    }
+    let par_flags = memory_model_features & 0xF;
+    if par_flags < 0b0001 {
+        return Err(MMUInitError::PhysicalAddressRangeAtLeast36bitNotSupported);
+    }
+    if (memory_model_features >> 28) & 0xF == 0xF {
+        return Err(MMUInitError::TranslationGranule4kbNotSupported);
+    }
+
     const PAGESIZE: usize = 4096;
     const PAGE_ENTRY_COUNT: usize = PAGESIZE / core::mem::size_of::<usize>();
     // granularity
@@ -36,8 +57,9 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
 
     const MMIO_BASE: usize = crate::peripherals::BCM_HOST.peripheral_address;
 
-    let data_page_index = core::ptr::addr_of!(__data_start) as usize / PAGESIZE;
-    let page_table_ptr = core::ptr::addr_of!(__kernel_end);
+    let data_page_index = unsafe { core::ptr::addr_of!(__data_start) } as usize / PAGESIZE;
+    let page_table_ptr = unsafe { core::ptr::addr_of!(__kernel_end) };
+
     let page_table_entry_ptr = page_table_ptr.cast::<usize>().cast_mut();
 
     /* create MMU translation tables at __kernel_end */
@@ -49,7 +71,9 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                 PT_USER |     // non-privileged
                 PT_ISH |      // inner shareable
                 PT_MEM; // normal memory
-    page_table_entry_ptr.write_volatile(physical_address | flags);
+    unsafe {
+        page_table_entry_ptr.write_volatile(physical_address | flags);
+    }
 
     // identity L2, first 2M block
     let physical_address = page_table_ptr.wrapping_add(3 * PAGESIZE) as usize;
@@ -58,10 +82,11 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                 PT_USER |     // non-privileged
                 PT_ISH |      // inner shareable
                 PT_MEM; // normal memory
-    page_table_entry_ptr
-        .add(2 * PAGE_ENTRY_COUNT)
-        .write_volatile(physical_address | flags);
-
+    unsafe {
+        page_table_entry_ptr
+            .wrapping_add(2 * PAGE_ENTRY_COUNT)
+            .write_volatile(physical_address | flags);
+    }
     // identity L2 2M blocks
     // TODO (astahl): this is 2032 on Pi 4's SoC, do we need to extend the block count up to 2048?
     let device_memory_block = MMIO_BASE >> 21; // 2 megabyte blocks
@@ -79,9 +104,11 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                     } else {
                         PT_ISH | PT_MEM
                     };
-        page_table_entry_ptr
-            .add(2 * PAGE_ENTRY_COUNT + block)
-            .write_volatile(physical_address | flags);
+        unsafe {
+            page_table_entry_ptr
+                .wrapping_add(2 * PAGE_ENTRY_COUNT + block)
+                .write_volatile(physical_address | flags);
+        }
     }
 
     // identity L3
@@ -96,9 +123,11 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                     } else {
                         PT_RO
                     }; // different for code and data
-        page_table_entry_ptr
-            .add(3 * PAGE_ENTRY_COUNT + page)
-            .write_volatile(physical_address | flags);
+        unsafe {
+            page_table_entry_ptr
+                .wrapping_add(3 * PAGE_ENTRY_COUNT + page)
+                .write_volatile(physical_address | flags);
+        }
     }
 
     // TTBR1, kernel L1
@@ -108,10 +137,11 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                 PT_KERNEL |   // privileged
                 PT_ISH |      // inner shareable
                 PT_MEM; // normal memory
-    page_table_entry_ptr
-        .add(2 * PAGE_ENTRY_COUNT - 1)
-        .write_volatile(physical_address | flags);
-
+    unsafe {
+        page_table_entry_ptr
+            .wrapping_add(2 * PAGE_ENTRY_COUNT - 1)
+            .write_volatile(physical_address | flags);
+    }
     // kernel L2
     let physical_address = page_table_ptr.wrapping_add(5 * PAGESIZE) as usize;
     let flags = PT_PAGE |     // we have area in it mapped by pages
@@ -119,10 +149,11 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                 PT_KERNEL |   // privileged
                 PT_ISH |      // inner shareable
                 PT_MEM; // normal memory
-    page_table_entry_ptr
-        .add(5 * PAGE_ENTRY_COUNT - 1)
-        .write_volatile(physical_address | flags);
-
+    unsafe {
+        page_table_entry_ptr
+            .wrapping_add(5 * PAGE_ENTRY_COUNT - 1)
+            .write_volatile(physical_address | flags);
+    }
     // kernel L3
     // TODO (astahl): this is the UART0 address??
     let physical_address = MMIO_BASE + 0x00201000;
@@ -132,30 +163,20 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                 PT_KERNEL |   // privileged
                 PT_OSH |      // outter shareable
                 PT_DEV; // device memory
-    page_table_entry_ptr
-        .add(5 * PAGE_ENTRY_COUNT)
-        .write_volatile(physical_address | flags);
-
+    unsafe {
+        page_table_entry_ptr
+            .wrapping_add(5 * PAGE_ENTRY_COUNT)
+            .write_volatile(physical_address | flags);
+    }
     /* okay, now we have to set system registers to enable MMU */
 
-    // check for 4k granule and at least 36 bits physical address bus */
-    let mut memory_model_features = 0_usize;
-    // see D19.2.64 for register layout
-    asm!("mrs {}, id_aa64mmfr0_el1", out(reg) memory_model_features);
-    let par_flags = memory_model_features & 0xF;
-    if par_flags < 0b0001 {
-        return Err(MMUInitError::PhysicalAddressRangeAtLeast36bitNotSupported);
-    }
-    if (memory_model_features >> 28) & 0xF == 0xF {
-        return Err(MMUInitError::TranslationGranule4kbSupported);
-    }
-
-  
     // first, set Memory Attributes array, indexed by PT_MEM, PT_DEV, PT_NC in our example
     let r: usize = (0xFF << 0) | // AttrIdx=0: normal, IWBWA, OWBWA, NTR
                    (0x04 << 8) | // AttrIdx=1: device, nGnRE (must be OSH too)
                    (0x44 <<16); // AttrIdx=2: non cacheable
-    asm!("msr mair_el1, {}", in(reg) r);
+    unsafe {
+        asm!("msr mair_el1, {}", in(reg) r);
+    }
 
     // next, specify mapping characteristics in translate control register
     let r: usize = (0 << 37) | // TBI=0, no tagging
@@ -172,19 +193,27 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
                    (0b01 << 8) |  // IRGN0=1 write back
                    (0b0  << 7) |  // EPD0 enable lower half
                    (25   << 0); // T0SZ=25, 3 levels (512G)
-    asm!("msr tcr_el1, {}; isb", in(reg)r);
+    unsafe {
+        asm!("msr tcr_el1, {}; isb", in(reg)r);
+    }
 
     // tell the MMU where our translation tables are. TTBR_ENABLE bit not documented, but required
     // lower half, user space
     let ttbr0_address = page_table_ptr as usize | TTBR_ENABLE;
-    asm!("msr ttbr0_el1, {}", in(reg) ttbr0_address);
+    unsafe {
+        asm!("msr ttbr0_el1, {}", in(reg) ttbr0_address);
+    }
     // upper half, kernel space
     let ttbr1_address = page_table_ptr as usize + PAGESIZE | TTBR_ENABLE;
-    asm!("msr ttbr1_el1, {}", in(reg) ttbr1_address);
+    unsafe {
+        asm!("msr ttbr1_el1, {}", in(reg) ttbr1_address);
+    }
 
     // finally, toggle some bits in system control register to enable page translation
     let mut r: usize = 0;
-    asm!("dsb ish; isb; mrs {}, sctlr_el1", out(reg) r);
+    unsafe {
+        asm!("dsb ish; isb; mrs {}, sctlr_el1", out(reg) r);
+    }
     r |= 0xC00800; // set mandatory reserved bits
     r &= !((1 << 25) |   // clear EE, little endian translation tables
            (1 << 24) |   // clear E0E
@@ -195,7 +224,9 @@ pub unsafe fn mmu_init() -> Result<(), MMUInitError> {
            (1 << 2) |    // clear C, no cache at all
            (1 << 1)); // clear A, no aligment check
     r |= 1 << 0; // set M, enable MMU
-    asm!("msr sctlr_el1, {}; isb", in(reg) r);
+    unsafe {
+        asm!("msr sctlr_el1, {}; isb", in(reg) r);
+    }
     Ok(())
 }
 
