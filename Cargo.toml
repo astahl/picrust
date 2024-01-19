@@ -13,7 +13,8 @@ bench = false
 codegen-units=1
 lto=true
 panic="abort"
-strip=true
+# uncomment to strip symbols
+# strip=true
 
 [features]
 bcm2712=[]

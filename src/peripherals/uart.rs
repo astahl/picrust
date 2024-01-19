@@ -71,20 +71,18 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
     }
 
     pub fn put_hex(byte: u8) {
+        const SYMBOLS: &[u8; 16] = b"0123456789abcdef"; 
         let upper = (byte >> 4) & 0xF;
         let lower = byte & 0xF;
-        match upper {
-            0..=9 => Self::putc(b'0' + upper),
-            _ => Self::putc(b'A' + (upper - 10)),
-        }
-        match lower {
-            0..=9 => Self::putc(b'0' + lower),
-            _ => Self::putc(b'A' + (lower - 10)),
-        }
+        Self::putc(SYMBOLS[upper as usize]);
+        Self::putc(SYMBOLS[lower as usize]);
     }
 
     pub fn put_hex_bytes(buffer: &[u8]) {
-        for chunk in buffer.chunks(16) {
+        for (line, chunk) in buffer.chunks(16).enumerate() {
+            if line != 0 {
+                Self::putc(b'\n');
+            }
             for chunk in chunk.chunks(4) {
                 for byte in chunk {
                     Self::put_hex(*byte);
@@ -92,7 +90,30 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
                 }
                 Self::putc(b' ');
             }
-            Self::putc(b'\n');
+        }
+    }
+
+    pub fn put_hex_usize(value: usize) {
+        Self::putc(b'0');
+        Self::putc(b'x');
+        if value == 0 {
+            Self::putc(b'0');
+            
+        } else {
+            for b in value.to_be_bytes().into_iter().skip_while(|b| *b == 0) {
+                Self::put_hex(b);
+            }
+        }
+    }
+
+    pub fn put_memory(ptr: *const u8, len: usize) {
+        Self::put_hex_usize(ptr as usize);
+        Self::putc(b':');
+        for i in 0..len {
+            Self::putc(b' ');
+            let position = ptr.wrapping_add(i);
+            let value = unsafe { position.read_volatile() };
+            Self::put_hex(value);
         }
     }
 
@@ -231,5 +252,14 @@ impl UartFlags {
     // Clear to send. This bit is the complement of the UART clear to send, nUARTCTS, modem status input. That is, the bit is 1 when nUARTCTS is LOW.
     pub const fn clear_to_send(&self) -> bool {
         self.0 & Self::CTS != 0
+    }
+}
+
+pub struct Uart0Formatter();
+
+impl core::fmt::Write for Uart0Formatter {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        Uart0::puts(s);
+        Ok(())
     }
 }

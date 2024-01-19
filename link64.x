@@ -16,10 +16,11 @@ SECTIONS
 		__font_end = .;
 	}
 	__rodata_end = .;
-	. = ALIGN(0x1000);
-	PROVIDE(_data = .);
 	.data : { 
-		*(.data .data.* .gnu.linkonce.d*)	}
+		. = ALIGN(0x1000);
+		PROVIDE(__data_start = .);
+		*(.data .data.* .gnu.linkonce.d*)	
+	}
 	.bss (NOLOAD) : {
 		. = ALIGN(0x1000);
 		__bss_start = .;

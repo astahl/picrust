@@ -7,18 +7,21 @@ mod hal;
 mod monitor;
 mod peripherals;
 mod system;
-use core::{arch::global_asm, usize};
+mod exception;
+use core::{arch::global_asm, str, usize};
 
-use crate::hal::display::Resolution;
+use crate::{hal::display::Resolution, peripherals::uart::Uart0Formatter, system::wait_msec};
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
     use peripherals::uart::Uart0;
+    Uart0::puts("PANIC!");
     if let Some(msg) = info.payload().downcast_ref::<&str>() {
-        Uart0::puts("PANIC: ");
         Uart0::puts(msg);
-    } else {
-        Uart0::puts("PANIC!");
+    }
+    if let Some(loc) = info.location() {
+        Uart0::puts(loc.file());
+        Uart0::put_uint(loc.line() as u64);
     }
     loop {
         hal::led::status_blink_twice(100);
@@ -35,13 +38,25 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn kernel_main() {
     use peripherals::uart::Uart0;
-    let core_id = system::get_core_num();
-    if core_id == 0 {
-        hal::led::status_set(true);
-        Uart0::init();
-    }
-    Uart0::put_uint(system::current_exception_level() as u64);
+    // let core_id = system::get_core_num();
+    // if core_id == 0 {
+    Uart0::init();
     Uart0::puts("start");
+    hal::led::status_set(true);
+    hal::led::status_blink_twice(500);
+    if let Err(e) = unsafe {
+        system::mmu_init()
+    } {
+        ("Failed MMU initialisation");
+        hal::led::status_blink_twice(100);
+        hal::led::status_blink_twice(100);
+        return;
+    }
+    
+    hal::led::status_blink_twice(1000);
+    Uart0::put_uint(system::current_exception_level() as u64);
+    // Uart0::puts("start");
+
     let mut str_buffer = buffer::Ring::<u8>::new();
 
     use hal::framebuffer::color;
@@ -53,7 +68,7 @@ pub extern "C" fn kernel_main() {
     )
     .unwrap();
 
-    fb.clear(color::BLACK);
+    // fb.clear(color::BLACK);
 
     let font = unsafe {
         core::slice::from_raw_parts(
@@ -79,6 +94,7 @@ pub extern "C" fn kernel_main() {
     };
     fb.clear(color::BLUE);
     fb.write_text(text, font, mapping);
+    wait_msec(1000);
     fb.clear(color::RED);
 
     use core::fmt::Write;
@@ -173,121 +189,10 @@ pub extern "C" fn kernel_main() {
                 )
                 .unwrap();
         }
-        canvas.scale_in_place(pixelscale.0, pixelscale.1);
+        // canvas.scale_in_place(pixelscale.0, pixelscale.1);
         v_scroll += 1;
 
-        system::wait_msec(500);
-    }
-}
-
-#[derive(Debug)]
-#[repr(C)]
-pub enum ExceptionType {
-    Synchronous = 0_isize,
-    IRQ,
-    FIQ,
-    SError,
-}
-
-#[derive(Debug)]
-pub enum ExceptionClass {
-    Unknown = 0b000000,
-    TrappedWFxInstructionExecution = 0b000001,
-    Reserved0x02,
-    TrappedMCROrMRCAccessCoproc0xF = 0b000011,
-    TrappedMCRROrMRRCAccess = 0b000100,
-    TrappedMCROrMRCAccessCoproc0xE = 0b000101,
-    TrappedLDCOrSTCAccess = 0b000110,
-    TrappedFpSMEAdvancedSIMDOrSVE = 0b000111,
-    Reserved0x08,
-    Reserved0x09,
-    TrappedLD64bOrST64bInstruction = 0b001010,
-    Reserved0x0c,
-    TrappedMRRCAcessCoproc0xE = 0b001100,
-    BranchTargetException = 0b001101,
-    IllegalExecutionState = 0b001110,
-    Reserved0x11,
-    TrappedSVCInstructionAArch32 = 0b010001,
-    Reserved0x12,
-    Reserved0x13,
-    Reserved0x14,
-    TrappedSVCInstructionAArch64 = 0b010101,
-    Reserved0x16,
-    Reserved0x17,
-    TrappedMSROrMRSOrSystemInstruction = 0b011000,
-    TrappedSVEAccess = 0b011001,
-    Reserved0x1a,
-    ExceptionFromTSTARTInstruction = 0b011011,
-    PointerAuthenticationFailure = 0b011100,
-    TrappedSMEAccess = 0b011101,
-    Reserved0x1e,
-    Reserved0x1f,
-    InstructionAbortFromLowerEL = 0b100000,
-    InstructionAbortFromSameEL = 0b100001,
-    ProgramCounterAlignmentFault = 0b100010,
-    Reserved0x23,
-    DataAbortFromLowerEL = 0b100100,
-    DataAbortFromSameEL = 0b100101,
-    StackPointerAlignmentFault = 0b100110,
-    MemoryOperationException = 0b100111,
-    TrappedFloatingPointAArch32 = 0b101000,
-    Reserved0x29,
-    Reserved0x2a,
-    Reserved0x2b,
-    TrappedFloatingPointAArch64 = 0b101100,
-    Reserved0x2d,
-    Reserved0x2e,
-    SError = 0b101111,
-    BreakpointFromLowerEL = 0b110000,
-    BreakpointFromSameEL = 0b110001,
-    SoftwareStepFromLowerEL = 0b110010,
-    SoftwareStepFromSameEL = 0b110011,
-    WatchpointFromLowerEL = 0b110100,
-    WatchpointFromSameEL = 0b110101,
-    Reserved0x36,
-    Reserved0x37,
-    BKPTInstructionAArch32 = 0b111000,
-    Reserved0x39,
-    Reserved0x3a,
-    Reserved0x3b,
-    BRKInstructionAArch64 = 0b111100,
-    Reserved0x3d,
-    Reserved0x3e,
-    Reserved0x3f,
-}
-
-pub enum InstructionLength {
-    Trapped16bitInstruction,
-    Trapped32bitInstruction,
-}
-
-#[repr(C)]
-pub struct ExceptionSyndrome(usize);
-
-impl ExceptionSyndrome {
-    pub fn exception_class(&self) -> ExceptionClass {
-        unsafe { core::mem::transmute((self.0 >> 26 & 0x3F) as u8) }
-    }
-
-    pub fn instruction_length(&self) -> InstructionLength {
-        unsafe { core::mem::transmute((self.0 >> 25 & 1) as u8) }
-    }
-
-    pub fn instruction_specific_syndrome(&self) -> u32 {
-        self.0 as u32 & 0x1fff
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn exc_handler(
-    exception_type: ExceptionType,
-    syndrome: ExceptionSyndrome,
-    elr: usize,
-    spsr: usize,
-    far: usize,
-) -> ! {
-    loop {
-        core::hint::spin_loop();
+        system::wait_msec(100);
     }
 }
 
@@ -309,7 +214,52 @@ global_asm!(
     "2:", // We're on the main core!
     // Set stack to start below our code
     "ldr     x1, =__kernel_start",
-    "mov     sp, x1",
+    // Ensure we end up on Exception Level 1 (starting on EL3)
+    // set up EL1
+    "mrs     x0, CurrentEL",
+    "and     x0, x0, #12", // clear reserved bits
+    // running at EL3?
+    "cmp     x0, #12",
+    "bne     5f",
+    // should never be executed, just for completeness
+    "mov     x2, #0x5b1",
+    "msr     scr_el3, x2",
+    "mov     x2, #0x3c9",
+    "msr     spsr_el3, x2",
+    "adr     x2, 5f",
+    "msr     elr_el3, x2",
+    "eret",
+    // running at EL2?
+    "5:  cmp     x0, #4",
+    "beq     6f",
+    "msr     sp_el1, x1",
+    // enable CNTP for EL1
+    "mrs     x0, cnthctl_el2",
+    "orr     x0, x0, #3",
+    "msr     cnthctl_el2, x0",
+    "msr     cntvoff_el2, xzr",
+    // enable SIMD/FP in EL1 https://stackoverflow.com/questions/46194098/armv8-changing-from-el3-to-el1-secure#46219711
+    "mov     x0, #3 << 20",
+    "msr     cpacr_el1, x0",
+    // enable AArch64 in EL1
+    "mov     x0, #(1 << 31)",    // AArch64
+    "orr     x0, x0, #(1 << 1)", // SWIO hardwired on Pi3
+    "msr     hcr_el2, x0",
+    "mrs     x0, hcr_el2",
+    // Setup SCTLR access
+    "mov     x2, #0x0800",
+    "movk    x2, #0x30d0, lsl #16",
+    "msr     sctlr_el1, x2",
+    // set up exception handlers
+    "ldr     x2, =_vectors",
+    "msr     vbar_el1, x2",
+    // change execution level to EL1
+    "mov     x2, #0x3c4",
+    "msr     spsr_el2, x2",
+    "adr     x2, 6f",
+    "msr     elr_el2, x2",
+    "eret",
+    "6: mov     sp, x1",
     // clear bss section
     "ldr    x1, =__bss_start",
     // initialize w2 to the remaining size (size is mult of 8 bytes, bss is aligned)
@@ -320,7 +270,7 @@ global_asm!(
     "str xzr, [x1], #8",
     // decrement the remaining size by 1 and loop
     "sub w2, w2, #1",
-    "b 3b",
+    "cbnz    w2, 3b",
     "4:",
     // Jump to our kernel_main() routine in rust (make sure it doesn't return)
     "bl kernel_main",
