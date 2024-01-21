@@ -2,10 +2,13 @@ ENTRY(_start)
 
 SECTIONS
 {
-	/* Starts at LOADER_ADDR. */
+	. = 0x40000;
+	__main_stack = .;
 	. = 0x80000;
 	__kernel_start = .;
-	.text :	{ KEEP(*(.text.boot)) *(.text .text.* .gnu.linkonce.t*)	}
+	.text :	{ 
+		KEEP(*(.text.boot)) *(.text .text.* .gnu.linkonce.t*)	
+	}
 	. = ALIGN(0x1000);
 	__rodata_start = .;
 	.rodata : {	

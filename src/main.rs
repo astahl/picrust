@@ -135,59 +135,59 @@ pub extern "C" fn kernel_main() -> ! {
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //
-    // let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
-    // mon.run();
-    fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
-    let mut canvas = drawing::PixelCanvas::with_slice(
-        fb.width_px as usize,
-        fb.height_px as usize,
-        fb.pitch_bytes as usize / 4,
-        fb.as_mut_pixels(),
-    )
-    .unwrap();
-    //canvas.clear(color::BLUE);
-    canvas
-        .fill_rect(color::BLUE, (298, 298), (300, 300))
-        .unwrap();
-    canvas.fill_lines(color::RED, 100..=100).unwrap();
-    let pixelscale = (2, 2);
-    let cols = canvas.width / (pixelscale.0 * 8);
-    let rows = canvas.height / (pixelscale.1 * 8);
-    let mut row_buffer = [0_u64; 256];
-    let mut v_scroll: usize = 0;
-    hal::led::status_set(false);
-    loop {
-        let line_iterator = text
-            .split(|b| *b == b'\n')
-            .flat_map(|l| l.chunks(cols))
-            .cycle();
-        canvas.fill_rect(0, (0, 0), (cols * 8, rows * 8)).unwrap();
-        for (row_nr, text_line) in line_iterator.skip(v_scroll as usize).take(rows).enumerate() {
-            let mut pre = 0;
-            let mut len = 0;
-            for (dst, src) in row_buffer.iter_mut().zip(text_line) {
-                let val = font[mapping(*src) as usize];
-                if len == 0 && val == 0 {
-                    pre += 1;
-                    continue;
-                }
-                *dst = val;
-                len += 1;
-            }
-            canvas
-                .blit8x8_line(
-                    &row_buffer[pre..len + pre],
-                    color::WHITE,
-                    color::BLACK,
-                    (pre * 8, row_nr * 8),
-                )
-                .unwrap();
-        }
-        canvas.scale_in_place(pixelscale.0, pixelscale.1);
-        v_scroll += 1;
+    let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
+    mon.run()
+    // fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
+    // let mut canvas = drawing::PixelCanvas::with_slice(
+    //     fb.width_px as usize,
+    //     fb.height_px as usize,
+    //     fb.pitch_bytes as usize / 4,
+    //     fb.as_mut_pixels(),
+    // )
+    // .unwrap();
+    // //canvas.clear(color::BLUE);
+    // canvas
+    //     .fill_rect(color::BLUE, (298, 298), (300, 300))
+    //     .unwrap();
+    // canvas.fill_lines(color::RED, 100..=100).unwrap();
+    // let pixelscale = (2, 2);
+    // let cols = canvas.width / (pixelscale.0 * 8);
+    // let rows = canvas.height / (pixelscale.1 * 8);
+    // let mut row_buffer = [0_u64; 256];
+    // let mut v_scroll: usize = 0;
+    // hal::led::status_set(false);
+    // loop {
+    //     let line_iterator = text
+    //         .split(|b| *b == b'\n')
+    //         .flat_map(|l| l.chunks(cols))
+    //         .cycle();
+    //     canvas.fill_rect(0, (0, 0), (cols * 8, rows * 8)).unwrap();
+    //     for (row_nr, text_line) in line_iterator.skip(v_scroll as usize).take(rows).enumerate() {
+    //         let mut pre = 0;
+    //         let mut len = 0;
+    //         for (dst, src) in row_buffer.iter_mut().zip(text_line) {
+    //             let val = font[mapping(*src) as usize];
+    //             if len == 0 && val == 0 {
+    //                 pre += 1;
+    //                 continue;
+    //             }
+    //             *dst = val;
+    //             len += 1;
+    //         }
+    //         canvas
+    //             .blit8x8_line(
+    //                 &row_buffer[pre..len + pre],
+    //                 color::WHITE,
+    //                 color::BLACK,
+    //                 (pre * 8, row_nr * 8),
+    //             )
+    //             .unwrap();
+    //     }
+    //     canvas.scale_in_place(pixelscale.0, pixelscale.1);
+    //     v_scroll += 1;
 
-        system::wait_msec(100);
-    }
+    //     system::wait_msec(100);
+    // }
 }
 
 global_asm!(".section .font", ".incbin \"901447-10.bin\"");
@@ -207,7 +207,7 @@ global_asm!(
     "bl       stop_core",
     "2:", // We're on the main core!
     // Set stack to start below our code
-    "ldr     x1, =__kernel_start",
+    "ldr     x1, =__main_stack",
     // Ensure we end up on Exception Level 1 (starting on EL3)
     "bl enter_el1",
 );
