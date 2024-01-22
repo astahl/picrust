@@ -8,6 +8,7 @@ mod hal;
 mod monitor;
 mod peripherals;
 mod system;
+mod bitfield;
 use core::{arch::global_asm, str, usize};
 
 use crate::{hal::display::Resolution, peripherals::uart::Uart0Formatter, system::wait_msec};
@@ -43,10 +44,10 @@ pub extern "C" fn kernel_main() -> ! {
     Uart0::init();
     Uart0::puts("start");
     hal::led::status_set(true);
-    hal::led::status_blink_twice(500);
-    if cfg!(not(feature = "bcm2711")) {
-        system::mmu_init().unwrap();
-    }
+    hal::led::status_blink_twice(100);
+    // if cfg!(not(feature = "bcm2711")) {
+    //     system::mmu_init().unwrap();
+    // }
 
     Uart0::put_uint(system::current_exception_level() as u64);
     // Uart0::puts("start");
@@ -88,7 +89,8 @@ pub extern "C" fn kernel_main() -> ! {
     };
     fb.clear(color::BLUE);
     fb.write_text(text, font, mapping);
-    wait_msec(1000);
+
+    hal::led::status_blink_twice(500);
     fb.clear(color::RED);
 
     use core::fmt::Write;
@@ -135,6 +137,7 @@ pub extern "C" fn kernel_main() -> ! {
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //
+    hal::led::status_set(false);
     let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     mon.run()
     // fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
@@ -208,56 +211,62 @@ global_asm!(
     "2:", // We're on the main core!
     // Set stack to start below our code
     "ldr     x1, =__main_stack",
-    // Ensure we end up on Exception Level 1 (starting on EL3)
+    // Ensure we end up on Exception Level 1 (starting on EL3 or EL2)
     "bl enter_el1",
 );
 
 #[cfg(not(feature = "bcm2711"))]
 global_asm!(
+    // move execution level to EL1
     "enter_el1:",
-    // set up EL1
+    // we make no assumptions if we're at EL3, EL2 or EL1
+    // the current EL is coded numerically in CurrentEL bits 3 and 2 
     "mrs     x0, CurrentEL",
-    "and     x0, x0, #12", // clear reserved bits
-    // running at EL3?
-    "cmp     x0, #12",
+    "ubfx    x0, x0, #2, #2",
+    // are we running at EL3?
+    "cmp     x0, #3",
     "bne     5f",
-    // should never be executed, just for completeness
+    // we are on EL3
     "mov     x2, #0x5b1",
     "msr     scr_el3, x2",
     "mov     x2, #0x3c9",
     "msr     spsr_el3, x2",
+    // leave execution level 3 and continue execution at the label below
     "adr     x2, 5f",
     "msr     elr_el3, x2",
     "eret",
-    // running at EL2?
-    "5:  cmp     x0, #4",
+    "5:",  
+    // are we already running at EL1?
+    "cmp     x0, #1",
     "beq     start_main",
+    // we are still on EL2
+    // set the EL1 stack pointer to __main_stack
     "msr     sp_el1, x1",
     // enable CNTP for EL1
-    "mrs     x0, cnthctl_el2",
-    "orr     x0, x0, #3",
-    "msr     cnthctl_el2, x0",
+    "mrs     x2, cnthctl_el2",
+    "orr     x2, x2, #3",
+    "msr     cnthctl_el2, x2",
     "msr     cntvoff_el2, xzr",
     // enable SIMD/FP in EL1 https://stackoverflow.com/questions/46194098/armv8-changing-from-el3-to-el1-secure#46219711
-    "mov     x0, #(3 << 20)",
-    "msr     cpacr_el1, x0",
+    "mov     x2, #(3 << 20)",
+    "msr     cpacr_el1, x2",
     // enable AArch64 in EL1
-    "mov     x0, #(1 << 31)",    // AArch64
-    "orr     x0, x0, #(1 << 1)", // SWIO hardwired on Pi3
-    "msr     hcr_el2, x0",
-    "mrs     x0, hcr_el2",
+    "mov     x2, #(1 << 31)",    // AArch64
+    "orr     x2, x2, #(1 << 1)", // SWIO hardwired on Pi3
+    "msr     hcr_el2, x2",
+    "mrs     x2, hcr_el2",
     // Setup SCTLR access
     "mov     x2, #0x0800",
     "movk    x2, #0x30d0, lsl #16",
-    "orr    x2, x2, #(1 << 12)", // enable I-Cache
-    "orr    x2, x2, #(1 << 2)",  // enable D-Cache
+    "orr     x2, x2, #(1 << 12)", // enable I-Cache
+    "orr     x2, x2, #(1 << 2)",  // enable D-Cache
     "msr     sctlr_el1, x2",
     // set up exception handlers
     "ldr     x2, =_vectors",
     "msr     vbar_el1, x2",
-    // change execution level to EL1
     "mov     x2, #0x3c4",
     "msr     spsr_el2, x2",
+    // leave execution level 2 to start main
     "adr     x2, start_main",
     "msr     elr_el2, x2",
     "eret",
@@ -266,10 +275,11 @@ global_asm!(
 #[cfg(feature = "bcm2711")]
 global_asm!(
     "enter_el1:",
-    "mov     x0, #0x33ff",
-    "msr     cptr_el3, x0", // Disable coprocessor traps to EL3
+    // "mov     x0, #0x33ff",
+    // "msr     cptr_el3, x0", // Disable coprocessor traps to EL3
     "mov     x0, #3 << 20",
     "msr     cpacr_el1, x0", // Enable FP/SIMD at EL1
+    //"bl start_main",
     // Now get ready to switch from EL3 down to EL1
     "mov     x0, #0x0800",          // reserved bits for sctlr
     "movk    x0, #0x30d0, lsl #16", // reserved bits for sctlr
@@ -297,23 +307,25 @@ global_asm!(
 
 global_asm!(
     "start_main:",
+    // set stack pointer to __main_stack
     "mov     sp, x1",
     // clear bss section
     "ldr    x1, =__bss_start",
-    // initialize w2 to the remaining size (size is mult of 8 bytes, bss is aligned)
+    // initialize w2 to the remaining size (size is mult of 8 bytes, bss is 64-bit aligned)
     "ldr    w2, =__bss_size",
+    "3:",
     // if the w2 is zero, we're done
-    "3: cbz w2, 4f",
+    "cbz    w2, 4f",
     // store the zero register to x1 and increment x1 by 8 bytes
-    "str xzr, [x1], #8",
+    "str    xzr, [x1], #8",
     // decrement the remaining size by 1 and loop
-    "sub w2, w2, #1",
-    "cbnz    w2, 3b",
+    "sub    w2, w2, #1",
+    "cbnz   w2, 3b",
     "4:",
     // Jump to our kernel_main() routine in rust (make sure it doesn't return)
-    "bl kernel_main",
+    "bl     kernel_main",
     // In case it does return, halt the master core too
-    "bl stop_core",
+    "bl     stop_core",
 );
 
 global_asm!(

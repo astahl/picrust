@@ -66,11 +66,9 @@ max_framebuffers=2
 disable_overscan=1
 
 [all]
-[pi3]
 arm_64bit=1
 kernel=kernel_bcm2837.img
 
-[all]
 [pi4]
 # Run as fast as firmware / board allows
 arm_boost=1

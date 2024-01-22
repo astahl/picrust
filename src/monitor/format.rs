@@ -33,6 +33,16 @@ impl Default for Formatting {
     }
 }
 
+pub const fn to_binary(byte: u8, formatting: &Formatting) -> [u8;8] {
+   [((byte >> 7) & 1) | b'0', 
+    ((byte >> 6) & 1) | b'0', 
+    ((byte >> 5) & 1) | b'0', 
+    ((byte >> 4) & 1) | b'0', 
+    ((byte >> 3) & 1) | b'0', 
+    ((byte >> 2) & 1) | b'0', 
+    ((byte >> 1) & 1) | b'0', 
+    ((byte >> 0) & 1) | b'0']
+}
 
 pub const fn to_hex(byte: u8, formatting: &Formatting) -> [u8;2] {
     const SYMBOLS: &[u8; 16] = b"0123456789abcdef";

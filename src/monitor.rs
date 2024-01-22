@@ -1,4 +1,4 @@
-use self::format::Formatting;
+use self::format::{Formatting, LeadingZeros};
 
 mod format;
 mod parse;
@@ -24,6 +24,7 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
     }
 
     pub fn run(&mut self) -> ! {
+        self.writer.putc(0x0c);
         self.echo_prompt();
         loop {
             let c = (self.input)().to_ascii_uppercase();
@@ -34,12 +35,12 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
                     }
                 }
                 b'\n' | 0x0D => {
-                    self.writer.newline();
+                    self.writer.carriage_return();
                     self.submit();
                     self.line_buffer.clear();
                     self.echo_prompt();
                 }
-                b'A'..=b'Z' | b'0'..=b'9' | b' ' | b'.' | b':' => {
+                b'A'..=b'F' | b'0'..=b'9' | b' ' | b'.' | b':' => {
                     if self.line_buffer.push_back(c).is_ok() {
                         self.writer.putc(c);
                     }
@@ -51,8 +52,12 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
             }
         }
     }
+
     fn echo_prompt(&self) {
         self.writer.newline();
+        let mut formatting = Formatting::default();
+        formatting.leading_zeros = LeadingZeros::Skip;
+        self.writer.hex_usize(self.context.last_address, Some(formatting));
         self.writer.putc(b'>');
     }
 
@@ -142,6 +147,7 @@ impl Iterator for Tokenizer<'_> {
             None
         } else {
             let start = self.position;
+            // handle whitespace
             while self.c_str.get(self.position).is_some_and(u8::is_ascii_whitespace) {
                 self.position += 1;
             }
@@ -158,17 +164,17 @@ impl Iterator for Tokenizer<'_> {
             let c = unsafe { self.c_str.get_unchecked(self.position) }; 
             let end = self.position + 1;
             let symbol = match c {
-                b':' => Some(Token::new(TokenType::Colon, start, end)),
-                b'.' => Some(Token::new(TokenType::Dot, start, end)),
-                b'+' => Some(Token::new(TokenType::Plus, start, end)),
-                b'-' => Some(Token::new(TokenType::Minus, start, end)),
-                c if c.is_ascii_graphic() && !c.is_ascii_hexdigit() => Some(Token::new(TokenType::SingleLetter(*c), start, end)),
+                b':' => Some(TokenType::Colon),
+                b'.' => Some(TokenType::Dot),
+                b'+' => Some(TokenType::Plus),
+                b'-' => Some(TokenType::Minus),
+                c if c.is_ascii_alphabetic() && !c.is_ascii_hexdigit() => Some(TokenType::SingleLetter(*c)),
                 _ => None
             };
             
             if symbol.is_some() {
                 self.position = end;
-                return symbol;
+                return symbol.map(|token_type| Token::new(token_type, start, end));
             }
 
             // try to parse a hex value
@@ -240,7 +246,7 @@ impl Command {
             },
             Command::PrintMemory { start } => {
                 self.print_memory(out, *start, context.length);
-                context.last_address = start + context.length;
+                context.last_address = *start;
             },
             Command::PrintMemoryContinue => {
                 self.print_memory(out, context.last_address, context.length);
@@ -253,7 +259,6 @@ impl Command {
         
         let ptr = address as *const u8;
         let align = core::mem::align_of::<usize>();
-        let width = 2 * core::mem::align_of::<usize>();
         let align_offset = ptr.align_offset(align);
         let from = if align_offset == 0 {
             ptr
@@ -264,7 +269,7 @@ impl Command {
         let mut to = ptr.wrapping_add(length);
         let align_offset = to.align_offset(align);
         to = to.wrapping_add(align_offset);
-        out.hex_usize(from as usize, None);
+        out.hex_usize(from as usize, Some(Formatting{leading_zeros: LeadingZeros::Space, ..Formatting::default()}));
         out.putc(b':');
         for i in unsafe { from.offset_from(ptr)..to.offset_from(ptr) }{
             if i == 0 || i == length as isize {
@@ -275,6 +280,17 @@ impl Command {
             let memvalue = unsafe { core::ptr::read_volatile(ptr.wrapping_offset(i)) };
             out.hex(memvalue, None);
         }
+        out.putc(b' ');
+        for i in unsafe { from.offset_from(ptr)..to.offset_from(ptr) }{
+            let memvalue = unsafe { core::ptr::read_volatile(ptr.wrapping_offset(i)) };
+            out.putc(if memvalue.is_ascii_graphic() { memvalue } else { b'.' });
+        }
+        for i in unsafe { from.offset_from(ptr)..to.offset_from(ptr) }{
+            let memvalue = unsafe { core::ptr::read_volatile(ptr.wrapping_offset(i)) };
+            out.putc(b' ');
+            out.binary(memvalue, None);
+        }
+        
     }
 }
 
@@ -283,6 +299,12 @@ struct Writer<Out: Fn(u8)> (Out);
 impl<Out: Fn(u8)> Writer<Out> {
     pub fn putc(&self, char: u8) {
         (self.0)(char);
+    }
+
+    pub fn puts_n<const N: usize>(&self, str: &[u8; N]) {
+        for i in 0..N {
+            self.putc(str[i]);
+        }
     }
 
     pub fn puts(&self, str: &[u8]) {
@@ -295,6 +317,18 @@ impl<Out: Fn(u8)> Writer<Out> {
         iter.for_each(|c| self.putc(c));
     } 
 
+    pub fn binary(&self, value: u8, formatting: Option<Formatting>) {
+        let [b7, b6, b5, b4, b3, b2, b1, b0] = format::to_binary(value, &formatting.unwrap_or_default());
+        self.putc(b7);
+        self.putc(b6);
+        self.putc(b5);
+        self.putc(b4);
+        self.putc(b3);
+        self.putc(b2);
+        self.putc(b1);
+        self.putc(b0);
+    }
+
     pub fn hex(&self, value: u8, formatting: Option<Formatting>) {
         let [upper, lower] = format::to_hex(value, &formatting.unwrap_or_default());
         self.putc(upper);
@@ -303,34 +337,41 @@ impl<Out: Fn(u8)> Writer<Out> {
 
     pub fn hex_usize(&self, value: usize, formatting: Option<Formatting>) {
         let formatting = formatting.unwrap_or_default();
-        match formatting.leading_zeros {
-            format::LeadingZeros::Keep => {
-                for b in format::to_hex_usize(value, &formatting) {
-                    self.putc(b);
-                }
+        
+        match (value, &formatting.leading_zeros) {
+            (_, format::LeadingZeros::Keep) => {
+                let str = format::to_hex_usize(value, &formatting);
+                self.puts_n(&str);
             }
-            format::LeadingZeros::Skip => {
+            (0, format::LeadingZeros::Skip) => { self.putc(b'0') }
+            (_, format::LeadingZeros::Skip) => {
                 for b in format::to_hex_usize(value, &formatting).into_iter().skip_while(|c| *c == b'0') {
                     self.putc(b);
                 }
             }
-            format::LeadingZeros::Space => {
-                let mut in_preroll = true;
-                for b in format::to_hex_usize(value, &formatting) {
-                    if in_preroll {
-                        if b == b'0' {
-                            self.putc(b' ')
-                        } else {
-                            in_preroll = false;
-                        }
+            (0, format::LeadingZeros::Space) => { 
+                let str = b"               0";
+                self.puts_n(&str)
+            }
+            (_, format::LeadingZeros::Space) => {
+                let mut str = format::to_hex_usize(value, &formatting);
+                for b in str.iter_mut() {
+                    if *b == b'0' {
+                        *b = b' ';
+                    } else {
+                        break;
                     }
-                    self.putc(b);
                 }
+                self.puts_n(&str);
             }
         }
     }
 
     pub fn newline(&self) {
         self.putc(b'\n');
+    }
+
+    pub fn carriage_return(&self) {
+        self.putc(b'\r');
     }
 }

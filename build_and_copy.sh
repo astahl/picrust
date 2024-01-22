@@ -1,7 +1,7 @@
 #!/bin/sh
 
-cargo imgpi4_64
-cargo imgpi3_64
+cargo img3
+cargo img4
 
 
 cp -v kernel*.img /Volumes/bootfs  
