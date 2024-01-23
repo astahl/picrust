@@ -19,7 +19,7 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
             input,
             writer: Writer(output),
             line_buffer: Buffer::new(),
-            context: CommandContext {last_address: 0, length: 8}
+            context: CommandContext {last_address: 0, length: 8, cursor_type: CursorType::U32}
         }
     }
 
@@ -40,7 +40,13 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
                     self.line_buffer.clear();
                     self.echo_prompt();
                 }
-                b'A'..=b'F' | b'0'..=b'9' | b' ' | b'.' | b':' => {
+                b'+' => {
+                    self.context.cursor_type = self.context.cursor_type.wider();
+                }
+                b'-' => {
+                    self.context.cursor_type = self.context.cursor_type.slimmer();
+                }
+                c if c.is_ascii_hexdigit() => {
                     if self.line_buffer.push_back(c).is_ok() {
                         self.writer.putc(c);
                     }
@@ -110,10 +116,61 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum CursorType {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128
+}
+
+impl CursorType {
+    pub const fn byte_len(&self) -> usize {
+        match self {
+            CursorType::U8 => core::mem::size_of::<u8>(),
+            CursorType::U16 => core::mem::size_of::<u16>(),
+            CursorType::U32 => core::mem::size_of::<u32>(),
+            CursorType::U64 => core::mem::size_of::<u64>(),
+            CursorType::U128 => core::mem::size_of::<u128>(),
+        }
+    }
+
+    pub const fn align_of(&self) -> usize {
+        match self {
+            CursorType::U8 => core::mem::align_of::<u8>(),
+            CursorType::U16 => core::mem::align_of::<u16>(),
+            CursorType::U32 => core::mem::align_of::<u32>(),
+            CursorType::U64 => core::mem::align_of::<u64>(),
+            CursorType::U128 => core::mem::align_of::<u128>(),
+        }
+    }
+
+    pub const fn wider(&self) -> Self {
+        match self {
+            CursorType::U8 => CursorType::U16,
+            CursorType::U16 => CursorType::U32,
+            CursorType::U32 => CursorType::U64,
+            CursorType::U64 => CursorType::U128,
+            CursorType::U128 => CursorType::U128,
+        }
+    } 
+
+    pub const fn slimmer(&self) -> Self {
+        match self {
+            CursorType::U8 => CursorType::U8,
+            CursorType::U16 => CursorType::U8,
+            CursorType::U32 => CursorType::U16,
+            CursorType::U64 => CursorType::U32,
+            CursorType::U128 => CursorType::U64,
+        }
+    } 
+}
 
 struct CommandContext {
     pub last_address: usize,
     pub length: usize,
+    pub cursor_type: CursorType,
 }
 
 enum Command {
@@ -245,52 +302,63 @@ impl Command {
                 }
             },
             Command::PrintMemory { start } => {
-                self.print_memory(out, *start, context.length);
-                context.last_address = *start;
+                context.last_address = self.print_memory(out, *start, context.length, context.cursor_type);
             },
             Command::PrintMemoryContinue => {
-                self.print_memory(out, context.last_address, context.length);
-                context.last_address += context.length;
+                context.last_address = self.print_memory(out, context.last_address, context.length, context.cursor_type);
             },
         }
     }
 
-    fn print_memory<Out: Fn(u8)>(&self, out: &Writer<Out>, address: usize, length: usize) {
-        
-        let ptr = address as *const u8;
-        let align = core::mem::align_of::<usize>();
-        let align_offset = ptr.align_offset(align);
-        let from = if align_offset == 0 {
-            ptr
-        } else {
-            let offset = align_offset as isize - core::mem::size_of::<usize>() as isize;
-            ptr.wrapping_offset(offset)
-        };
-        let mut to = ptr.wrapping_add(length);
-        let align_offset = to.align_offset(align);
-        to = to.wrapping_add(align_offset);
-        out.hex_usize(from as usize, Some(Formatting{leading_zeros: LeadingZeros::Space, ..Formatting::default()}));
-        out.putc(b':');
-        for i in unsafe { from.offset_from(ptr)..to.offset_from(ptr) }{
-            if i == 0 || i == length as isize {
-                out.putc(b'|');
+    fn print_memory<Out: Fn(u8)>(&self, out: &Writer<Out>, address: usize, length: usize, cursor: CursorType) -> usize {
+        // calculate start and end of the column we print
+        let cur_start = address;
+        let cur_end = address + cursor.byte_len();
+        let column_align = cursor.align_of().max(length);
+        let mut start = address & !(column_align - 1);
+        let mut end = start + length;
+        loop {  
+            // print the address of the column first
+            out.hex_usize(start, Some(Formatting{leading_zeros: LeadingZeros::Space, ..Formatting::default()}));
+            out.putc(b':');
+
+            for addr in start..end {
+                if addr == cur_start {
+                    out.putc(b'(');
+                } else if addr == cur_end {
+                    out.putc(b')');
+                } else {
+                    out.putc(b' ');
+                }
+                let memvalue = unsafe { (addr as *const u8).read_volatile() };
+                out.hex(memvalue, None);
+            }
+            if cur_end == end {
+                out.putc(b')');
             } else {
                 out.putc(b' ');
             }
-            let memvalue = unsafe { core::ptr::read_volatile(ptr.wrapping_offset(i)) };
-            out.hex(memvalue, None);
+
+            for addr in start..end {
+                let memvalue = unsafe { (addr as *const u8).read_volatile() };
+                out.putc(if memvalue.is_ascii_graphic() { memvalue } else { b'.' });
+            }
+
+            for addr in cur_start.max(start)..cur_end.min(end) {
+                let memvalue = unsafe { (addr as *const u8).read_volatile() };
+                out.putc(b' ');
+                out.binary(memvalue, None);
+            } 
+
+            if cur_end <= end {
+                break;
+            } else {
+                end += length;
+                start += length;
+                out.newline();
+            }
         }
-        out.putc(b' ');
-        for i in unsafe { from.offset_from(ptr)..to.offset_from(ptr) }{
-            let memvalue = unsafe { core::ptr::read_volatile(ptr.wrapping_offset(i)) };
-            out.putc(if memvalue.is_ascii_graphic() { memvalue } else { b'.' });
-        }
-        for i in unsafe { from.offset_from(ptr)..to.offset_from(ptr) }{
-            let memvalue = unsafe { core::ptr::read_volatile(ptr.wrapping_offset(i)) };
-            out.putc(b' ');
-            out.binary(memvalue, None);
-        }
-        
+        cur_end
     }
 }
 
@@ -299,6 +367,13 @@ struct Writer<Out: Fn(u8)> (Out);
 impl<Out: Fn(u8)> Writer<Out> {
     pub fn putc(&self, char: u8) {
         (self.0)(char);
+    }
+
+    pub fn putc_repeat(&self, char: u8, mut count: usize) {
+        while count > 0 {
+            self.putc(char);
+            count -= 1;
+        }
     }
 
     pub fn puts_n<const N: usize>(&self, str: &[u8; N]) {
@@ -330,7 +405,7 @@ impl<Out: Fn(u8)> Writer<Out> {
     }
 
     pub fn hex(&self, value: u8, formatting: Option<Formatting>) {
-        let [upper, lower] = format::to_hex(value, &formatting.unwrap_or_default());
+        let [upper, lower] = format::to_hex_u8(value, &formatting.unwrap_or_default());
         self.putc(upper);
         self.putc(lower);
     }
@@ -350,8 +425,8 @@ impl<Out: Fn(u8)> Writer<Out> {
                 }
             }
             (0, format::LeadingZeros::Space) => { 
-                let str = b"               0";
-                self.puts_n(&str)
+                self.putc_repeat(b' ', format::hex_len_val(&value) - 1);
+                self.putc(b'0');
             }
             (_, format::LeadingZeros::Space) => {
                 let mut str = format::to_hex_usize(value, &formatting);
