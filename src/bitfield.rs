@@ -1,11 +1,14 @@
-pub trait BitContainer<T>: Default 
-+ Copy
-+ core::cmp::Eq
-+ core::ops::Shr<usize, Output = T>
-+ core::ops::Shl<usize, Output = T>
-+ core::ops::Sub<Output = T> 
-+ core::ops::BitAnd<Output = T>
-+ core::ops::Not<Output = T> {}
+pub trait BitContainer<T>:
+    Default
+    + Copy
+    + core::cmp::Eq
+    + core::ops::Shr<usize, Output = T>
+    + core::ops::Shl<usize, Output = T>
+    + core::ops::Sub<Output = T>
+    + core::ops::BitAnd<Output = T>
+    + core::ops::Not<Output = T>
+{
+}
 impl BitContainer<u8> for u8 {}
 impl BitContainer<u16> for u16 {}
 impl BitContainer<u32> for u32 {}
@@ -19,11 +22,14 @@ impl BitContainer<i64> for i64 {}
 impl BitContainer<i128> for i128 {}
 impl BitContainer<isize> for isize {}
 
-pub struct Bitfield<T>(pub T) where T: BitContainer<T>;
+pub struct Bitfield<T>(pub T)
+where
+    T: BitContainer<T>;
 
-impl<T> Bitfield<T> 
-where T: BitContainer<T>{
-
+impl<T> Bitfield<T>
+where
+    T: BitContainer<T>,
+{
     pub fn new(value: T) -> Self {
         Self(value)
     }

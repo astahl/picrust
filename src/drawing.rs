@@ -15,7 +15,7 @@ pub enum CanvasAccessError {
     OverflowY,
     PitchMismatch,
     UnsortedCoordinates,
-    OverlappingMemoryRegions
+    OverlappingMemoryRegions,
 }
 
 impl<'a, T> PixelCanvas<'a, T> {
@@ -57,17 +57,22 @@ impl<'a, T> PixelCanvas<'a, T> {
         }
     }
 
-    pub  fn copy_from(&mut self, other: &Self) -> Result<(), CanvasAccessError> {
+    pub fn copy_from(&mut self, other: &Self) -> Result<(), CanvasAccessError> {
         if self.height < other.height {
             Err(CanvasAccessError::OverflowY)
-        } 
-        else if self.pitch != other.pitch {
+        } else if self.pitch != other.pitch {
             Err(CanvasAccessError::PitchMismatch)
-        }
-        else if self.data.as_ptr_range().contains(&other.data.as_ptr_range().start) || self.data.as_ptr_range().contains(&other.data.as_ptr_range().end){
+        } else if self
+            .data
+            .as_ptr_range()
+            .contains(&other.data.as_ptr_range().start)
+            || self
+                .data
+                .as_ptr_range()
+                .contains(&other.data.as_ptr_range().end)
+        {
             Err(CanvasAccessError::OverlappingMemoryRegions)
-        }
-        else {
+        } else {
             unsafe {
                 self.copy_from_unchecked(other);
             }
@@ -76,7 +81,11 @@ impl<'a, T> PixelCanvas<'a, T> {
     }
 
     pub unsafe fn copy_from_unchecked(&mut self, other: &Self) {
-        core::ptr::copy_nonoverlapping(other.data.as_ptr(), self.data.as_mut_ptr(), self.data.len());
+        core::ptr::copy_nonoverlapping(
+            other.data.as_ptr(),
+            self.data.as_mut_ptr(),
+            self.data.len(),
+        );
     }
 
     pub fn put(&mut self, value: T, (x, y): (usize, usize)) -> Result<(), CanvasAccessError> {

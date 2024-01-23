@@ -104,7 +104,6 @@ impl core::fmt::Write for Ring<char> {
     }
 }
 
-
 pub struct Line<T, const N: usize> {
     cursor: usize,
     end: usize,

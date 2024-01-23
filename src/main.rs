@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+mod bitfield;
 mod buffer;
 mod drawing;
 mod exception;
@@ -8,7 +9,6 @@ mod hal;
 mod monitor;
 mod peripherals;
 mod system;
-mod bitfield;
 use core::{arch::global_asm, str, usize};
 
 use crate::{hal::display::Resolution, peripherals::uart::Uart0Formatter, system::wait_msec};
@@ -220,7 +220,7 @@ global_asm!(
     // move execution level to EL1
     "enter_el1:",
     // we make no assumptions if we're at EL3, EL2 or EL1
-    // the current EL is coded numerically in CurrentEL bits 3 and 2 
+    // the current EL is coded numerically in CurrentEL bits 3 and 2
     "mrs     x0, CurrentEL",
     "ubfx    x0, x0, #2, #2",
     // are we running at EL3?
@@ -235,7 +235,7 @@ global_asm!(
     "adr     x2, 5f",
     "msr     elr_el3, x2",
     "eret",
-    "5:",  
+    "5:",
     // are we already running at EL1?
     "cmp     x0, #1",
     "beq     start_main",
