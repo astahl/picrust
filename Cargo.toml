@@ -17,6 +17,8 @@ panic="abort"
 # strip=true
 
 [features]
+mmu=[]
+serial_uart=[]
 bcm2712=[]
 bcm2711=[]
 bcm2837=[]
@@ -24,7 +26,7 @@ bcm2836=[]
 bcm2835=[]
 raspi1=["bcm2835"]
 raspi2b=["bcm2836"]
-raspi3b=["bcm2837"]
+raspi3b=["bcm2837", "mmu", "serial_uart"]
 raspi4=["bcm2711"]
 default=["raspi3b"]
 

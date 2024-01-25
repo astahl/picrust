@@ -22,11 +22,11 @@ impl BitContainer<i64> for i64 {}
 impl BitContainer<i128> for i128 {}
 impl BitContainer<isize> for isize {}
 
-pub struct Bitfield<T>(pub T)
+pub struct BitField<T>(pub T)
 where
     T: BitContainer<T>;
 
-impl<T> Bitfield<T>
+impl<T> BitField<T>
 where
     T: BitContainer<T>,
 {
@@ -54,7 +54,11 @@ where
         (self.0 >> lsb) & Self::mask_up_to(length)
     }
 
-    pub fn bit(&self, position: usize) -> bool {
+    pub fn bit_test(&self, position: usize) -> bool {
         self.0 & Self::mask_bit(position) != Self::zero()
+    }
+
+    pub fn bit_value(&self, position: usize) -> T {
+        (self.0 >> position) & Self::one()
     }
 }

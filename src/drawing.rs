@@ -1,5 +1,3 @@
-use core::arch::aarch64::{vget_high_u8, vst1_u8, vtstq_u8};
-
 pub struct PixelCanvas<'a, T> {
     pub width: usize,
     pub height: usize,

@@ -1,3 +1,5 @@
+use crate::bitfield::BitField;
+
 #[no_mangle]
 pub extern "C" fn exc_handler(
     exception_type: ExceptionType,
@@ -110,22 +112,22 @@ pub enum InstructionLength {
 }
 
 #[repr(C)]
-pub struct ExceptionSyndrome(usize);
+pub struct ExceptionSyndrome(BitField::<usize>);
 
 impl ExceptionSyndrome {
     pub fn exception_class(&self) -> ExceptionClass {
-        unsafe { core::mem::transmute((self.0 >> 26 & 0x3F) as u8) }
+        unsafe { core::mem::transmute(self.0.field(26, 6) as u8) }
     }
 
     pub fn instruction_length(&self) -> InstructionLength {
-        unsafe { core::mem::transmute((self.0 >> 25 & 1) as u8) }
+        unsafe { core::mem::transmute(self.0.bit_value(25) as u8) }
     }
 
     pub fn instruction_specific_syndrome(&self) -> u32 {
-        self.0 as u32 & 0x1fff
+        self.0.field(0, 13) as u32
     }
 
     pub fn raw_value(&self) -> usize {
-        self.0
+        self.0.0
     }
 }
