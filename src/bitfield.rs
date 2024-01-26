@@ -30,15 +30,15 @@ impl<T> BitField<T>
 where
     T: BitContainer<T>,
 {
-    pub fn new(value: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self(value)
     }
 
-    fn zero() -> T {
+    pub fn zero() -> T {
         T::default()
     }
 
-    fn one() -> T {
+    pub fn one() -> T {
         !(!Self::zero() << 1)
     }
 

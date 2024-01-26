@@ -112,7 +112,7 @@ pub enum InstructionLength {
 }
 
 #[repr(C)]
-pub struct ExceptionSyndrome(BitField::<usize>);
+pub struct ExceptionSyndrome(BitField<usize>);
 
 impl ExceptionSyndrome {
     pub fn exception_class(&self) -> ExceptionClass {
@@ -128,6 +128,6 @@ impl ExceptionSyndrome {
     }
 
     pub fn raw_value(&self) -> usize {
-        self.0.0
+        self.0 .0
     }
 }

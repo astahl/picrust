@@ -45,9 +45,9 @@ pub extern "C" fn kernel_main() -> ! {
     Uart0::puts("start");
     hal::led::status_set(true);
     hal::led::status_blink_twice(100);
-    // if cfg!(not(feature = "bcm2711")) {
-    //     system::mmu_init().unwrap();
-    // }
+    if cfg!(not(feature = "bcm2711")) {
+        system::mmu_init().unwrap();
+    }
 
     Uart0::put_uint(system::current_exception_level() as u64);
     // Uart0::puts("start");
@@ -83,6 +83,7 @@ pub extern "C" fn kernel_main() -> ! {
             b'a'..=b'z' => c as u8 - b'`' | 0x80,
             b'{' => b'<',
             b'}' => b'>',
+            b'\n' => b' ', // TODO better handle newlines in the buffer writer
             b'_' => 82,
             _ => 255,
         }
@@ -123,7 +124,7 @@ pub extern "C" fn kernel_main() -> ! {
     // }
 
     for edid in hal::display::EdidIterator::new() {
-        writeln!(str_buffer, "EDID BLOCK {:#?}", edid).unwrap();
+        writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
         // for byte in edid.bytes() {
         //     write!(str_buffer, "{:02X} ", byte).unwrap();
         // }
@@ -215,7 +216,7 @@ global_asm!(
     "bl enter_el1",
 );
 
-#[cfg(not(feature = "bcm2711"))]
+// #[cfg(not(feature = "bcm2711"))]
 global_asm!(
     // move execution level to EL1
     "enter_el1:",
@@ -256,12 +257,12 @@ global_asm!(
     "orr     x2, x2, #(1 << 1)", // SWIO hardwired on Pi3
     "msr     hcr_el2, x2",
     "mrs     x2, hcr_el2", // todo what does this read do??
-    // System Control Register
+    // System Control Register EL1, reset value on Cortex A72 is 0x00C50838
     // 0x30d01804 = 0b0011_0000_1101_0000_0001_1000_0000_0100
     //                  ^^      ^^ ^         ^ ^          ^
     //                   |      || |         | |          C, bit [2] = Stage 1 Cacheability control, for data access
     //                   |      || |         | EOS, bit [11] = When FEAT_ExS is implemented, else RES1
-    //                   |      || |         |                 Exception Exit is Context Synchronizing. 
+    //                   |      || |         |                 Exception Exit is Context Synchronizing.
     //                   |      || |         |                 0b0 An exception return from EL1 is not a context synchronizing event
     //                   |      || |         |                 0b1 An exception return from EL1 is a context synchronizing event
     //                   |      || |         I, bit [12] = Stage 1 instruction access Cacheability control, for accesses at EL0 and EL1
@@ -281,7 +282,6 @@ global_asm!(
     //                                      No Trap Load Multiple and Store Multiple to Device-nGRE/Device-nGnRE/Device-nGnRnE memory.
     //                                      0b0 All memory accesses by A32 and T32 Load Multiple and Store Multiple at EL0 that are marked at stage 1 as Device-nGRE/Device-nGnRE/Device-nGnRnE memory are trapped and generate a stage 1 Alignment fault.
     //                                      0b1 All memory accesses by A32 and T32 Load Multiple and Store Multiple at EL0 that are marked at stage 1 as Device-nGRE/Device-nGnRE/Device-nGnRnE memory are not trapped.
-
     "movz     x2, #0x1804",
     "movk    x2, #0x30d0, lsl #16",
     "msr     sctlr_el1, x2",
@@ -296,39 +296,38 @@ global_asm!(
     "eret",
 );
 
-
-#[cfg(feature = "bcm2711")]
-global_asm!(
-    "enter_el1:",
-    // "mov     x0, #0x33ff",
-    // "msr     cptr_el3, x0", // Disable coprocessor traps to EL3
-    "mov     x0, #3 << 20",
-    "msr     cpacr_el1, x0", // Enable FP/SIMD at EL1
-    //"bl start_main",
-    // Now get ready to switch from EL3 down to EL1
-    "mov     x0, #0x0800",          // reserved bits for sctlr
-    "movk    x0, #0x30d0, lsl #16", // reserved bits for sctlr
-    "orr    x0, x0, #(1 << 12)",    // enable I-Cache
-    "orr    x0, x0, #(1 << 2)",     // enable D-Cache
-    // keep bit0 0 to disable MMU
-    "msr	sctlr_el1, x0",
-    "mov     x0, #(1 << 31)", // Hypervisor RW
-    "msr     hcr_el2, x0",
-    "mov     x0, #(3 << 4)",      // reserved bits for SCR
-    "orr     x0, x0, #(1 << 10)", // RW
-    "orr     x0, x0, #(1 << 0)",  // NS
-    "msr     scr_el3, x0",
-    "mov     x0, #(7 << 6)",     // mask all
-    "orr     x0, x0, #(1 << 0)", // EL1h
-    "orr     x0, x0, #(1 << 2)", // EL1h
-    "msr     spsr_el3, x0",
-    // set up exception handlers
-    "ldr     x2, =_vectors",
-    "msr     vbar_el1, x2",
-    "adr     x0, start_main",
-    "msr     elr_el3, x0",
-    "eret",
-);
+// #[cfg(feature = "bcm2711")]
+// global_asm!(
+//     "enter_el1:",
+//     // "mov     x0, #0x33ff",
+//     // "msr     cptr_el3, x0", // Disable coprocessor traps to EL3
+//     "mov     x0, #3 << 20",
+//     "msr     cpacr_el1, x0", // Enable FP/SIMD at EL1
+//     //"bl start_main",
+//     // Now get ready to switch from EL3 down to EL1
+//     "mov     x0, #0x0800",          // reserved bits for sctlr
+//     "movk    x0, #0x30d0, lsl #16", // reserved bits for sctlr
+//     "orr    x0, x0, #(1 << 12)",    // enable I-Cache
+//     "orr    x0, x0, #(1 << 2)",     // enable D-Cache
+//     // keep bit0 0 to disable MMU
+//     "msr	sctlr_el1, x0",
+//     "mov     x0, #(1 << 31)", // Hypervisor RW
+//     "msr     hcr_el2, x0",
+//     "mov     x0, #(3 << 4)",      // reserved bits for SCR
+//     "orr     x0, x0, #(1 << 10)", // RW
+//     "orr     x0, x0, #(1 << 0)",  // NS
+//     "msr     scr_el3, x0",
+//     "mov     x0, #(7 << 6)",     // mask all
+//     "orr     x0, x0, #(1 << 0)", // EL1h
+//     "orr     x0, x0, #(1 << 2)", // EL1h
+//     "msr     spsr_el3, x0",
+//     // set up exception handlers
+//     "ldr     x2, =_vectors",
+//     "msr     vbar_el1, x2",
+//     "adr     x0, start_main",
+//     "msr     elr_el3, x0",
+//     "eret",
+// );
 
 global_asm!(
     "start_main:",
