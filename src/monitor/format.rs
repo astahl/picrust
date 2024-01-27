@@ -224,3 +224,138 @@ pub const fn to_hex_u128(value: u128, formatting: &Formatting) -> [u8; 32] {
     result[31] = p[1];
     result
 }
+
+const fn to_decimal_u8(mut num: u8) -> [u8; 3] {
+    let mut result = [b'0'; 3];
+    const POWERS: [u8; 2] = [100, 10];
+    let mut i = 0;
+    let mut n = 1;
+    while i < result.len() - 1 {
+        let mut modifier = 0;
+        while n >= 0 {
+            let reducer = POWERS[i] << n;
+            if num >= reducer {
+                modifier |= 1 << n;
+                num -= reducer;
+            }
+            n -= 1;
+        }
+        result[i] |= modifier;
+        i += 1;
+        n = 3;
+    }
+    result[i] += num as u8;
+    result
+}
+
+const fn to_decimal_u8_skip_first_zero_unchecked(mut num: u8) -> [u8; 2] {
+    let mut result = [b'0'; 2];
+    let mut n = 3;
+    let mut modifier = 0;
+    while n >= 0 {
+        let reducer = 10 << n;
+        if num >= reducer {
+            modifier |= 1 << n;
+            num -= reducer;
+        }
+        n -= 1;
+    }
+    result[0] |= modifier;
+    result[1] += num as u8;
+    result
+}
+
+const fn to_decimal_u16(mut num: u16) -> [u8; 5] {
+    let mut result = [b'0'; 5];
+    const POWERS: [u16; 4] = [10000, 1000, 100, 10];
+    let mut i = 0;
+    let mut n = 2; // highest most significant digit is 6, which is larger than 2^2
+    while i < result.len() - 1 {
+        let mut modifier = 0;
+        while n >= 0 {
+            let reducer = POWERS[i] << n;
+            if num >= reducer {
+                modifier |= 1 << n;
+                num -= reducer;
+            }
+            n -= 1;
+        }
+        result[i] |= modifier;
+        i += 1;
+        n = 3; // reset to 2^3 for all following digits
+    }
+    result[i] += num as u8;
+    result
+}
+
+const fn to_decimal_u32(mut num: u32) -> [u8; 10] {
+    let mut result = [b'0'; 10];
+    const POWERS: [u32; 9] = [
+        1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10,
+    ];
+    let mut i = 0;
+    let mut n = 2; // highest most significant digit is 4 >= 2^2
+    while i < result.len() - 1 {
+        let mut modifier = 0;
+        while n >= 0 {
+            let reducer = POWERS[i] << n;
+            if num >= reducer {
+                modifier |= 1 << n;
+                num -= reducer;
+            }
+            n -= 1;
+        }
+        result[i] |= modifier;
+        i += 1;
+        n = 3; // reset to 2^3 for all following digits
+    }
+    result[i] += num as u8;
+    result
+}
+
+const fn to_decimal_u32_skip_first_zero_unchecked(mut num: u32) -> [u8; 9] {
+    let mut result = [b'0'; 9];
+    const POWERS: [u32; 8] = [100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10];
+    let mut i = 0;
+    while i < result.len() - 1 {
+        let mut n = 3; // reset to 2^3 for all following digits
+        let mut modifier = 0;
+        while n >= 0 {
+            let reducer = POWERS[i] << n;
+            if num >= reducer {
+                modifier |= 1 << n;
+                num -= reducer;
+            }
+            n -= 1;
+        }
+        result[i] |= modifier;
+        i += 1;
+    }
+    result[i] += num as u8;
+    result
+}
+
+const fn to_decimal_u64(num: u64) -> [u8; 20] {
+    let low9 = (num % 1000000000) as u32;
+    let upper = (num / 1000000000);
+    let mid9 = (upper % 1000000000) as u32;
+    let top2 = (upper / 1000000000) as u8;
+
+    unsafe {
+        core::mem::transmute((
+            to_decimal_u8_skip_first_zero_unchecked(top2),
+            to_decimal_u32_skip_first_zero_unchecked(mid9),
+            to_decimal_u32_skip_first_zero_unchecked(low9),
+        ))
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+pub const fn to_decimal_usize(value: usize) -> [u8; 20] {
+    to_decimal_u64(value as u64)
+}
+
+#[cfg(target_pointer_width = "32")]
+pub const fn to_decimal_usize(value: usize) -> [u8; 10] {
+    to_decimal_u32(value as u32)
+}

@@ -1,5 +1,6 @@
 use self::format::{Formatting, LeadingZeros};
 
+mod bcd;
 mod format;
 mod parse;
 
@@ -458,6 +459,41 @@ impl<Out: Fn(u8)> Writer<Out> {
         self.putc(b2);
         self.putc(b1);
         self.putc(b0);
+    }
+
+    pub fn decimal_usize(&self, value: usize, formatting: Option<Formatting>) {
+        let formatting = formatting.unwrap_or_default();
+
+        match (value, &formatting.leading_zeros) {
+            (_, format::LeadingZeros::Keep) => {
+                let str = format::to_decimal_usize(value);
+                self.puts_n(&str);
+            }
+            (0, format::LeadingZeros::Skip) => self.putc(b'0'),
+            (_, format::LeadingZeros::Skip) => {
+                for b in format::to_decimal_usize(value)
+                    .into_iter()
+                    .skip_while(|c| *c == b'0')
+                {
+                    self.putc(b);
+                }
+            }
+            (0, format::LeadingZeros::Space) => {
+                self.putc_repeat(b' ', 20);
+                self.putc(b'0');
+            }
+            (_, format::LeadingZeros::Space) => {
+                let mut str = format::to_decimal_usize(value);
+                for b in str.iter_mut() {
+                    if *b == b'0' {
+                        *b = b' ';
+                    } else {
+                        break;
+                    }
+                }
+                self.puts_n(&str);
+            }
+        }
     }
 
     pub fn hex(&self, value: u8, formatting: Option<Formatting>) {
