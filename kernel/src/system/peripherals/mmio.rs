@@ -19,6 +19,7 @@ impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
     }
 }
 
+#[repr(transparent)]
 pub struct DynamicMmioField<T>(core::mem::MaybeUninit<T>);
 
 impl<T> DynamicMmioField<T> {

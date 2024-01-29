@@ -7,7 +7,7 @@ compile_error!("target arch not supported! Only aarch64 allowed!");
 #[cfg(any(all(feature = "raspi4", feature = "raspi3b")))]
 compile_error!("Can't compile for multiple Raspberry Pi Models.");
 
-
+mod exception;
 mod system;
 use core::{arch::global_asm, str, usize};
 use mystd::buffer;
@@ -47,7 +47,7 @@ pub extern "C" fn main() -> ! {
     Uart0::puts("start");
     hal::led::status_set(true);
     hal::led::status_blink_twice(100);
-    if cfg!(not(feature = "bcm2711")) {
+    if cfg!(feature = "mmu") {
         system::mmu_init().unwrap();
     }
 

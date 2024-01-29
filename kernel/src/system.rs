@@ -1,4 +1,3 @@
-pub mod exception;
 pub mod hal;
 pub mod peripherals;
 
@@ -16,12 +15,12 @@ pub enum MMUInitError {
     NotImplementedError,
 }
 
-#[cfg(feature = "bcm2711")]
+#[cfg(not(feature = "mmu"))]
 pub fn mmu_init() -> Result<(), MMUInitError> {
     Err(MMUInitError::NotImplementedError)
 }
 
-#[cfg(not(feature = "bcm2711"))]
+#[cfg(feature = "mmu")]
 pub fn mmu_init() -> Result<(), MMUInitError> {
     // check for 4k granule and at least 36 bits physical address bus */
     let mut memory_model_features = 0_usize;

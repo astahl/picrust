@@ -22,6 +22,7 @@ impl BitContainer<i64> for i64 {}
 impl BitContainer<i128> for i128 {}
 impl BitContainer<isize> for isize {}
 
+#[repr(transparent)]
 pub struct BitField<T>(pub T)
 where
     T: BitContainer<T>;
