@@ -3,6 +3,8 @@ use core::ptr::read_volatile;
 use crate::peripherals::mmio;
 use crate::peripherals::mmio::MMIO;
 
+use super::mmio::DynamicMmioField;
+
 #[repr(align(16), C)]
 pub struct Mailbox<const BUFFER_SIZE: usize> {
     write_offset: usize,
@@ -11,32 +13,33 @@ pub struct Mailbox<const BUFFER_SIZE: usize> {
     req_res_code: ReqResCode,
     buffer: [u8; BUFFER_SIZE],
 }
-pub struct ReqResCode(u32);
+
+#[repr(u32)]
+pub enum RequestResponseStatus {
+    Pending = 0,
+    Success = 0x80000000,
+    ErrorParsingRequestBuffer = 0x80000001
+}
+
+pub struct ReqResCode(DynamicMmioField<RequestResponseStatus>);
 
 impl ReqResCode {
-    pub const fn new() -> Self {
-        Self(0)
+    pub const fn cleared() -> Self {
+        Self(DynamicMmioField::init(RequestResponseStatus::Pending))
     }
 
     pub fn clear(&mut self) {
-        mmio::write_to(&mut self.0 as *mut u32, 0);
+        self.0.write(RequestResponseStatus::Pending)
     }
 
-    pub fn is_pending(&self) -> bool {
-        mmio::read_from(&self.0 as *const u32) == 0
+    pub fn get(&self) -> RequestResponseStatus {
+        self.0.read()
     }
+}
 
-    pub fn is_success(&self) -> bool {
-        mmio::read_from(&self.0 as *const u32) == 0x80000000
-    }
-
-    pub fn is_error_parsing_request_buffer(&self) -> bool {
-        mmio::read_from(&self.0 as *const u32) == 0x80000001
-    }
-
-    pub fn raw_value(&self) -> u32 {
-        mmio::read_from(&self.0 as *const u32)
-    }
+pub enum MailboxError {
+    Unknown,
+    RequestResponseError(RequestResponseStatus)
 }
 
 pub struct MboxStatus(u32);
@@ -375,7 +378,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
             write_offset: 0,
             read_offset: 0,
             size: BUFFER_SIZE as u32 * 4 + 8,
-            req_res_code: ReqResCode::new(),
+            req_res_code: ReqResCode::cleared(),
             buffer: [0; BUFFER_SIZE],
         }
     }
@@ -447,7 +450,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         self.read_offset += PropertyMessageResponse::peek_len(src);
     }
 
-    pub fn submit_messages(&mut self, channel: u8) -> Result<(), u32> {
+    pub fn submit_messages(&mut self, channel: u8) -> Result<(), MailboxError> {
         // crate::peripherals::uart::Uart0::put_hex_bytes(&self.buffer);
         self.call(channel);
 
@@ -457,10 +460,9 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         // crate::peripherals::uart::Uart0::putc(b'\n');
         // crate::peripherals::uart::Uart0::putc(b'\n');
 
-        if self.req_res_code.is_success() {
-            Ok(())
-        } else {
-            Err(self.req_res_code.raw_value())
+        match self.req_res_code.get() {
+            RequestResponseStatus::Success => Ok(()),
+            e => Err(MailboxError::RequestResponseError(e)),
         }
     }
 }

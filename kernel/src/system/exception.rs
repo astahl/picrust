@@ -8,7 +8,7 @@ pub extern "C" fn exc_handler(
     spsr: usize,
     far: usize,
 ) -> ! {
-    use crate::peripherals::uart::Uart0;
+    use crate::system::peripherals::uart::Uart0;
     Uart0::init();
     Uart0::puts("Exception Handler!\nException Type: ");
     Uart0::put_uint(exception_type as u64);

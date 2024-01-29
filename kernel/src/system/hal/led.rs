@@ -14,7 +14,10 @@ pub fn status_set(on: bool) {
         status,
     });
     mailbox.push_tag(Null);
-    mailbox.submit_messages(8).unwrap();
+    if let Err(e) = mailbox.submit_messages(8) {
+        // handle miscommunication error
+        todo!()
+    }
 }
 
 pub fn status_get() -> bool {

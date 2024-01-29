@@ -7,14 +7,13 @@ compile_error!("target arch not supported! Only aarch64 allowed!");
 #[cfg(any(all(feature = "raspi4", feature = "raspi3b")))]
 compile_error!("Can't compile for multiple Raspberry Pi Models.");
 
-mod exception;
-mod hal;
-mod monitor;
-mod peripherals;
+
 mod system;
 use core::{arch::global_asm, str, usize};
 use mystd::buffer;
-use crate::{hal::display::Resolution, peripherals::uart::Uart0Formatter, system::wait_msec};
+use system::hal;
+use system::peripherals;
+use system::hal::display::Resolution;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {

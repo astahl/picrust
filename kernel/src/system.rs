@@ -1,3 +1,7 @@
+pub mod exception;
+pub mod hal;
+pub mod peripherals;
+
 use core::arch::asm;
 
 extern "C" {
@@ -55,7 +59,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 
     const TTBR_ENABLE: usize = 1;
 
-    const MMIO_BASE: usize = crate::peripherals::BCM_HOST.peripheral_address;
+    const MMIO_BASE: usize = peripherals::BCM_HOST.peripheral_address;
 
     let data_page_index = unsafe { core::ptr::addr_of!(__data_start) } as usize / PAGESIZE;
     let page_table_ptr = unsafe { core::ptr::addr_of!(__kernel_end) };
@@ -212,6 +216,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // finally, toggle some bits in system control register to enable page translation
     let mut r: usize = 0;
     unsafe {
+        // Data synchronization barrier then instruction synchronization barrier to guarantee all preceding memory accesses have been finished and none of the following instructions have been performed yet.
         asm!("dsb ish; isb; mrs {}, sctlr_el1", out(reg) r);
     }
     r |= 0xC00800; // set mandatory reserved bits
