@@ -7,16 +7,13 @@ compile_error!("target arch not supported! Only aarch64 allowed!");
 #[cfg(any(all(feature = "raspi4", feature = "raspi3b")))]
 compile_error!("Can't compile for multiple Raspberry Pi Models.");
 
-mod bitfield;
-mod buffer;
-mod drawing;
 mod exception;
 mod hal;
 mod monitor;
 mod peripherals;
 mod system;
 use core::{arch::global_asm, str, usize};
-
+use mystd::buffer;
 use crate::{hal::display::Resolution, peripherals::uart::Uart0Formatter, system::wait_msec};
 
 #[panic_handler]
@@ -43,7 +40,7 @@ extern "C" {
 }
 
 #[no_mangle]
-pub extern "C" fn kernel_main() -> ! {
+pub extern "C" fn main() -> ! {
     use peripherals::uart::Uart0;
     // let core_id = system::get_core_num();
     // if core_id == 0 {
@@ -325,7 +322,7 @@ global_asm!(
         cbnz    w2, 3b
     4:
         // Jump to our kernel_main() routine in rust (make sure it doesn't return)
-        bl      kernel_main
+        bl      main
         // In case it does return, halt the master core too
         bl      _stop_core
     "#

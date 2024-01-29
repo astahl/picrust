@@ -27,3 +27,5 @@ raspi4=["bcm2711"]
 default=["raspi3b"]
 
 [dependencies]
+mystd = { path = "../mystd" }
+monitor = { path = "../monitor" }
