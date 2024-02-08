@@ -1,3 +1,5 @@
+use core::mem::MaybeUninit;
+
 pub enum BufferError {
     Overflow,
 }
@@ -166,4 +168,36 @@ impl<T: Default + Copy, const N: usize> Line<T, N> {
             data: [T::default(); N],
         }
     }
+}
+
+// pub fn collect_into_array<T, const N: usize, I>(iter: I, fill: T) -> [T; N]
+// where
+//     T: Clone,
+//     I: Iterator<Item = T>,
+// {
+//     let mut result = MaybeUninit::<[T; N]>::uninit();
+//     let mut filling_iter = iter.chain(core::iter::repeat(fill)).take(N);
+//     let element_ptr: *mut MaybeUninit<T> = result.as_mut_ptr().cast();
+//     unsafe {
+//         for i in 0..N {
+//             element_ptr
+//                 .add(i)
+//                 .as_mut()
+//                 .unwrap_unchecked()
+//                 .write(filling_iter.next().unwrap_unchecked());
+//         }
+//         result.assume_init()
+//     }
+// }
+
+pub fn collect_into_array<T, const N: usize, I>(iter: I, fill: T) -> [T; N]
+where
+    T: Copy,
+    I: Iterator<Item = T>,
+{
+    let mut result = [fill; N];
+    for (dst, src) in result.iter_mut().zip(iter.take(N)) {
+        *dst = src;
+    }
+    result
 }

@@ -83,6 +83,45 @@ pub enum AlphaMode {
     Ignored,
 }
 
+
+#[repr(u32)]
+pub enum Tag {
+    End = 0,
+    VcGetFirmwareRevision = 0x00000001,
+    HwGetBoardModel = 0x00010001,
+    HwGetBoardRevision = 0x00010002,
+    HwGetBoardMacAddress = 0x00010003,
+    HwGetBoardSerial = 0x00010004,
+    HwGetArmMemory = 0x00010005,
+    HwGetVcMemory = 0x00010006,
+    HwGetClocks = 0x00010007,
+    GetEdidBlock = 0x00030020,
+    GetOnboardLedStatus = 0x00030041,
+    TestOnboardLedStatus = 0x00034041,
+    SetOnboardLedStatus = 0x00038041,
+    FbAllocateBuffer = 0x00040001,
+    FbReleaseBuffer = 0x00048001,
+    FbGetPhysicalDimensions = 0x00040003,
+    FbTestPhysicalDimensions = 0x00044003,
+    FbSetPhysicalDimensions = 0x00048003,
+    FbGetVirtualDimensions = 0x00040004,
+    FbTestVirtualDimensions = 0x00044004,
+    FbSetVirtualDimensions = 0x00048004,
+    FbGetDepth = 0x00040005,
+    FbTestDepth = 0x00044005,
+    FbSetDepth = 0x00048005,
+    FbGetPixelOrder = 0x00040006,
+    FbTestPixelOrder = 0x00044006,
+    FbSetPixelOrder = 0x00048006,
+    FbGetAlphaMode = 0x00040007,
+    FbTestAlphaMode = 0x00044007,
+    FbSetAlphaMode = 0x00048007,
+    FbGetPitch = 0x00040008,
+    FbGetVirtualOffset = 0x00040009,
+    FbTestVirtualOffset = 0x00044009,
+    FbSetVirtualOffset = 0x00048009,
+}
+
 #[repr(u32)]
 #[derive(Copy, Clone)]
 pub enum PropertyMessageRequest {
