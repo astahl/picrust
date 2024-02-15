@@ -1,6 +1,6 @@
 use core::{
     fmt::{Debug, Display},
-    mem::MaybeUninit,
+    mem::MaybeUninit, ptr::slice_from_raw_parts,
 };
 
 use crate::peripherals::mailbox;
@@ -1428,30 +1428,30 @@ impl core::iter::Iterator for EdidIterator {
         if self.block_num == self.block_total {
             return None;
         }
-        use mailbox::PropertyMessageRequest::*;
-        let mut mb = mailbox::Mailbox::<256>::new();
-        mb.push_tag(GetEdidBlock {
-            block_number: self.block_num as u32,
-        });
-        mb.push_tag(Null);
-        if mb.submit_messages(8).is_ok() {
-            let (_block_number, status, data): (u32, u32, [u8; 128]) = mb.pop_values();
-            if status == 0 {
-                let block = Edid::from_bytes(&data);
-                match &block {
-                    Edid::Edid(edid) => {
-                        self.block_total = 1 + edid.extension_len();
-                    }
-                    _ => {}
+
+        let mut mb = mailbox::Mailbox::<35>::new();
+        if let Ok(message) = mb.push_request_raw(mailbox::Tag::GetEdidBlock as u32, 136) {
+            message[0] = self.block_num as u32;
+        }
+       
+        let mut responses = mb.submit_messages(8).ok()?;
+        let (_, status, data) = *responses.next()?.ok()?.try_value_as::<(u32, u32, [u8; 128])>()?;
+
+        if status == 0 {
+            let block = Edid::from_bytes(&data);
+            match &block {
+                Edid::Edid(edid) => {
+                    self.block_total = 1 + edid.extension_len();
                 }
-                self.block_num += 1;
-                Some(block)
-            } else {
-                None
+                _ => {}
             }
-        } else {
+            self.block_num += 1;
+            Some(block)
+        }
+        else {
             None
         }
+                   
     }
 }
 

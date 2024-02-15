@@ -27,7 +27,7 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
         Uart0::put_uint(loc.line() as u64);
     }
     loop {
-        hal::led::status_blink_twice(100);
+        // hal::led::status_blink_twice(100);
     }
 }
 
@@ -45,8 +45,8 @@ pub extern "C" fn main() -> ! {
     // if core_id == 0 {
     Uart0::init();
     Uart0::puts("start");
-    hal::led::status_set(true);
-    hal::led::status_blink_twice(100);
+    let status_led = hal::led::Led::Status;
+    //status_led.blink_pattern(0b10101001, core::time::Duration::from_millis(100));
     if cfg!(feature = "mmu") {
         system::mmu_init().unwrap();
     }
@@ -140,7 +140,7 @@ pub extern "C" fn main() -> ! {
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //
-    hal::led::status_set(false);
+    status_led.off();
     let mut mon = monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc);
     mon.run()
     // fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);

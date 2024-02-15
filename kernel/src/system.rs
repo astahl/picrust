@@ -1,7 +1,7 @@
 pub mod hal;
 pub mod peripherals;
 
-use core::arch::asm;
+use core::{arch::asm, time::Duration};
 
 extern "C" {
     static __kernel_end: u8;
@@ -262,7 +262,7 @@ pub fn current_exception_level() -> usize {
     return (el >> 2) & 0b11;
 }
 
-pub fn wait_msec(msec: usize) {
+pub fn wait(duration: Duration) {
     let mut frequency: usize;
     let mut current_counter: usize;
     unsafe {
@@ -272,7 +272,7 @@ pub fn wait_msec(msec: usize) {
             out(reg) frequency, out(reg) current_counter
         );
     }
-    let expire_at = current_counter + ((frequency / 1000) * msec);
+    let expire_at = current_counter + ((frequency as u128  * duration.as_micros()) / 1_000_000) as usize;
     while current_counter < expire_at {
         unsafe {
             core::arch::asm!(

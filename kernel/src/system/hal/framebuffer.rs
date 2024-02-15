@@ -20,54 +20,54 @@ pub struct Framebuffer {
 impl Framebuffer {
     pub fn new(width: u32, height: u32) -> Option<Self> {
         use crate::peripherals::mailbox::*;
-        let mut mailbox = Mailbox::<256>::new();
-        {
-            use PropertyMessageRequest::*;
-            mailbox.push_tag(FbSetPhysicalDimensions {
-                width_px: width,
-                height_px: height,
-            });
-            mailbox.push_tag(FbSetVirtualDimensions {
-                width_px: width,
-                height_px: height,
-            });
-            mailbox.push_tag(FbSetVirtualOffset { x_px: 0, y_px: 0 });
-            mailbox.push_tag(FbSetDepth { bpp: 32 });
-            mailbox.push_tag(FbSetPixelOrder {
-                state: PixelOrder::Bgr,
-            });
-            mailbox.push_tag(FbAllocateBuffer {
-                alignment_bytes: 4096,
-            });
-            mailbox.push_tag(FbGetPitch);
-            mailbox.push_tag(Null);
-        }
+        let mut mailbox = Mailbox::<64>::new();
+        let physical_dimenstions = mailbox.push_request_raw(Tag::FbSetPhysicalDimensions as u32, 8).ok()?;
+        physical_dimenstions[0] = width;
+        physical_dimenstions[1] = height;
 
-        if mailbox.submit_messages(8).is_ok() {
-            let (width_px, height_px) = mailbox.pop_values();
-            // FbSetVirtualDimensions {..},
-            mailbox.skip_tag();
-            // FbSetVirtualOffset { .. },
-            mailbox.skip_tag();
-            let bits_per_pixel: u32 = mailbox.pop_values();
-            // FbSetPixelOrder { .. },
-            mailbox.skip_tag();
+        let virtual_dimensions = mailbox.push_request_raw(Tag::FbSetVirtualDimensions as u32, 8).ok()?;
+        virtual_dimensions[0] = width;
+        virtual_dimensions[1] = height;
 
-            let (base_address_bytes, size_bytes): (u32, u32) = mailbox.pop_values();
-            let pitch_bytes: u32 = mailbox.pop_values();
+        let virtual_offset = mailbox.push_request_raw(Tag::FbSetVirtualOffset as u32, 8).ok()?;
+        virtual_offset[0] = 0;
+        virtual_offset[1] = 0;
 
-            let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
-            Some(Self {
-                width_px,
-                height_px,
-                ptr,
-                size_bytes,
-                bits_per_pixel,
-                pitch_bytes,
-            })
-        } else {
-            return None;
-        }
+        let bpp = mailbox.push_request_raw(Tag::FbSetDepth as u32, 4).ok()?;
+        bpp[0] = 32;
+
+        let pixel_order = mailbox.push_request_raw(Tag::FbSetPixelOrder as u32, 4).ok()?;
+        pixel_order[0] = PixelOrder::Bgr as u32;
+
+        let allocate_buffer = mailbox.push_request_raw(Tag::FbAllocateBuffer as u32, 8).ok()?;
+        allocate_buffer[0] = 4096; // alignment bytes
+
+        mailbox.push_request_raw(Tag::FbGetPitch as u32, 4).ok()?;
+
+        let mut responses = mailbox.submit_messages(8).ok()?;
+        let (width_px, height_px) = *responses.next().unwrap().unwrap().try_value_as()?;
+        // FbSetVirtualDimensions {..},
+        let _ = responses.next();
+        // FbSetVirtualOffset { .. },
+        let _ = responses.next();
+        let bits_per_pixel: u32 = *responses.next()
+            .unwrap()
+            .unwrap().try_value_as()?;
+        // FbSetPixelOrder { .. },
+        responses.next();
+
+        let (base_address_bytes, size_bytes): (u32, u32) = *responses.next().unwrap().unwrap().try_value_as()?;
+        let pitch_bytes: u32 = *responses.next().unwrap().unwrap().try_value_as()?;
+    
+        let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
+        Some(Self {
+            width_px,
+            height_px,
+            ptr,
+            size_bytes,
+            bits_per_pixel,
+            pitch_bytes,
+        })
     }
 
     pub fn set_pixel_a8b8g8r8(&self, x: u32, y: u32, value: u32) {
