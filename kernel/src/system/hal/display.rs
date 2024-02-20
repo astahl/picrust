@@ -1,9 +1,21 @@
 use core::{
-    fmt::{Debug, Display},
-    mem::MaybeUninit, ptr::slice_from_raw_parts,
+    fmt::{Debug, Display}
 };
 
-use crate::peripherals::mailbox;
+use crate::{peripherals::mailbox, system::peripherals::mailbox::simple_single_call};
+
+mod tag {
+    pub const GET_EDID_BLOCK: u32 = 0x00030020;
+
+    #[derive(Clone, Copy)]
+    pub struct GetEdidBlock {
+        pub block_number: u32,
+        pub status: u32,
+        pub data: [u8; 128],
+    }
+}
+
+
 
 pub struct BufferedIterator<T, const CAPACITY: usize> {
     index: usize,
@@ -402,7 +414,7 @@ impl Resolution {
 
 #[derive(Debug)]
 pub enum Edid {
-    Edid(EdidBlock),
+    Edid(RawEdidBlock),
     CtaExtensionRev3(CtaExtensionBlock),
     Unknown,
 }
@@ -411,7 +423,7 @@ impl Edid {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         match bytes {
             [0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, ..] => {
-                Self::Edid(EdidBlock(bytes.try_into().unwrap()))
+                Self::Edid(RawEdidBlock(bytes.try_into().unwrap()))
             }
             [0x02, 0x03, ..] => {
                 Self::CtaExtensionRev3(CtaExtensionBlock(bytes.try_into().unwrap()))
@@ -432,8 +444,6 @@ impl Edid {
         self.bytes().iter().copied().reduce(u8::wrapping_add) == Some(0)
     }
 }
-
-pub struct EdidBlock([u8; 128]);
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -534,11 +544,11 @@ pub struct SupportedFeatures {
     preferred_timing_mode: bool,
     continuous_timings: bool,
 }
-
+type FxP16_10 = mystd::fixed_point::FixedPoint<10, u16>;
 #[derive(Debug, Default)]
 pub struct CIEPoint {
-    x: f32,
-    y: f32,
+    x: FxP16_10,
+    y: FxP16_10,
 }
 
 #[derive(Debug, Default)]
@@ -878,7 +888,9 @@ impl DescriptorIterator<'_> {
     }
 }
 
-impl EdidBlock {
+pub struct RawEdidBlock([u8; 128]);
+
+impl RawEdidBlock {
     pub fn test_block() -> Self {
         let edid0: [u8; 128] = [
             0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x05, 0xe3, 0x09, 0x19, 0x01, 0x01,
@@ -892,7 +904,7 @@ impl EdidBlock {
             0x00, 0x38, 0x4c, 0x1e, 0x53, 0x11, 0x00, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
             0x01, 0x3c,
         ];
-        EdidBlock(edid0)
+        RawEdidBlock(edid0)
     }
 
     pub fn manufacturer_id(&self) -> [u8; 3] {
@@ -1002,20 +1014,20 @@ impl EdidBlock {
 
         ChromaticityCoordinates {
             red: CIEPoint {
-                x: red_x as f32 / 1024.0,
-                y: red_y as f32 / 1024.0,
+                x: FxP16_10::new(red_x),
+                y: FxP16_10::new(red_y),
             },
             green: CIEPoint {
-                x: green_x as f32 / 1024.0,
-                y: green_y as f32 / 1024.0,
+                x: FxP16_10::new(green_x),
+                y: FxP16_10::new(green_y),
             },
             blue: CIEPoint {
-                x: blue_x as f32 / 1024.0,
-                y: blue_y as f32 / 1024.0,
+                x: FxP16_10::new(blue_x),
+                y: FxP16_10::new(blue_y),
             },
             white: CIEPoint {
-                x: white_x as f32 / 1024.0,
-                y: white_y as f32 / 1024.0,
+                x: FxP16_10::new(white_x),
+                y: FxP16_10::new(white_y),
             },
         }
     }
@@ -1081,9 +1093,9 @@ impl EdidBlock {
     }
 }
 
-impl Debug for EdidBlock {
+impl Debug for RawEdidBlock {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("EdidBlock")
+        f.debug_struct("RawEdidBlock")
             .field("Video Input Parameter", &self.video_input_parameter())
             .field("Screen Geometry", &self.screen_geometry())
             .field("Supported Features", &self.supported_features())
@@ -1429,29 +1441,19 @@ impl core::iter::Iterator for EdidIterator {
             return None;
         }
 
-        let mut mb = mailbox::Mailbox::<35>::new();
-        if let Ok(message) = mb.push_request_raw(mailbox::Tag::GetEdidBlock as u32, 136) {
-            message[0] = self.block_num as u32;
-        }
+        let response: tag::GetEdidBlock = simple_single_call(tag::GET_EDID_BLOCK, self.block_num as u32).ok()?;
        
-        let mut responses = mb.submit_messages(8).ok()?;
-        let (_, status, data) = *responses.next()?.ok()?.try_value_as::<(u32, u32, [u8; 128])>()?;
-
-        if status == 0 {
-            let block = Edid::from_bytes(&data);
-            match &block {
-                Edid::Edid(edid) => {
-                    self.block_total = 1 + edid.extension_len();
-                }
-                _ => {}
+        if response.status == 0 {
+            let block = Edid::from_bytes(&response.data);
+            if let Edid::Edid(edid) = &block {
+                self.block_total = 1 + edid.extension_len();
             }
             self.block_num += 1;
             Some(block)
         }
         else {
             None
-        }
-                   
+        } 
     }
 }
 
@@ -1479,7 +1481,7 @@ impl core::iter::Iterator for MockEdidIterator {
 
         self.block_num += 1;
         match self.block_num {
-            1 => Some(Edid::Edid(EdidBlock::test_block())),
+            1 => Some(Edid::Edid(RawEdidBlock::test_block())),
             2 => Some(Edid::CtaExtensionRev3(CtaExtensionBlock::test_block())),
             _ => None,
         }

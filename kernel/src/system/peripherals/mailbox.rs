@@ -44,6 +44,7 @@ pub enum MailboxError {
     RequestResponseError(RequestResponseStatus),
     BufferOverflow,
     BufferSizeMismatch,
+    BufferAlignmentError,
     ResponseIterationError,
     ResponseReinterpretationError,
 }
@@ -61,51 +62,14 @@ impl MboxStatus {
 }
 
 
-#[repr(u32)]
-#[derive(Copy, Clone)]
-pub enum PixelOrder {
-    Bgr = 0,
-    Rgb = 1,
-}
-
-#[repr(u32)]
-#[derive(Copy, Clone)]
-pub enum AlphaMode {
-    Enabled0Opaque = 0,
-    Enabled0Transparent = 1,
-    Ignored,
-}
-
-pub struct FbDepth { bits_per_pixel: u32 }
-
-pub struct FbPitch { bytes_per_line: u32 }
-
-pub struct FbDimensions { width_px: u32, height_px: u32 }
-
-pub struct FbOffset { x_px: u32, y_px: u32 }
-
-pub struct EdidBlock {
-    block_number: u32,
-    status: u32,
-    data: [u8; 128],
-}
-
 pub struct MemoryBlock {
     address: u32,
     size: u32
 }
 
-pub type Palette = [u32; 256];
-
-pub struct PaletteChange<const N: usize> {
-    offset: u32,
-    length: u32,
-    values: [u32; N]
-}
 
 #[repr(u32)]
 pub enum Tag {
-    End = 0,
     VcGetFirmwareRevision = 0x00000001,
     HwGetBoardModel = 0x00010001,
     HwGetBoardRevision = 0x00010002,
@@ -114,31 +78,9 @@ pub enum Tag {
     HwGetArmMemory = 0x00010005,
     HwGetVcMemory = 0x00010006,
     HwGetClocks = 0x00010007,
-    GetEdidBlock = 0x00030020,
     GetOnboardLedStatus = 0x00030041,
     TestOnboardLedStatus = 0x00034041,
     SetOnboardLedStatus = 0x00038041,
-    FbAllocateBuffer = 0x00040001,
-    FbReleaseBuffer = 0x00048001,
-    FbGetPhysicalDimensions = 0x00040003,
-    FbTestPhysicalDimensions = 0x00044003,
-    FbSetPhysicalDimensions = 0x00048003,
-    FbGetVirtualDimensions = 0x00040004,
-    FbTestVirtualDimensions = 0x00044004,
-    FbSetVirtualDimensions = 0x00048004,
-    FbGetDepth = 0x00040005,
-    FbTestDepth = 0x00044005,
-    FbSetDepth = 0x00048005,
-    FbGetPixelOrder = 0x00040006,
-    FbTestPixelOrder = 0x00044006,
-    FbSetPixelOrder = 0x00048006,
-    FbGetAlphaMode = 0x00040007,
-    FbTestAlphaMode = 0x00044007,
-    FbSetAlphaMode = 0x00048007,
-    FbGetPitch = 0x00040008,
-    FbGetVirtualOffset = 0x00040009,
-    FbTestVirtualOffset = 0x00044009,
-    FbSetVirtualOffset = 0x00048009,
 }
 
 
@@ -198,7 +140,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         (self.size as usize - 12) >> 2
     }
 
-    pub fn push_request_raw(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<&mut [u32], MailboxError> {
+    fn push_request_raw(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<&mut [u32], MailboxError> {
         let message_u32_size = ((core::mem::size_of::<MessageHeader>() + value_buffer_byte_size as usize + 3) >> 2) as usize;
         let message_byte_size = message_u32_size << 2;
         let message_start = self.buffer_end_index();
@@ -213,6 +155,27 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         self.buffer[message_start + 2] = 0;
         let value_buffer = self.buffer.get_mut((message_start + 3)..message_end);
         value_buffer.ok_or(MailboxError::BufferOverflow)
+    }
+
+    pub fn push_request<T>(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<&mut T, MailboxError> {
+        let ptr = self.push_request_raw(tag, value_buffer_byte_size)?.as_mut_ptr();
+        if core::mem::size_of::<T>() > value_buffer_byte_size as usize {
+            Err(MailboxError::BufferSizeMismatch)
+        } else if ptr as usize % core::mem::align_of::<T>() != 0 {
+            Err(MailboxError::BufferAlignmentError)
+        } else {
+            unsafe {
+                ptr.cast::<T>().as_mut().ok_or(MailboxError::Unknown)
+            }
+        }
+    }
+
+    pub fn push_request_empty(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<(), MailboxError> {
+        self.push_request_raw(tag, value_buffer_byte_size).map(|_|{})
+    }
+
+    pub fn push_request_zeroed(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<(), MailboxError> {
+        self.push_request_raw(tag, value_buffer_byte_size).map(|data|{data.fill(0)})
     }
 
     pub fn submit_messages<'a>(&'a mut self, channel: u8) -> Result<ResponseIterator<'a>, MailboxError> {
@@ -242,15 +205,15 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
 
 }
 
-pub fn simple_single_call<Q, R: Clone>(tag: u32, request_value: Q) -> Result<R, MailboxError> {
+pub fn simple_single_call<Q, R: Copy>(tag: u32, request_value: Q) -> Result<R, MailboxError> {
     let byte_size = core::mem::size_of::<Q>().max(core::mem::size_of::<R>());
-    let mut mbox = Mailbox::<64>::new();
+    let mut mbox = Mailbox::<512>::new();
     let mut buffer = mbox.push_request_raw(tag, byte_size as u32)?;
     unsafe {
         *buffer.as_mut_ptr().cast::<Q>() = request_value;
     };
     let mut responses = mbox.submit_messages(8)?;
-    responses.nth(0).ok_or(MailboxError::ResponseIterationError)??.try_value_as().ok_or(MailboxError::ResponseReinterpretationError).cloned()
+    responses.nth(0).ok_or(MailboxError::ResponseIterationError)??.try_value_as().ok_or(MailboxError::ResponseReinterpretationError).copied()
 }
 
 pub struct ResponseIterator<'a> {

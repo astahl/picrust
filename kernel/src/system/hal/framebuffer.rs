@@ -8,6 +8,66 @@ pub mod color {
     pub const BLUE: u32 = 0xff_ff_00_00;
 }
 
+mod tags {
+    pub const FB_ALLOCATE_BUFFER: u32 = 0x00040001;
+    pub const FB_RELEASE_BUFFER: u32 = 0x00048001;
+    pub const FB_GET_PHYSICAL_DIMENSIONS: u32 = 0x00040003;
+    pub const FB_TEST_PHYSICAL_DIMENSIONS: u32 = 0x00044003;
+    pub const FB_SET_PHYSICAL_DIMENSIONS: u32 = 0x00048003;
+    pub const FB_GET_VIRTUAL_DIMENSIONS: u32 = 0x00040004;
+    pub const FB_TEST_VIRTUAL_DIMENSIONS: u32 = 0x00044004;
+    pub const FB_SET_VIRTUAL_DIMENSIONS: u32 = 0x00048004;
+    pub const FB_GET_DEPTH: u32 = 0x00040005;
+    pub const FB_TEST_DEPTH: u32 = 0x00044005;
+    pub const FB_SET_DEPTH: u32 = 0x00048005;
+    pub const FB_GET_PIXEL_ORDER: u32 = 0x00040006;
+    pub const FB_TEST_PIXEL_ORDER: u32 = 0x00044006;
+    pub const FB_SET_PIXEL_ORDER: u32 = 0x00048006;
+    pub const FB_GET_ALPHA_MODE: u32 = 0x00040007;
+    pub const FB_TEST_ALPHA_MODE: u32 = 0x00044007;
+    pub const FB_SET_ALPHA_MODE: u32 = 0x00048007;
+    pub const FB_GET_PITCH: u32 = 0x00040008;
+    pub const FB_GET_VIRTUAL_OFFSET: u32 = 0x00040009;
+    pub const FB_TEST_VIRTUAL_OFFSET: u32 = 0x00044009;
+    pub const FB_SET_VIRTUAL_OFFSET: u32 = 0x00048009;
+
+    #[repr(u32)]
+    #[derive(Copy, Clone)]
+    pub enum PixelOrder {
+        Bgr = 0,
+        Rgb = 1,
+    }
+
+    #[repr(u32)]
+    #[derive(Copy, Clone)]
+    pub enum AlphaMode {
+        Enabled0Opaque = 0,
+        Enabled0Transparent = 1,
+        Ignored,
+    }
+
+    pub struct FbDepth { pub bits_per_pixel: u32 }
+
+
+    pub struct FbPitch { pub bytes_per_line: u32 }
+
+    #[derive(Clone, Copy)]
+    pub struct FbDimensions { pub width_px: u32, pub height_px: u32 }
+
+    pub struct FbOffset { pub x_px: u32, pub y_px: u32 }
+
+    pub struct FbAllocate { pub alignment_bytes: u32 }
+
+    pub type Palette = [u32; 256];
+
+    pub struct PaletteChange<const N: usize> {
+        offset: u32,
+        length: u32,
+        values: [u32; N]
+    }
+}
+
+
 pub struct Framebuffer {
     ptr: *mut u8,
     pub size_bytes: u32,
@@ -20,44 +80,34 @@ pub struct Framebuffer {
 impl Framebuffer {
     pub fn new(width: u32, height: u32) -> Option<Self> {
         use crate::peripherals::mailbox::*;
+        use tags::*;
         let mut mailbox = Mailbox::<64>::new();
-        let physical_dimenstions = mailbox.push_request_raw(Tag::FbSetPhysicalDimensions as u32, 8).ok()?;
-        physical_dimenstions[0] = width;
-        physical_dimenstions[1] = height;
+        let dimensions = FbDimensions { width_px: width, height_px: height };
+        *mailbox.push_request(tags::FB_SET_PHYSICAL_DIMENSIONS, 8).ok()? = dimensions;
 
-        let virtual_dimensions = mailbox.push_request_raw(Tag::FbSetVirtualDimensions as u32, 8).ok()?;
-        virtual_dimensions[0] = width;
-        virtual_dimensions[1] = height;
+        *mailbox.push_request(tags::FB_SET_VIRTUAL_DIMENSIONS, 8).ok()? = dimensions;
+        mailbox.push_request_zeroed(tags::FB_SET_VIRTUAL_OFFSET, 8).ok()?;
 
-        let virtual_offset = mailbox.push_request_raw(Tag::FbSetVirtualOffset as u32, 8).ok()?;
-        virtual_offset[0] = 0;
-        virtual_offset[1] = 0;
+        *mailbox.push_request(tags::FB_SET_DEPTH, 4).ok()? = 32_u32;
+        *mailbox.push_request(tags::FB_SET_PIXEL_ORDER, 4).ok()? = PixelOrder::Bgr;
 
-        let bpp = mailbox.push_request_raw(Tag::FbSetDepth as u32, 4).ok()?;
-        bpp[0] = 32;
+        // alignment to page size
+        *mailbox.push_request(tags::FB_ALLOCATE_BUFFER, 8).ok()? = 4096_u32; 
 
-        let pixel_order = mailbox.push_request_raw(Tag::FbSetPixelOrder as u32, 4).ok()?;
-        pixel_order[0] = PixelOrder::Bgr as u32;
-
-        let allocate_buffer = mailbox.push_request_raw(Tag::FbAllocateBuffer as u32, 8).ok()?;
-        allocate_buffer[0] = 4096; // alignment bytes
-
-        mailbox.push_request_raw(Tag::FbGetPitch as u32, 4).ok()?;
+        mailbox.push_request_empty(tags::FB_GET_PITCH, 4).ok()?;
 
         let mut responses = mailbox.submit_messages(8).ok()?;
-        let (width_px, height_px) = *responses.next().unwrap().unwrap().try_value_as()?;
+        let (width_px, height_px) = *responses.next()?.ok()?.try_value_as()?;
         // FbSetVirtualDimensions {..},
         let _ = responses.next();
         // FbSetVirtualOffset { .. },
         let _ = responses.next();
-        let bits_per_pixel: u32 = *responses.next()
-            .unwrap()
-            .unwrap().try_value_as()?;
+        let bits_per_pixel: u32 = *responses.next()?.ok()?.try_value_as()?;
         // FbSetPixelOrder { .. },
         responses.next();
 
-        let (base_address_bytes, size_bytes): (u32, u32) = *responses.next().unwrap().unwrap().try_value_as()?;
-        let pitch_bytes: u32 = *responses.next().unwrap().unwrap().try_value_as()?;
+        let (base_address_bytes, size_bytes): (u32, u32) = *responses.next()?.ok()?.try_value_as()?;
+        let pitch_bytes: u32 = *responses.next()?.ok()?.try_value_as()?;
     
         let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
         Some(Self {
@@ -90,7 +140,7 @@ impl Framebuffer {
     //     unsafe { core::slice::from_raw_parts(self.ptr.cast::<u32>(), self.size_bytes / 4) }
     // }
 
-    pub fn as_mut_pixels(&self) -> &mut [u32] {
+    fn as_mut_pixels(&self) -> &mut [u32] {
         unsafe {
             core::slice::from_raw_parts_mut(self.ptr.cast::<u32>(), self.size_bytes as usize >> 2)
         }
