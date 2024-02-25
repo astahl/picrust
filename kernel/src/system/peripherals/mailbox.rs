@@ -13,13 +13,12 @@ pub struct Mailbox<const BUFFER_SIZE: usize> {
     buffer: [u32; BUFFER_SIZE],
 }
 
-
 #[derive(Debug)]
 #[repr(u32)]
 pub enum RequestResponseStatus {
     Pending = 0,
     Success = 0x80000000,
-    ErrorParsingRequestBuffer = 0x80000001
+    ErrorParsingRequestBuffer = 0x80000001,
 }
 
 pub struct ReqResCode(DynamicMmioField<RequestResponseStatus>);
@@ -61,12 +60,10 @@ impl MboxStatus {
     }
 }
 
-
 pub struct MemoryBlock {
     address: u32,
-    size: u32
+    size: u32,
 }
-
 
 #[repr(u32)]
 pub enum Tag {
@@ -82,7 +79,6 @@ pub enum Tag {
     TestOnboardLedStatus = 0x00034041,
     SetOnboardLedStatus = 0x00038041,
 }
-
 
 const MBOX_BASE: usize = 0xB880; //0x201000;
 impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
@@ -140,15 +136,22 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         (self.size as usize - 12) >> 2
     }
 
-    fn push_request_raw(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<&mut [u32], MailboxError> {
-        let message_u32_size = ((core::mem::size_of::<MessageHeader>() + value_buffer_byte_size as usize + 3) >> 2) as usize;
+    fn push_request_raw(
+        &mut self,
+        tag: u32,
+        value_buffer_byte_size: u32,
+    ) -> Result<&mut [u32], MailboxError> {
+        let message_u32_size =
+            ((core::mem::size_of::<MessageHeader>() + value_buffer_byte_size as usize + 3) >> 2)
+                as usize;
         let message_byte_size = message_u32_size << 2;
         let message_start = self.buffer_end_index();
         let message_end = message_start + message_u32_size;
-        if message_end > BUFFER_SIZE - 1 { // leave room for the null tag
+        if message_end > BUFFER_SIZE - 1 {
+            // leave room for the null tag
             return Err(MailboxError::BufferOverflow);
         }
-    
+
         self.size += message_byte_size as u32;
         self.buffer[message_start] = tag;
         self.buffer[message_start + 1] = value_buffer_byte_size;
@@ -157,28 +160,45 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         value_buffer.ok_or(MailboxError::BufferOverflow)
     }
 
-    pub fn push_request<T>(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<&mut T, MailboxError> {
-        let ptr = self.push_request_raw(tag, value_buffer_byte_size)?.as_mut_ptr();
+    pub fn push_request<T>(
+        &mut self,
+        tag: u32,
+        value_buffer_byte_size: u32,
+    ) -> Result<&mut T, MailboxError> {
+        let ptr = self
+            .push_request_raw(tag, value_buffer_byte_size)?
+            .as_mut_ptr();
         if core::mem::size_of::<T>() > value_buffer_byte_size as usize {
             Err(MailboxError::BufferSizeMismatch)
         } else if ptr as usize % core::mem::align_of::<T>() != 0 {
             Err(MailboxError::BufferAlignmentError)
         } else {
-            unsafe {
-                ptr.cast::<T>().as_mut().ok_or(MailboxError::Unknown)
-            }
+            unsafe { ptr.cast::<T>().as_mut().ok_or(MailboxError::Unknown) }
         }
     }
 
-    pub fn push_request_empty(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<(), MailboxError> {
-        self.push_request_raw(tag, value_buffer_byte_size).map(|_|{})
+    pub fn push_request_empty(
+        &mut self,
+        tag: u32,
+        value_buffer_byte_size: u32,
+    ) -> Result<(), MailboxError> {
+        self.push_request_raw(tag, value_buffer_byte_size)
+            .map(|_| {})
     }
 
-    pub fn push_request_zeroed(&mut self, tag: u32, value_buffer_byte_size: u32) -> Result<(), MailboxError> {
-        self.push_request_raw(tag, value_buffer_byte_size).map(|data|{data.fill(0)})
+    pub fn push_request_zeroed(
+        &mut self,
+        tag: u32,
+        value_buffer_byte_size: u32,
+    ) -> Result<(), MailboxError> {
+        self.push_request_raw(tag, value_buffer_byte_size)
+            .map(|data| data.fill(0))
     }
 
-    pub fn submit_messages<'a>(&'a mut self, channel: u8) -> Result<ResponseIterator<'a>, MailboxError> {
+    pub fn submit_messages<'a>(
+        &'a mut self,
+        channel: u8,
+    ) -> Result<ResponseIterator<'a>, MailboxError> {
         // for (i, v) in self.buffer.iter().enumerate() {
         //     crate::peripherals::uart::Uart0::put_uint(i as u64);
         //     crate::peripherals::uart::Uart0::putc(b'>');
@@ -198,11 +218,12 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         // crate::peripherals::uart::Uart0::putc(b'\n');
 
         match self.req_res_code.get() {
-            RequestResponseStatus::Success => Ok(ResponseIterator{buffer: &self.buffer}),
+            RequestResponseStatus::Success => Ok(ResponseIterator {
+                buffer: &self.buffer,
+            }),
             e => Err(MailboxError::RequestResponseError(e)),
         }
     }
-
 }
 
 pub fn simple_single_call<Q, R: Copy>(tag: u32, request_value: Q) -> Result<R, MailboxError> {
@@ -213,11 +234,16 @@ pub fn simple_single_call<Q, R: Copy>(tag: u32, request_value: Q) -> Result<R, M
         *buffer.as_mut_ptr().cast::<Q>() = request_value;
     };
     let mut responses = mbox.submit_messages(8)?;
-    responses.nth(0).ok_or(MailboxError::ResponseIterationError)??.try_value_as().ok_or(MailboxError::ResponseReinterpretationError).copied()
+    responses
+        .nth(0)
+        .ok_or(MailboxError::ResponseIterationError)??
+        .try_value_as()
+        .ok_or(MailboxError::ResponseReinterpretationError)
+        .copied()
 }
 
 pub struct ResponseIterator<'a> {
-    buffer: &'a [u32]
+    buffer: &'a [u32],
 }
 
 pub struct MessageHeader {
@@ -228,19 +254,29 @@ pub struct MessageHeader {
 
 pub struct Response<'a> {
     pub header: MessageHeader,
-    pub value_buffer: &'a [u32]
+    pub value_buffer: &'a [u32],
 }
 
-impl<'a>  Response<'a> {
+impl<'a> Response<'a> {
     pub unsafe fn value_as_unchecked<T>(&self) -> &'a T {
         &*self.value_buffer.as_ptr().cast::<T>()
-    } 
+    }
 
     pub fn try_value_as<T>(&self) -> Option<&'a T> {
-        debug_assert!(self.value_buffer.as_ptr().align_offset(core::mem::align_of::<T>()) == 0);
+        debug_assert!(
+            self.value_buffer
+                .as_ptr()
+                .align_offset(core::mem::align_of::<T>())
+                == 0
+        );
         debug_assert!(self.value_buffer.len() >= (core::mem::size_of::<T>() + 3) >> 2);
-        if self.value_buffer.as_ptr().align_offset(core::mem::align_of::<T>()) == 0
-        && self.value_buffer.len() >= (core::mem::size_of::<T>() + 3) >> 2 {
+        if self
+            .value_buffer
+            .as_ptr()
+            .align_offset(core::mem::align_of::<T>())
+            == 0
+            && self.value_buffer.len() >= (core::mem::size_of::<T>() + 3) >> 2
+        {
             Some(unsafe { self.value_as_unchecked() })
         } else {
             None
@@ -262,20 +298,22 @@ impl<'a> Iterator for ResponseIterator<'a> {
         if tag == 0 {
             None
         } else if self.buffer.len() < HEADER_U32_SIZE {
-            Some(Err(MailboxError::BufferSizeMismatch)) 
+            Some(Err(MailboxError::BufferSizeMismatch))
         } else {
             let header_ptr: *const MessageHeader = self.buffer.as_ptr().cast();
             let header = unsafe { header_ptr.read_volatile() };
-            
+
             let end_index = ((HEADER_BYTE_SIZE + header.value_length as usize) + 3) >> 2;
             let (head, tail) = self.buffer.split_at(end_index);
             self.buffer = tail;
-            Some(head.get(HEADER_U32_SIZE..)
-                .ok_or(MailboxError::BufferSizeMismatch)
-                .map(|value_buffer| Response{
-                header,
-                value_buffer
-            }))
+            Some(
+                head.get(HEADER_U32_SIZE..)
+                    .ok_or(MailboxError::BufferSizeMismatch)
+                    .map(|value_buffer| Response {
+                        header,
+                        value_buffer,
+                    }),
+            )
         }
     }
 }

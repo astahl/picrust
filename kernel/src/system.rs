@@ -272,7 +272,8 @@ pub fn wait(duration: Duration) {
             out(reg) frequency, out(reg) current_counter
         );
     }
-    let expire_at = current_counter + ((frequency as u128  * duration.as_micros()) / 1_000_000) as usize;
+    let expire_at =
+        current_counter + ((frequency as u128 * duration.as_micros()) / 1_000_000) as usize;
     while current_counter < expire_at {
         unsafe {
             core::arch::asm!(

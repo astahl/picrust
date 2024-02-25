@@ -9,14 +9,20 @@ pub enum Led {
 
 impl Led {
     pub fn set(&self, on: bool) {
-        match mailbox::simple_single_call::<[u32;2], ()>(mailbox::Tag::SetOnboardLedStatus as u32, [*self as u32, if on { 1 } else { 0 }]) {
+        match mailbox::simple_single_call::<[u32; 2], ()>(
+            mailbox::Tag::SetOnboardLedStatus as u32,
+            [*self as u32, if on { 1 } else { 0 }],
+        ) {
             Ok(_) => (),
             Err(_) => (),
         }
     }
 
     pub fn get(&self) -> bool {
-        match mailbox::simple_single_call::<u32, [u32;2]>(mailbox::Tag::GetOnboardLedStatus as u32, *self as u32) {
+        match mailbox::simple_single_call::<u32, [u32; 2]>(
+            mailbox::Tag::GetOnboardLedStatus as u32,
+            *self as u32,
+        ) {
             Ok([pin, status]) => status == 1,
             Err(_) => false,
         }
@@ -25,7 +31,6 @@ impl Led {
     pub fn on(&self) {
         self.set(true);
     }
-
 
     pub fn off(&self) {
         self.set(false);
@@ -38,8 +43,6 @@ impl Led {
         }
     }
 }
-
-
 
 pub fn status_blink_twice(interval_msec: u64) {
     let status = Led::Status;

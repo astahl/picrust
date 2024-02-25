@@ -1,4 +1,3 @@
-
 pub struct MMIO<const BASE: usize, const OFFSET: usize>();
 impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
     const ADDRESS: usize = crate::system::peripherals::BCM_HOST.peripheral_address + BASE + OFFSET;
@@ -28,11 +27,12 @@ impl<T> DynamicMmioField<T> {
     }
 
     pub fn read(&self) -> T {
-        unsafe{ core::ptr::addr_of!(self.0).read_volatile().assume_init() }
+        unsafe { core::ptr::addr_of!(self.0).read_volatile().assume_init() }
     }
 
     pub fn write(&mut self, value: T) {
-        unsafe{ core::ptr::addr_of_mut!(self.0).write_volatile(core::mem::MaybeUninit::new(value)) }
+        unsafe {
+            core::ptr::addr_of_mut!(self.0).write_volatile(core::mem::MaybeUninit::new(value))
+        }
     }
 }
-

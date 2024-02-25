@@ -46,27 +46,37 @@ mod tags {
         Ignored,
     }
 
-    pub struct FbDepth { pub bits_per_pixel: u32 }
+    pub struct FbDepth {
+        pub bits_per_pixel: u32,
+    }
 
-
-    pub struct FbPitch { pub bytes_per_line: u32 }
+    pub struct FbPitch {
+        pub bytes_per_line: u32,
+    }
 
     #[derive(Clone, Copy)]
-    pub struct FbDimensions { pub width_px: u32, pub height_px: u32 }
+    pub struct FbDimensions {
+        pub width_px: u32,
+        pub height_px: u32,
+    }
 
-    pub struct FbOffset { pub x_px: u32, pub y_px: u32 }
+    pub struct FbOffset {
+        pub x_px: u32,
+        pub y_px: u32,
+    }
 
-    pub struct FbAllocate { pub alignment_bytes: u32 }
+    pub struct FbAllocate {
+        pub alignment_bytes: u32,
+    }
 
     pub type Palette = [u32; 256];
 
     pub struct PaletteChange<const N: usize> {
         offset: u32,
         length: u32,
-        values: [u32; N]
+        values: [u32; N],
     }
 }
-
 
 pub struct Framebuffer {
     ptr: *mut u8,
@@ -82,17 +92,26 @@ impl Framebuffer {
         use crate::peripherals::mailbox::*;
         use tags::*;
         let mut mailbox = Mailbox::<64>::new();
-        let dimensions = FbDimensions { width_px: width, height_px: height };
-        *mailbox.push_request(tags::FB_SET_PHYSICAL_DIMENSIONS, 8).ok()? = dimensions;
+        let dimensions = FbDimensions {
+            width_px: width,
+            height_px: height,
+        };
+        *mailbox
+            .push_request(tags::FB_SET_PHYSICAL_DIMENSIONS, 8)
+            .ok()? = dimensions;
 
-        *mailbox.push_request(tags::FB_SET_VIRTUAL_DIMENSIONS, 8).ok()? = dimensions;
-        mailbox.push_request_zeroed(tags::FB_SET_VIRTUAL_OFFSET, 8).ok()?;
+        *mailbox
+            .push_request(tags::FB_SET_VIRTUAL_DIMENSIONS, 8)
+            .ok()? = dimensions;
+        mailbox
+            .push_request_zeroed(tags::FB_SET_VIRTUAL_OFFSET, 8)
+            .ok()?;
 
         *mailbox.push_request(tags::FB_SET_DEPTH, 4).ok()? = 32_u32;
         *mailbox.push_request(tags::FB_SET_PIXEL_ORDER, 4).ok()? = PixelOrder::Bgr;
 
         // alignment to page size
-        *mailbox.push_request(tags::FB_ALLOCATE_BUFFER, 8).ok()? = 4096_u32; 
+        *mailbox.push_request(tags::FB_ALLOCATE_BUFFER, 8).ok()? = 4096_u32;
 
         mailbox.push_request_empty(tags::FB_GET_PITCH, 4).ok()?;
 
@@ -106,9 +125,10 @@ impl Framebuffer {
         // FbSetPixelOrder { .. },
         responses.next();
 
-        let (base_address_bytes, size_bytes): (u32, u32) = *responses.next()?.ok()?.try_value_as()?;
+        let (base_address_bytes, size_bytes): (u32, u32) =
+            *responses.next()?.ok()?.try_value_as()?;
         let pitch_bytes: u32 = *responses.next()?.ok()?.try_value_as()?;
-    
+
         let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
         Some(Self {
             width_px,

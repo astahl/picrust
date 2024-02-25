@@ -356,16 +356,17 @@ pub struct BoardInfo {
 }
 
 pub fn get_arm_memory() -> Option<Memory> {
-    let (base_address, size): (u32, u32) = mailbox::simple_single_call(mailbox::Tag::HwGetArmMemory as u32, 8).ok()?;
+    let (base_address, size): (u32, u32) =
+        mailbox::simple_single_call(mailbox::Tag::HwGetArmMemory as u32, 8).ok()?;
     Some(Memory {
         base_address: base_address as usize,
         size: ByteSize(size as usize),
     })
-
 }
 
 pub fn get_vc_memory() -> Option<Memory> {
-    let (base_address, size): (u32, u32) = mailbox::simple_single_call(mailbox::Tag::HwGetVcMemory as u32, ()).ok()?;
+    let (base_address, size): (u32, u32) =
+        mailbox::simple_single_call(mailbox::Tag::HwGetVcMemory as u32, ()).ok()?;
     Some(Memory {
         base_address: base_address as usize,
         size: ByteSize(size as usize),
@@ -374,9 +375,12 @@ pub fn get_vc_memory() -> Option<Memory> {
 
 pub fn get_board_info() -> Option<BoardInfo> {
     let mut mb = mailbox::Mailbox::<256>::new();
-    mb.push_request_empty(mailbox::Tag::HwGetBoardModel as u32, 4).ok()?;
-    mb.push_request_empty(mailbox::Tag::HwGetBoardRevision as u32, 4).ok()?;
-    mb.push_request_empty(mailbox::Tag::HwGetBoardSerial as u32, 8).ok()?;
+    mb.push_request_empty(mailbox::Tag::HwGetBoardModel as u32, 4)
+        .ok()?;
+    mb.push_request_empty(mailbox::Tag::HwGetBoardRevision as u32, 4)
+        .ok()?;
+    mb.push_request_empty(mailbox::Tag::HwGetBoardSerial as u32, 8)
+        .ok()?;
     let mut responses = mb.submit_messages(8).ok()?;
 
     let model: u32 = responses.next()?.ok()?.try_value_as().copied()?;

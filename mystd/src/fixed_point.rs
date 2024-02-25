@@ -1,14 +1,13 @@
-pub mod ops;
-pub mod convert;
 pub mod container;
+pub mod convert;
+pub mod ops;
 use container::FixedPointContainer;
-
 
 #[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct FixedPoint<const P: isize, T: FixedPointContainer<T>> (T);
+pub struct FixedPoint<const P: isize, T: FixedPointContainer>(T);
 
-impl<const P: isize, T: FixedPointContainer<T>> FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer> FixedPoint<P, T> {
     pub const fn new(value: T) -> Self {
         Self(value)
     }
@@ -30,18 +29,22 @@ impl<const P: isize, T: FixedPointContainer<T>> FixedPoint<P, T> {
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + Default> Default for FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + Default> Default for FixedPoint<P, T> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + core::fmt::Debug> core::fmt::Debug for FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + core::fmt::Debug> core::fmt::Debug
+    for FixedPoint<P, T>
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("FixedPoint").field(&P).field(&self.0).finish()
+        f.debug_tuple("FixedPoint")
+            .field(&P)
+            .field(&self.0)
+            .finish()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -56,6 +59,4 @@ mod tests {
         write!(buff, "{:?}", FixedPoint::<10, i32>::new(-1234)).expect("Writing should work");
         assert_eq!(b"FixedPoint(10, -1234)", buff.as_slices().0);
     }
-
 }
-

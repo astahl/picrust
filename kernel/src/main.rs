@@ -12,8 +12,8 @@ mod system;
 use core::{arch::global_asm, str, usize};
 use mystd::buffer;
 use system::hal;
-use system::peripherals;
 use system::hal::display::Resolution;
+use system::peripherals;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {

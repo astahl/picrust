@@ -1,6 +1,4 @@
-use core::{
-    fmt::{Debug, Display}
-};
+use core::fmt::{Debug, Display};
 
 use crate::{peripherals::mailbox, system::peripherals::mailbox::simple_single_call};
 
@@ -14,8 +12,6 @@ mod tag {
         pub data: [u8; 128],
     }
 }
-
-
 
 pub struct BufferedIterator<T, const CAPACITY: usize> {
     index: usize,
@@ -1441,8 +1437,9 @@ impl core::iter::Iterator for EdidIterator {
             return None;
         }
 
-        let response: tag::GetEdidBlock = simple_single_call(tag::GET_EDID_BLOCK, self.block_num as u32).ok()?;
-       
+        let response: tag::GetEdidBlock =
+            simple_single_call(tag::GET_EDID_BLOCK, self.block_num as u32).ok()?;
+
         if response.status == 0 {
             let block = Edid::from_bytes(&response.data);
             if let Edid::Edid(edid) = &block {
@@ -1450,10 +1447,9 @@ impl core::iter::Iterator for EdidIterator {
             }
             self.block_num += 1;
             Some(block)
-        }
-        else {
+        } else {
             None
-        } 
+        }
     }
 }
 

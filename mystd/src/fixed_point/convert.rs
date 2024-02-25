@@ -25,31 +25,34 @@ mod consts {
 
 #[derive(Debug)]
 pub enum FixedPointConversionError {
-    ValueIsNotFinite
+    ValueIsNotFinite,
 }
 
-impl<T: FixedPointContainer<T>> core::convert::From<T> for FixedPoint<0, T> {
+impl<T: FixedPointContainer> core::convert::From<T> for FixedPoint<0, T> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
 }
 
 fn fixed_u32_to_float32(value: u32, precision: isize) -> f32 {
-    use consts::f32::*;    
+    use consts::f32::*;
 
     if value == 0 {
         return 0.0;
     }
-    
+
     // take the number of leading zeros, so we can shift the mantissa so the first 1 is at lsb 24 (the mantissa in f32 is 23 bits long)
     let most_significant_one = 31 - value.leading_zeros() as isize;
     let exponent = most_significant_one - precision;
-    
+
     if exponent > MAX_EXPONENT {
         f32::INFINITY
     } else if exponent >= MIN_EXPONENT {
         let mantissa = value.signed_shift(most_significant_one, MANTISSA_WIDTH);
-        f32::from_bits(((exponent + EXPONENT_BIAS) as u32 & EXPONENT_MASK) << MANTISSA_WIDTH | (mantissa & MANTISSA_MASK))
+        f32::from_bits(
+            ((exponent + EXPONENT_BIAS) as u32 & EXPONENT_MASK) << MANTISSA_WIDTH
+                | (mantissa & MANTISSA_MASK),
+        )
     } else if exponent >= DENORM_EXPONENT {
         let mantissa = value.signed_shift(precision, -DENORM_EXPONENT);
         // handle denormalization
@@ -57,7 +60,7 @@ fn fixed_u32_to_float32(value: u32, precision: isize) -> f32 {
     } else {
         0.0
     }
-} 
+}
 
 fn fixed_i32_to_float32(value: i32, precision: isize) -> f32 {
     if value < 0 {
@@ -73,16 +76,19 @@ fn fixed_u64_to_float64(value: u64, precision: isize) -> f64 {
     if value == 0 {
         return 0.0;
     }
-    
+
     // take the number of leading zeros, so we can shift the mantissa so the first 1 is at lsb 53 (the mantissa in f32 is 52 bits long)
     let most_significant_one = 63 - value.leading_zeros() as isize;
     let exponent = most_significant_one - precision;
-    
+
     if exponent > MAX_EXPONENT {
         f64::INFINITY
     } else if exponent >= MIN_EXPONENT {
         let mantissa = value.signed_shift(most_significant_one, MANTISSA_WIDTH);
-        f64::from_bits(((exponent + EXPONENT_BIAS) as u64 & EXPONENT_MASK) << MANTISSA_WIDTH | (mantissa & MANTISSA_MASK))
+        f64::from_bits(
+            ((exponent + EXPONENT_BIAS) as u64 & EXPONENT_MASK) << MANTISSA_WIDTH
+                | (mantissa & MANTISSA_MASK),
+        )
     } else if exponent >= DENORM_EXPONENT {
         let mantissa = value.signed_shift(precision, -DENORM_EXPONENT);
         // handle denormalization
@@ -90,7 +96,7 @@ fn fixed_u64_to_float64(value: u64, precision: isize) -> f64 {
     } else {
         0.0
     }
-} 
+}
 
 fn fixed_i64_to_float64(value: i64, precision: isize) -> f64 {
     if value < 0 {
@@ -100,31 +106,33 @@ fn fixed_i64_to_float64(value: i64, precision: isize) -> f64 {
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + Into<u32>> FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + Into<u32>> FixedPoint<P, T> {
     pub fn to_f32_unsigned(&self) -> f32 {
         fixed_u32_to_float32(self.0.into(), P)
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + Into<u64>> FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + Into<u64>> FixedPoint<P, T> {
     pub fn to_f64_unsigned(&self) -> f64 {
         fixed_u64_to_float64(self.0.into(), P)
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + Into<i32>> FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + Into<i32>> FixedPoint<P, T> {
     pub fn to_f32_signed(&self) -> f32 {
         fixed_i32_to_float32(self.0.into(), P)
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + Into<i64>> FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + Into<i64>> FixedPoint<P, T> {
     pub fn to_f64_signed(&self) -> f64 {
         fixed_i64_to_float64(self.0.into(), P)
     }
 }
 
-impl<const P: isize, T: FixedPointContainer<T> + From<i32>> core::convert::TryFrom<f32> for FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + From<i32>> core::convert::TryFrom<f32>
+    for FixedPoint<P, T>
+{
     type Error = FixedPointConversionError;
 
     fn try_from(value: f32) -> Result<Self, Self::Error> {
@@ -134,10 +142,10 @@ impl<const P: isize, T: FixedPointContainer<T> + From<i32>> core::convert::TryFr
         }
         let bits = value.to_bits();
         if bits & !SIGN_MASK == 0 {
-            return Ok(Self::default())
+            return Ok(Self::default());
         }
         let biased_exponent = EXPONENT_MASK & (bits >> MANTISSA_WIDTH);
-        
+
         let mut mantissa = MANTISSA_MASK & bits;
         let precision = if biased_exponent == 0 {
             // denormal value
@@ -158,8 +166,9 @@ impl<const P: isize, T: FixedPointContainer<T> + From<i32>> core::convert::TryFr
     }
 }
 
-
-impl<const P: isize, T: FixedPointContainer<T> + From<i64>> core::convert::TryFrom<f64> for FixedPoint<P, T> {
+impl<const P: isize, T: FixedPointContainer + From<i64>> core::convert::TryFrom<f64>
+    for FixedPoint<P, T>
+{
     type Error = FixedPointConversionError;
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
@@ -169,10 +178,10 @@ impl<const P: isize, T: FixedPointContainer<T> + From<i64>> core::convert::TryFr
         }
         let bits = value.to_bits();
         if bits & !SIGN_MASK == 0 {
-            return Ok(Self::default())
+            return Ok(Self::default());
         }
         let biased_exponent = EXPONENT_MASK & (bits >> MANTISSA_WIDTH);
-        
+
         let mut mantissa = MANTISSA_MASK & bits;
         let precision = if biased_exponent == 0 {
             // denormal value
@@ -193,8 +202,6 @@ impl<const P: isize, T: FixedPointContainer<T> + From<i64>> core::convert::TryFr
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,17 +215,36 @@ mod tests {
         assert_eq!(0.5, FixedPoint::<1, u32>::new(1).to_f32_unsigned());
         assert_eq!(1.5, FixedPoint::<1, u32>::new(3).to_f32_unsigned());
         assert_eq!(1.0, FixedPoint::<10, u32>::new(1024).to_f32_unsigned());
-        assert_eq!(1.25, FixedPoint::<10, u32>::new(1024 + 256).to_f32_unsigned());
+        assert_eq!(
+            1.25,
+            FixedPoint::<10, u32>::new(1024 + 256).to_f32_unsigned()
+        );
 
         assert!(FixedPoint::<126, u32>::new(1).to_f32_unsigned().is_normal());
-        assert!(FixedPoint::<-127, u32>::new(1).to_f32_unsigned().is_normal());
+        assert!(FixedPoint::<-127, u32>::new(1)
+            .to_f32_unsigned()
+            .is_normal());
 
-        assert!(FixedPoint::<149, u32>::new(1).to_f32_unsigned().is_subnormal());
-        assert_eq!(f32::from_bits(0b1), FixedPoint::<149, u32>::new(1).to_f32_unsigned());
-        assert_eq!(f32::from_bits(0b10), FixedPoint::<148, u32>::new(1).to_f32_unsigned());
-        assert_eq!(f32::from_bits(0b1), FixedPoint::<150, u32>::new(2).to_f32_unsigned());
+        assert!(FixedPoint::<149, u32>::new(1)
+            .to_f32_unsigned()
+            .is_subnormal());
+        assert_eq!(
+            f32::from_bits(0b1),
+            FixedPoint::<149, u32>::new(1).to_f32_unsigned()
+        );
+        assert_eq!(
+            f32::from_bits(0b10),
+            FixedPoint::<148, u32>::new(1).to_f32_unsigned()
+        );
+        assert_eq!(
+            f32::from_bits(0b1),
+            FixedPoint::<150, u32>::new(2).to_f32_unsigned()
+        );
 
-        assert_eq!(f32::INFINITY, FixedPoint::<-128, u32>::new(1).to_f32_unsigned());
+        assert_eq!(
+            f32::INFINITY,
+            FixedPoint::<-128, u32>::new(1).to_f32_unsigned()
+        );
         assert_eq!(0.0, FixedPoint::<150, u32>::new(1).to_f32_unsigned());
 
         assert_eq!(-1.0, FixedPoint::<0, i32>::new(-1).to_f32_signed());
@@ -227,7 +253,6 @@ mod tests {
 
     #[test]
     fn to_f64_works() {
-
         assert_eq!(0.0, FixedPoint::<2000, u64>::new(0).to_f64_unsigned());
         assert_eq!(0.0, FixedPoint::<-2000, u64>::new(0).to_f64_unsigned());
         assert_eq!(0.0, FixedPoint::<0, u64>::new(0).to_f64_unsigned());
@@ -236,17 +261,38 @@ mod tests {
         assert_eq!(0.5, FixedPoint::<1, u64>::new(1).to_f64_unsigned());
         assert_eq!(1.5, FixedPoint::<1, u64>::new(3).to_f64_unsigned());
         assert_eq!(1.0, FixedPoint::<10, u64>::new(1024).to_f64_unsigned());
-        assert_eq!(1.25, FixedPoint::<10, u64>::new(1024 + 256).to_f64_unsigned());
+        assert_eq!(
+            1.25,
+            FixedPoint::<10, u64>::new(1024 + 256).to_f64_unsigned()
+        );
 
-        assert!(FixedPoint::<1022, u64>::new(1).to_f64_unsigned().is_normal());
-        assert!(FixedPoint::<-1023, u64>::new(1).to_f64_unsigned().is_normal());
+        assert!(FixedPoint::<1022, u64>::new(1)
+            .to_f64_unsigned()
+            .is_normal());
+        assert!(FixedPoint::<-1023, u64>::new(1)
+            .to_f64_unsigned()
+            .is_normal());
 
-        assert!(FixedPoint::<1074, u64>::new(1).to_f64_unsigned().is_subnormal());
-        assert_eq!(f64::from_bits(0b1), FixedPoint::<1074, u64>::new(1).to_f64_unsigned());
-        assert_eq!(f64::from_bits(0b10), FixedPoint::<1073, u64>::new(1).to_f64_unsigned());
-        assert_eq!(f64::from_bits(0b1), FixedPoint::<1075, u64>::new(2).to_f64_unsigned());
+        assert!(FixedPoint::<1074, u64>::new(1)
+            .to_f64_unsigned()
+            .is_subnormal());
+        assert_eq!(
+            f64::from_bits(0b1),
+            FixedPoint::<1074, u64>::new(1).to_f64_unsigned()
+        );
+        assert_eq!(
+            f64::from_bits(0b10),
+            FixedPoint::<1073, u64>::new(1).to_f64_unsigned()
+        );
+        assert_eq!(
+            f64::from_bits(0b1),
+            FixedPoint::<1075, u64>::new(2).to_f64_unsigned()
+        );
 
-        assert_eq!(f64::INFINITY, FixedPoint::<-1024, u64>::new(1).to_f64_unsigned());
+        assert_eq!(
+            f64::INFINITY,
+            FixedPoint::<-1024, u64>::new(1).to_f64_unsigned()
+        );
         assert_eq!(0.0, FixedPoint::<1075, u64>::new(1).to_f64_unsigned());
 
         assert_eq!(-1.0, FixedPoint::<0, i64>::new(-1).to_f64_signed());
@@ -266,8 +312,18 @@ mod tests {
         assert_eq!(-1, FixedPoint::<3, i32>::try_from(-0.125).unwrap().raw());
 
         // denorms
-        assert_eq!(0b1, FixedPoint::<149, i32>::try_from(f32::from_bits(0b1)).unwrap().raw());
-        assert_eq!(0b101, FixedPoint::<148, i32>::try_from(f32::from_bits(0b1010)).unwrap().raw());
+        assert_eq!(
+            0b1,
+            FixedPoint::<149, i32>::try_from(f32::from_bits(0b1))
+                .unwrap()
+                .raw()
+        );
+        assert_eq!(
+            0b101,
+            FixedPoint::<148, i32>::try_from(f32::from_bits(0b1010))
+                .unwrap()
+                .raw()
+        );
 
         let a: FixedPoint<22, i32> = core::f32::consts::PI.try_into().unwrap();
         assert_eq!(core::f32::consts::PI, a.to_f32_signed());
@@ -286,13 +342,22 @@ mod tests {
         assert_eq!(-1, FixedPoint::<3, i64>::try_from(-0.125).unwrap().raw());
 
         // denorms
-        assert_eq!(0b1, FixedPoint::<1074, i64>::try_from(f64::from_bits(0b1)).unwrap().raw());
-        assert_eq!(0b101, FixedPoint::<1073, i64>::try_from(f64::from_bits(0b1010)).unwrap().raw());
+        assert_eq!(
+            0b1,
+            FixedPoint::<1074, i64>::try_from(f64::from_bits(0b1))
+                .unwrap()
+                .raw()
+        );
+        assert_eq!(
+            0b101,
+            FixedPoint::<1073, i64>::try_from(f64::from_bits(0b1010))
+                .unwrap()
+                .raw()
+        );
 
         let a: FixedPoint<48, i64> = core::f64::consts::PI.try_into().unwrap();
         assert_eq!(core::f64::consts::PI, a.to_f64_signed());
     }
-
 
     #[test]
     fn from_t_works() {
