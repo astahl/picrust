@@ -48,15 +48,15 @@ impl<const P: isize, T: FixedPointContainer + core::fmt::Debug> core::fmt::Debug
 
 #[cfg(test)]
 mod tests {
-    use crate::buffer;
+    use crate::collections;
 
     use super::*;
 
     #[test]
     fn fmt_debug_works() {
         use core::fmt::Write;
-        
-        let mut buff = buffer::RingArray::<u8, 32>::new();
+
+        let mut buff = collections::ring::RingArray::<u8, 32>::new();
         write!(buff, "{:?}", FixedPoint::<10, i32>::new(-1234)).expect("Writing should work");
         assert_eq!(b"FixedPoint(10, -1234)", buff.as_slices().0);
     }

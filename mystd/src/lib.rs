@@ -2,7 +2,7 @@
 
 pub mod bcd;
 pub mod bitfield;
-pub mod buffer;
+pub mod collections;
 pub mod drawing;
 pub mod fixed_point;
 pub mod format;

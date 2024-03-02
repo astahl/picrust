@@ -10,7 +10,7 @@ compile_error!("Can't compile for multiple Raspberry Pi Models.");
 mod exception;
 mod system;
 use core::{arch::global_asm, str, usize};
-use mystd::buffer;
+use mystd::collections;
 use system::hal;
 use system::hal::display::Resolution;
 use system::peripherals;
@@ -54,7 +54,7 @@ pub extern "C" fn main() -> ! {
     Uart0::put_uint(system::current_exception_level() as u64);
     // Uart0::puts("start");
 
-    let mut str_buffer = buffer::RingArray::<u8, 1024>::new();
+    let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
 
     use hal::framebuffer::color;
     let resolution = hal::display::Resolution::preferred().unwrap_or_default();

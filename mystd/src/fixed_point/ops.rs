@@ -56,8 +56,6 @@ where
     }
 }
 
-
-
 impl<const P: isize, T> core::ops::Add<FixedPoint<P, T>> for FixedPoint<P, T>
 where
     T: FixedPointContainer + core::ops::Add<T, Output = T>,
@@ -113,10 +111,7 @@ mod tests {
         assert_eq!(-4.0, c.to_f32_signed());
         let c: Fx = (a / b).truncate();
         assert_eq!(0.0, c.to_f32_signed());
-
-        
     }
-
 
     #[test]
     fn add_works() {
