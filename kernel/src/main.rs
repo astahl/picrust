@@ -54,7 +54,7 @@ pub extern "C" fn main() -> ! {
     Uart0::put_uint(system::current_exception_level() as u64);
     // Uart0::puts("start");
 
-    let mut str_buffer = buffer::Ring::<u8>::new();
+    let mut str_buffer = buffer::RingArray::<u8, 1024>::new();
 
     use hal::framebuffer::color;
     let resolution = hal::display::Resolution::preferred().unwrap_or_default();

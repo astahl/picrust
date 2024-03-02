@@ -7,7 +7,7 @@ mod command;
 use writer::Writer;
 
 const LINE_LEN: usize = 256;
-type Buffer = mystd::buffer::Line<u8, LINE_LEN>;
+type Buffer = mystd::buffer::LineArray<u8, LINE_LEN>;
 
 pub struct Monitor<In: Fn() -> u8, Out: Fn(u8)> {
     input: In,

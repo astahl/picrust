@@ -55,7 +55,8 @@ mod tests {
     #[test]
     fn fmt_debug_works() {
         use core::fmt::Write;
-        let mut buff = buffer::Ring::<u8>::new();
+        
+        let mut buff = buffer::RingArray::<u8, 32>::new();
         write!(buff, "{:?}", FixedPoint::<10, i32>::new(-1234)).expect("Writing should work");
         assert_eq!(b"FixedPoint(10, -1234)", buff.as_slices().0);
     }
