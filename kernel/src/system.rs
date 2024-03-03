@@ -8,6 +8,22 @@ extern "C" {
     static __data_start: u8;
 }
 
+
+pub fn initialize() {
+    // let core_id = system::get_core_num();
+    // if core_id == 0 {
+    if cfg!(feature = "serial_uart") {
+        peripherals::uart::Uart0::init();
+        peripherals::uart::Uart0::puts("System Initialize...\n");
+    }
+    let status_led = hal::led::Led::Status;
+    status_led.on();
+    if cfg!(feature = "mmu") {
+        mmu_init().unwrap();
+    }
+    status_led.off();
+}
+
 #[derive(Debug)]
 pub enum MMUInitError {
     PhysicalAddressRangeAtLeast36bitNotSupported,

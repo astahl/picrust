@@ -10,7 +10,6 @@ SECTIONS
 		KEEP(*(.text.boot)) *(.text .text.* .gnu.linkonce.t*)	
 	}
 	. = ALIGN(0x1000);
-	__rodata_start = .;
 	.rodata : {	
 		*(.rodata* .gnu.linkonce.r*)
 		. = ALIGN(0x1000);
@@ -18,7 +17,6 @@ SECTIONS
 		*(.font*)
 		__font_end = .;
 	}
-	__rodata_end = .;
 	. = ALIGN(0x1000);
 	.data : { 
 		PROVIDE(__data_start = .);

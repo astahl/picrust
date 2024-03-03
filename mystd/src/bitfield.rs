@@ -1,65 +1,108 @@
-pub trait BitContainer<T>:
+pub trait BitContainer:
     Default
     + Copy
     + core::cmp::Eq
-    + core::ops::Shr<usize, Output = T>
-    + core::ops::Shl<usize, Output = T>
-    + core::ops::Sub<Output = T>
-    + core::ops::BitAnd<Output = T>
-    + core::ops::Not<Output = T>
+    + core::ops::Shr<usize, Output = Self>
+    + core::ops::Shl<usize, Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::BitAnd<Output = Self>
+    + core::ops::BitOr<Output = Self>
+    + core::ops::Not<Output = Self>
 {
+    const ZERO: Self;
+    const ONE: Self;
 }
-impl BitContainer<u8> for u8 {}
-impl BitContainer<u16> for u16 {}
-impl BitContainer<u32> for u32 {}
-impl BitContainer<u64> for u64 {}
-impl BitContainer<u128> for u128 {}
-impl BitContainer<usize> for usize {}
-impl BitContainer<i8> for i8 {}
-impl BitContainer<i16> for i16 {}
-impl BitContainer<i32> for i32 {}
-impl BitContainer<i64> for i64 {}
-impl BitContainer<i128> for i128 {}
-impl BitContainer<isize> for isize {}
+impl BitContainer for u8 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for u16 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for u32 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for u64 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for u128 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for usize {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for i8 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for i16 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for i32 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for i64 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for i128 {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
+impl BitContainer for isize {
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+}
 
 #[repr(transparent)]
 pub struct BitField<T>(pub T)
 where
-    T: BitContainer<T>;
+    T: BitContainer;
 
 impl<T> BitField<T>
 where
-    T: BitContainer<T>,
+    T: BitContainer,
 {
     pub const fn new(value: T) -> Self {
         Self(value)
     }
 
-    pub fn zero() -> T {
-        T::default()
-    }
-
-    pub fn one() -> T {
-        !(!Self::zero() << 1)
-    }
-
     fn mask_bit(position: usize) -> T {
-        Self::one() << position
+        T::ONE << position
     }
 
     fn mask_up_to(position: usize) -> T {
-        Self::mask_bit(position) - Self::one()
+        Self::mask_bit(position) - T::ONE
     }
 
     pub fn field(&self, lsb: usize, length: usize) -> T {
         (self.0 >> lsb) & Self::mask_up_to(length)
     }
 
+    pub fn field_set(&mut self, lsb: usize, length: usize, value: T) {
+        self.0 = ((value & Self::mask_up_to(length)) << lsb) | (self.0 & !(Self::mask_up_to(length) << lsb))
+    }
+
     pub fn bit_test(&self, position: usize) -> bool {
-        self.0 & Self::mask_bit(position) != Self::zero()
+        self.0 & Self::mask_bit(position) != T::ZERO
+    }
+
+    pub fn bit_set(&mut self, position: usize) {
+        self.0 = self.0 | Self::mask_bit(position);
+    }
+
+    pub fn bit_clear(&mut self, position: usize) {
+        self.0 = self.0 & !Self::mask_bit(position);
     }
 
     pub fn bit_value(&self, position: usize) -> T {
-        (self.0 >> position) & Self::one()
+        (self.0 >> position) & T::ONE
     }
 }

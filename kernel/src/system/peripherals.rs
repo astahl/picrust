@@ -4,6 +4,7 @@ pub mod gpio;
 pub mod mailbox;
 pub mod mmio;
 pub mod uart;
+pub mod dma;
 
 pub struct BcmHost {
     pub peripheral_address: usize,
