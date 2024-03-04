@@ -2,8 +2,6 @@ use mystd::bitfield::BitField;
 
 use super::mmio::MMIO;
 
-
-
 pub struct DmaChannel<const CHANNEL_BASE: usize>();
 
 pub type Dma0 = DmaChannel<0x7000>;
@@ -58,11 +56,11 @@ impl DmaControlAndStatus{
         self.0.bit_test(0)
     }
 
-    pub fn start(&mut self) {
+    pub fn set_active(&mut self) {
         self.0.bit_set(0);
     }
 
-    pub fn pause(&mut self) {
+    pub fn clear_active(&mut self) {
         self.0.bit_clear(0);
     }
 
@@ -155,8 +153,27 @@ impl DmaControlAndStatus{
     }
 }
 
+impl core::fmt::Debug for DmaControlAndStatus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DmaControlAndStatus")
+            .field("ACTIVE", &self.is_active())
+            .field("END", &self.is_end())
+            .field("INT", &self.is_interrupted())
+            .field("PAUSED", &self.is_paused())
+            .field("DREQ_STOPS_DMA", &self.is_paused_by_data_request_state())
+            .field("WAITING_FOR_OUTSTANDING_WRITE", &self.is_waiting_for_outstanding_writes())
+            .field("ERROR", &self.is_error())
+            .field("PRIORITY", &self.axi_priority_level())
+            .field("PANIC_PRIORITY", &self.axi_panic_priority_level())
+            .field("DISDEBUG", &self.is_debug_pause_signal_disabled())
+            .field("ABORT", &self.is_aborting())
+            .field("RESET", &self.is_resetting())
+            .finish()
+    }
+}
 
-#[repr(align(32))]
+
+#[repr(C, align(32))]
 pub struct DmaControlBlock {
     transfer_information: DmaTransferInformation,
     source_address: u32,
@@ -167,6 +184,29 @@ pub struct DmaControlBlock {
     reserved: [u32;2]
 }
 
+impl DmaControlBlock {
+    pub fn new(src: *const u8, dest: *mut u8, length: u32, burst_length_words: u32) -> Option<Self> {
+        if length > 0x3fff_ffff {
+            None
+        } else {
+            Some(Self {
+                transfer_information: *DmaTransferInformation::new()
+                    .dest_address_increment(true)
+                    .dest_transfer_width(DmaTransferWidth::Bit128)
+                    .src_address_increment(true)
+                    .src_transfer_width(DmaTransferWidth::Bit128)
+                    .burst_transfer_length(burst_length_words),
+                source_address: src as u32,
+                destination_address: dest as u32,
+                transfer_length: DmaTransferLength::new_linear(length),
+                stride: Dma2dStride::none(),
+                next_control_block_address: 0x0,
+                reserved: [0, 0],
+            })
+        }
+    }
+}
+
 
 pub enum DmaTransferWidth {
     Bit32,
@@ -174,9 +214,14 @@ pub enum DmaTransferWidth {
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct DmaTransferInformation(BitField<u32>);
 
 impl DmaTransferInformation {
+    pub const fn new() -> Self {
+        Self(BitField(0))
+    }
+
     pub fn value(&self) -> u32 {
         self.0.0
     }
@@ -293,6 +338,10 @@ pub struct Dma2dStride{
 }
 
 impl Dma2dStride {
+    pub fn none() -> Self {
+        Self { source: 0, destination: 0 }
+    }
+
     pub fn new(source: i16, destination: i16) -> Self {
         Self{ destination, source }
     }

@@ -62,6 +62,7 @@ impl BitContainer for isize {
 }
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct BitField<T>(pub T)
 where
     T: BitContainer;

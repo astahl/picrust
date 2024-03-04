@@ -62,9 +62,55 @@ impl Iterator for PinSelectIterator {
     }
 }
 
+#[repr(u32)]
+#[derive(Clone, Copy)]
+pub enum PinFunction {
+    Input   = 0b000,
+    Output  = 0b001,
+    Alt0    = 0b100,
+    Alt1    = 0b101,
+    Alt2    = 0b110,
+    Alt3    = 0b111,
+    Alt4    = 0b011,
+    Alt5    = 0b010,
+}
+
+impl Gpio {
+    // Function Select Registers
+    const GPFSEL0: MMIO<GPIO_BASE, 0x00> = MMIO();
+    const GPFSEL1: MMIO<GPIO_BASE, 0x04> = MMIO();
+    const GPFSEL2: MMIO<GPIO_BASE, 0x08> = MMIO();
+    const GPFSEL3: MMIO<GPIO_BASE, 0x0c> = MMIO();
+    const GPFSEL4: MMIO<GPIO_BASE, 0x10> = MMIO();
+    const GPFSEL5: MMIO<GPIO_BASE, 0x14> = MMIO();
+
+    pub fn set_functions(pins: PinSet, function: PinFunction) {
+        let mut state = [Self::GPFSEL0.read(), Self::GPFSEL1.read(), Self::GPFSEL2.read(), Self::GPFSEL3.read(), Self::GPFSEL4.read(), Self::GPFSEL5.read()];
+        let mut updated = [false, false, false, false, false, false];
+        for pin in pins {
+            let bank_select = (pin as usize) / 10;
+            let offset = (pin % 10) * 3;
+            let old_state = state[bank_select];
+            let mask = 0b111_u32 << offset;
+            let new_value = (function as u32) << offset; 
+            let old_value = old_state & mask;
+            if new_value != old_value {
+                state[bank_select] = (old_state & !mask) | new_value;
+                updated[bank_select] = true;
+            }
+        }
+        if updated[0] { Self::GPFSEL0.write(state[0]); }
+        if updated[1] { Self::GPFSEL1.write(state[1]); }
+        if updated[2] { Self::GPFSEL2.write(state[2]); }
+        if updated[3] { Self::GPFSEL3.write(state[3]); }
+        if updated[4] { Self::GPFSEL4.write(state[4]); }
+        if updated[5] { Self::GPFSEL5.write(state[5]); }
+    }
+}
 
 #[cfg(feature="bcm2837")]
 #[repr(u32)]
+#[derive(Clone, Copy)]
 pub enum Resistor {
     None = 0,
     PullDown = 0b01,
@@ -74,6 +120,7 @@ pub enum Resistor {
 
 #[cfg(any(feature="bcm2811", feature="bcm2812"))]
 #[repr(u32)]
+#[derive(Clone, Copy)]
 pub enum Resistor {
     None = 0,
     PullUp = 0b01,

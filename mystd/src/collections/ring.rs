@@ -2,6 +2,7 @@ use super::BufferError;
 use super::Sliceable;
 use core::fmt::Write;
 use core::marker::PhantomData;
+use core::str::Utf8Error;
 
 mod num {
 
@@ -217,6 +218,12 @@ impl<T, S: Sliceable<T>, const N: usize> Ring<T, S, N> {
         self.read.set(0);
         self.write.set(len);
         unsafe { self.data.as_slice().get_unchecked(..len) }
+    }
+}
+
+impl<S: Sliceable<u8>, const N: usize> Ring<u8, S, N>  {
+    pub fn to_str(&mut self) -> Result<&str, Utf8Error> {
+        core::str::from_utf8(self.make_continuous())
     }
 }
 

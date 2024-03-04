@@ -10,10 +10,8 @@ compile_error!("Can't compile for multiple Raspberry Pi Models.");
 mod exception;
 mod system;
 mod tests;
-use core::{arch::global_asm, str, usize};
-use mystd::collections;
+use core::{arch::global_asm, str};
 use system::hal;
-use system::hal::display::Resolution;
 use system::peripherals;
 
 #[panic_handler]
@@ -35,13 +33,15 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 extern "C" {
     static __font_start: u64;
     static __font_end: u64;
+    static mut __kernel_end: u64;
 }
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     use peripherals::uart::Uart0;
     system::initialize();
-    tests::run();
+    //tests::run();
+    tests::test_dma();
 
     monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc).run()
 }
