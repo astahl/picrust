@@ -1,6 +1,8 @@
 use crate::peripherals::gpio;
 use crate::peripherals::mmio::MMIO;
 
+use super::gpio::PinSet;
+
 pub struct Pl011Uart<const UART_BASE: usize>();
 
 pub type Uart0 = Pl011Uart<0x201000>;
@@ -37,7 +39,7 @@ impl<const UART_BASE: usize> Pl011Uart<UART_BASE> {
         // disable UART
         Self::CONTROL_REGISTER.write(0x00000000);
 
-        gpio::Gpio::init_uart0();
+        gpio::Gpio::set_pull_resistors(PinSet::select(&[14, 15]), gpio::Resistor::None);
 
         // Clear all pending UART interrupts
         Self::INTERRUPT_CLEAR_REGISTER.write(0x7FF);

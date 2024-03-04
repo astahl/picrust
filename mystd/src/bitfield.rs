@@ -70,6 +70,10 @@ impl<T> BitField<T>
 where
     T: BitContainer,
 {
+    pub const fn zero() -> Self {
+        Self(T::ZERO)
+    }
+
     pub const fn new(value: T) -> Self {
         Self(value)
     }

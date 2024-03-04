@@ -13,13 +13,4 @@ mod tests {
     use super::*;
 
 
-
-    
-
-    #[test]
-    fn stride_works() {
-        let a = Dma2dStride::new(-4, -5);
-        assert_eq!(-4, a.source);
-        assert_eq!(-5, a.destination);
-    }
 }
