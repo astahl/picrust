@@ -95,6 +95,10 @@ where
         self.0 = ((value & Self::mask_up_to(length)) << lsb) | (self.0 & !(Self::mask_up_to(length) << lsb))
     }
 
+    pub fn with_field_set(&self, lsb: usize, length: usize, value: T) -> Self {
+        Self(((value & Self::mask_up_to(length)) << lsb) | (self.0 & !(Self::mask_up_to(length) << lsb)))
+    }
+
     pub fn bit_test(&self, position: usize) -> bool {
         self.0 & Self::mask_bit(position) != T::ZERO
     }
@@ -103,8 +107,16 @@ where
         self.0 = self.0 | Self::mask_bit(position);
     }
 
+    pub fn with_bit_set(&self, position: usize) -> Self {
+        Self(self.0 | Self::mask_bit(position))
+    }
+
     pub fn bit_clear(&mut self, position: usize) {
         self.0 = self.0 & !Self::mask_bit(position);
+    }
+
+    pub fn with_bit_cleared(&self, position: usize) -> Self {
+        Self(self.0 & !Self::mask_bit(position))
     }
 
     pub fn bit_value(&self, position: usize) -> T {

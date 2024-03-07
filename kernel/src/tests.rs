@@ -1,4 +1,7 @@
+use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
+use crate::system::peripherals::dma::DmaTransferInformation;
+use crate::system::peripherals::dma::DMA_0;
 
 use super::peripherals::uart::Uart0;
 use super::system;
@@ -152,49 +155,53 @@ pub fn run() {
 pub fn test_dma() {
     use core::fmt::Write;
     use super::peripherals::dma;
-    use super::peripherals::dma::Dma0;
     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
-    let mut status = dma::Dma0::control_status();
-    status.reset();
-    writeln!(str_buffer, "{:?}", dma::Dma0::control_status()).unwrap();
-    Dma0::set_control_status(status);
-    while Dma0::control_status().is_resetting() {
-        writeln!(str_buffer, "RESETTING {:?}", dma::Dma0::control_status()).unwrap();
-    }
+    // let mut status = dma::Dma0::control_status();
+    // status.set_reset();
+    // writeln!(str_buffer, "{:?}", dma::Dma0::control_status()).unwrap();
+    // Dma0::set_control_status(status);
+    // while Dma0::control_status().is_resetting() {
+    //     writeln!(str_buffer, "RESETTING {:?}", dma::Dma0::control_status()).unwrap();
+    // }
 
     let mem_start = unsafe { core::ptr::addr_of_mut!(super::__kernel_end).wrapping_add(0x100000) };
 
     writeln!(str_buffer, "MEM START = {:x}", mem_start as usize).unwrap();
     let control_block_ptr: *mut dma::DmaControlBlock = mem_start.cast();
-    let src = mem_start.wrapping_add(0x10000).cast::<u8>();
-    let dest = src.wrapping_add(0x1000);
+    let src = mem_start.wrapping_add(0x100000).cast::<u8>();
+    let dest = src.wrapping_add(0x100000);
     writeln!(str_buffer, "CB Addr = {:p}", control_block_ptr).unwrap();
     writeln!(str_buffer, "Src Addr = {:p}", src).unwrap();
     writeln!(str_buffer, "Dest Addr = {:p}", dest).unwrap();
     Uart0::puts(str_buffer.to_str().unwrap());
     str_buffer.clear();
-
+    
     unsafe {
-        let length = 512;
+        let length = 8*1024*1024;
         core::slice::from_raw_parts_mut(src, length).fill(0x55);
-        let burst_length_words = 2;
-        control_block_ptr.write_volatile(DmaControlBlock::new(src.cast(), dest.cast(), length as u32, burst_length_words).unwrap());
-        let mut status = dma::Dma0::control_status();
-        status.set_will_wait_for_outstanding_writes(true);
-        status.set_axi_panic_priority_level(15);
-        status.set_axi_priority_level(1);
-        status.set_active();
-        dma::Dma0::set_control_block_address(control_block_ptr as u32);
+        let transfer_information = DmaTransferInformation::wide_copy();
+        let cb = DmaControlBlock::linear_copy(transfer_information, src as u32, dest as u32, length as u32, 0);
+        control_block_ptr.write_volatile(cb);
+        
+        DMA_0.set_control_block_address(control_block_ptr as u32);
 
         writeln!(str_buffer, "Src = {:x}", src.read()).unwrap();
         writeln!(str_buffer, "Dest = {:x}", dest.read()).unwrap();
-        writeln!(str_buffer, "cb: {:x}", Dma0::control_block_address()).unwrap();
-        Dma0::set_control_status(status);
-        while Dma0::control_status().is_active() {
+        writeln!(str_buffer, "cb: {:x}", DMA_0.control_block_address()).unwrap();
+        let status = DMA_0.control_and_status()
+            .with_active_set()
+            .with_axi_priority_level(DmaControlAndStatus::MAX_PRIORITY_LEVEL).unwrap()
+            .with_axi_panic_priority_level(DmaControlAndStatus::MAX_PRIORITY_LEVEL).unwrap()
+            .with_wait_for_outstanding_writes_set();
+        DMA_0.set_control_and_status(status);
+        while !DMA_0.control_and_status().is_end() {
             writeln!(str_buffer, "wait").unwrap();
         }
-        writeln!(str_buffer, "cb: {:x}", Dma0::control_block_address()).unwrap();
+        writeln!(str_buffer, "cb: {:x}", DMA_0.control_block_address()).unwrap();
         writeln!(str_buffer, "Dest = {:x}", dest.read()).unwrap();
+        writeln!(str_buffer, "Ended? {:?}", DMA_0.control_and_status().is_end()).unwrap();
+
+        writeln!(str_buffer, "dbg: {:#?}", DMA_0.debug()).unwrap();
     }
     Uart0::puts(str_buffer.to_str().unwrap());
     

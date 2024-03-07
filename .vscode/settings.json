@@ -3,5 +3,6 @@
         "./monitor/Cargo.toml",
         "./kernel/Cargo.toml",
         "./mystd/Cargo.toml",
-    ]
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
 }
