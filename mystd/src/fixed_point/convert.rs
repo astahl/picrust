@@ -311,6 +311,14 @@ mod tests {
         assert_eq!(1, FixedPoint::<3, i32>::try_from(0.125).unwrap().raw());
         assert_eq!(-1, FixedPoint::<3, i32>::try_from(-0.125).unwrap().raw());
 
+        assert_eq!(8, FixedPoint::<3, i32>::try_from(1.0).unwrap().raw());
+        assert_eq!(-8, FixedPoint::<3, i32>::try_from(-1.0).unwrap().raw());
+        assert_eq!(-16, FixedPoint::<3, i32>::try_from(-2.0).unwrap().raw());
+        assert_eq!(-24, FixedPoint::<3, i32>::try_from(-3.0).unwrap().raw());
+        assert_eq!(24, FixedPoint::<3, i32>::try_from(3.0).unwrap().raw());
+        assert_eq!(3, FixedPoint::<3, i32>::try_from(3.0).unwrap().truncate());
+        assert_eq!(-3, FixedPoint::<3, i32>::try_from(-3.1).unwrap().truncate());
+
         // denorms
         assert_eq!(
             0b1,

@@ -13,17 +13,20 @@ mod tests;
 use core::{arch::global_asm, str};
 use system::hal;
 use system::peripherals;
+use system::peripherals::uart;
+
+use crate::system::peripherals::uart::UART_0;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
-    use peripherals::uart::Uart0;
-    Uart0::puts("PANIC!");
+    use core::fmt::Write;
+    let mut uart = uart::UART_0;
+    writeln!(&mut uart, "PANIC!");
     if let Some(msg) = info.payload().downcast_ref::<&str>() {
-        Uart0::puts(msg);
+        writeln!(&mut uart, "{}", *msg);
     }
     if let Some(loc) = info.location() {
-        Uart0::puts(loc.file());
-        Uart0::put_uint(loc.line() as u64);
+        writeln!(&mut uart, "source: {}", loc);
     }
     loop {
         // hal::led::status_blink_twice(100);
@@ -38,12 +41,11 @@ extern "C" {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    use peripherals::uart::Uart0;
     system::initialize();
-    //tests::run();
+    tests::run();
     tests::test_dma();
 
-    monitor::Monitor::new(|| Uart0::get_byte().unwrap_or(b'0'), Uart0::putc).run()
+    monitor::Monitor::new(|| UART_0.get_byte().unwrap_or(b'0'), |c| UART_0.put_byte(c)).run()
 }
 
 global_asm!(".section .font", ".incbin \"901447-10.bin\"");

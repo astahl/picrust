@@ -36,3 +36,40 @@ impl<T> DynamicMmioField<T> {
         }
     }
 }
+
+
+
+#[derive(Clone, Copy)]
+pub struct Register<const BASE: usize, const OFFSET: usize, T>(usize, core::marker::PhantomData<T>);
+impl<const BASE: usize, const OFFSET: usize, T> Register<BASE, OFFSET, T> {
+    const ADDRESS: usize = BASE + OFFSET;
+    pub const fn at(address: usize) -> Self {
+        Self(address, core::marker::PhantomData{})
+    }
+
+    pub fn read(self) -> T {
+        unsafe { self.as_ptr().read_volatile() } 
+    }
+    
+    pub fn write(self, value: T) {
+        unsafe { self.as_mut_ptr().write_volatile(value) } 
+    }
+
+    pub fn update<F: Fn(T) -> T> (self, f: F) {
+        let ptr = self.as_mut_ptr();
+        unsafe {
+            let value = ptr.read_volatile();
+            ptr.write_volatile(f(value));
+        }
+    }
+
+    pub const fn as_ptr(self) -> *const T {
+        (Self::ADDRESS + self.0) as *const T
+    }
+
+    pub const fn as_mut_ptr(self) -> *mut T {
+        (Self::ADDRESS + self.0) as *mut T
+    }
+}
+
+pub type PeripheralRegister<const OFFSET: usize, T> = Register<{super::BCM_HOST.peripheral_address}, OFFSET, T>;

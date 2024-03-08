@@ -1,5 +1,7 @@
 use mystd::bitfield::BitField;
 
+use crate::system::peripherals::uart::UART_0;
+
 #[no_mangle]
 pub extern "C" fn exc_handler(
     exception_type: ExceptionType,
@@ -8,23 +10,25 @@ pub extern "C" fn exc_handler(
     spsr: usize,
     far: usize,
 ) -> ! {
-    use crate::system::peripherals::uart::Uart0;
-    Uart0::init();
-    Uart0::puts("Exception Handler!\nException Type: ");
-    Uart0::put_uint(exception_type as u64);
-    Uart0::puts("\nEC: ");
-    Uart0::put_hex(syndrome.exception_class() as u8);
-    Uart0::puts("\nISS: ");
-    Uart0::put_hex_bytes(&syndrome.instruction_specific_syndrome().to_be_bytes());
-    Uart0::puts("\nELR: ");
-    Uart0::put_hex_bytes(&elr.to_be_bytes());
-    Uart0::puts("\nSPSR: ");
-    Uart0::put_hex_bytes(&spsr.to_be_bytes());
-    Uart0::puts("\nFAR: ");
-    Uart0::put_hex_bytes(&far.to_be_bytes());
+    use core::fmt::Write;
+    let mut uart = UART_0;
+    uart.init();
+    writeln!(&mut uart, "Exception Handler!");
+    // Uart0::puts("Exception Handler!\nException Type: ");
+    // Uart0::put_uint(exception_type as u64);
+    // Uart0::puts("\nEC: ");
+    // Uart0::put_hex(syndrome.exception_class() as u8);
+    // Uart0::puts("\nISS: ");
+    // Uart0::put_hex_bytes(&syndrome.instruction_specific_syndrome().to_be_bytes());
+    // Uart0::puts("\nELR: ");
+    // Uart0::put_hex_bytes(&elr.to_be_bytes());
+    // Uart0::puts("\nSPSR: ");
+    // Uart0::put_hex_bytes(&spsr.to_be_bytes());
+    // Uart0::puts("\nFAR: ");
+    // Uart0::put_hex_bytes(&far.to_be_bytes());
 
-    Uart0::putc(b'\n');
-    Uart0::put_memory(elr as *const u8, 16);
+    // Uart0::putc(b'\n');
+    // Uart0::put_memory(elr as *const u8, 16);
     loop {
         core::hint::spin_loop();
     }

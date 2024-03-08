@@ -12,12 +12,15 @@ extern "C" {
 pub fn initialize() {
     // let core_id = system::get_core_num();
     // if core_id == 0 {
+    if cfg!(feature = "serial_uart") {
+        use peripherals::uart;
+        use core::fmt::Write;
+        let mut uart = uart::UART_0;
+        uart.init();
+        writeln!(&mut uart, "System Initialize...").unwrap();
+    }
     let status_led = hal::led::Led::Status;
     status_led.on();
-    if cfg!(feature = "serial_uart") {
-        peripherals::uart::Uart0::init();
-        peripherals::uart::Uart0::puts("System Initialize...\n");
-    }
     if cfg!(feature = "mmu") {
         mmu_init().unwrap();
     }

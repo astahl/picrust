@@ -2,14 +2,17 @@ use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
 use crate::system::peripherals::dma::DmaTransferInformation;
 use crate::system::peripherals::dma::DMA_0;
+use crate::system::peripherals::uart::UART_0;
 
-use super::peripherals::uart::Uart0;
 use super::system;
 use super::hal;
 use mystd::collections;
+use mystd::io::Write;
 
 pub fn run() {
-    Uart0::put_uint(system::current_exception_level() as u64);
+    use core::fmt::Write;
+    let mut uart = UART_0;
+    writeln!(&mut uart, "Current Exception Level: {}", system::current_exception_level());
     // Uart0::puts("start");
 
     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
@@ -54,7 +57,6 @@ pub fn run() {
     hal::led::status_blink_twice(500);
     fb.clear(color::RED);
 
-    use core::fmt::Write;
     let mut supported_resolutions = [hal::display::Resolution::default(); 128];
     let count = hal::display::Resolution::supported(supported_resolutions.as_mut_slice(), 0);
     writeln!(
@@ -90,11 +92,11 @@ pub fn run() {
         // }
     }
     writeln!(str_buffer, "Bye!").unwrap();
-    let (text, _) = str_buffer.as_slices();
+    let text = str_buffer.to_str().unwrap();
     fb.clear(color::BLACK);
-    fb.write_text(text, font, mapping);
+    fb.write_text(text.as_bytes(), font, mapping);
 
-    Uart0::puts(core::str::from_utf8(text).unwrap());
+    uart.write_all(text.as_bytes());
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //
@@ -154,6 +156,7 @@ pub fn run() {
 
 pub fn test_dma() {
     use core::fmt::Write;
+    let mut uart = UART_0;
     use super::peripherals::dma;
     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
     // let mut status = dma::Dma0::control_status();
@@ -173,7 +176,7 @@ pub fn test_dma() {
     writeln!(str_buffer, "CB Addr = {:p}", control_block_ptr).unwrap();
     writeln!(str_buffer, "Src Addr = {:p}", src).unwrap();
     writeln!(str_buffer, "Dest Addr = {:p}", dest).unwrap();
-    Uart0::puts(str_buffer.to_str().unwrap());
+    uart.write_all(str_buffer.make_continuous());
     str_buffer.clear();
     
     unsafe {
@@ -203,7 +206,7 @@ pub fn test_dma() {
 
         writeln!(str_buffer, "dbg: {:#?}", DMA_0.debug()).unwrap();
     }
-    Uart0::puts(str_buffer.to_str().unwrap());
+    uart.write_all(str_buffer.make_continuous());
     
 
 }

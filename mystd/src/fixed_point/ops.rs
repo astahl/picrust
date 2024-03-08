@@ -56,6 +56,17 @@ where
     }
 }
 
+impl<const P: isize, T> core::ops::Div<T> for FixedPoint<P, T>
+where
+    T: FixedPointContainer + core::ops::Div<Output = T>,
+{
+    type Output = Self;
+
+    fn div(self, rhs: T) -> Self::Output {
+        FixedPoint::new(self.0 / rhs)
+    }
+}
+
 impl<const P: isize, T> core::ops::Add<FixedPoint<P, T>> for FixedPoint<P, T>
 where
     T: FixedPointContainer + core::ops::Add<T, Output = T>,

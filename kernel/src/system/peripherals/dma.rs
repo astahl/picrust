@@ -1,8 +1,8 @@
-use core::{marker::PhantomData, num::{NonZeroU16, NonZeroU32}, usize};
+use core::{num::{NonZeroU16, NonZeroU32}, usize};
 
 use mystd::bitfield::BitField;
 
-use super::mmio::MMIO;
+use super::mmio::PeripheralRegister;
 
 #[derive(Debug)]
 pub enum DmaError {
@@ -12,28 +12,6 @@ pub enum DmaError {
     InvalidWaitCycles,
     InvalidPeripheral,
 }
-
-
-#[derive(Clone, Copy)]
-pub struct Register<const BASE: usize, const OFFSET: usize, T>(usize, PhantomData<T>);
-impl<const BASE: usize, const OFFSET: usize, T> Register<BASE, OFFSET, T> {
-    const ADDRESS: usize = BASE + OFFSET;
-    pub const fn at(address: usize) -> Self {
-        Self(address, PhantomData{})
-    }
-
-    pub fn read(self) -> T {
-        let ptr = (Self::ADDRESS + self.0) as *const T;
-        unsafe { ptr.read_volatile() } 
-    }
-    
-    pub fn write(self, value: T) {
-        let ptr = (Self::ADDRESS + self.0) as *mut T;
-        unsafe { ptr.write_volatile(value) } 
-    }
-}
-
-type PeripheralRegister<const OFFSET: usize, T> = Register<{super::BCM_HOST.peripheral_address}, OFFSET, T>;
 
 pub struct DmaStandardChannel(usize);
 
