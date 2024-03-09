@@ -3,7 +3,7 @@ use mystd::fixed_point::FixedPoint;
 use mystd::io::Write;
 
 use crate::peripherals::gpio;
-use crate::peripherals::mmio::MMIO;
+use crate::system::hal::clocks::Clock;
 
 use super::gpio::PinSet;
 use super::mmio::PeripheralRegister;
@@ -38,14 +38,6 @@ type UartTestDataReg = PeripheralRegister<0x8c, u32>;
 
 impl Pl011Uart {
 
-    pub fn clock_rate() -> u32 {
-        3_000_000
-    }
-
-    pub fn max_baud_rate() -> u32 {
-        Self::clock_rate() / 16
-    }
-
     pub fn init(&self) {
         // NOTE: The UART_LCRH, UART_IBRD, and UART_FBRD registers must not be changed:
         // when the UART is enabled
@@ -75,16 +67,8 @@ impl Pl011Uart {
         // Clear all pending UART interrupts
         UartInterruptClearReg::at(self.0).write(UartInterrupts::all_set());
         
-        // Set UART Baud Rate to 115200 (look at docs for formula for values)
-        // BAUDDIV = FUARTCLK / (16 * BaudRate)
-        // FUARTCLK = 3,000,000 Hz
-        // = 3,000,000 / 1.843.200
-        // = 1.62760
-        let f_uart_clk = FixedPoint::<6, u32>::from_int(Self::clock_rate());
-        let baud_rate = 115200;
-        let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
-        let (brd_int, brd_frac) = baud_rate_divisor.split_int_frac();
-        
+        let clock_rate = Clock::UART.rate().unwrap_or(3_000_000);
+        let (brd_int, brd_frac) = UartBitrate::_1200Baud.to_int_frac(clock_rate);
         UartIntegerBaudRateDivisorReg::at(self.0).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(self.0).write(brd_frac);
         
@@ -103,67 +87,6 @@ impl Pl011Uart {
         UartDataReg::at(self.0).write(UartData::send(data));
     }
 
-    // pub fn put_hex(byte: u8) {
-    //     const SYMBOLS: &[u8; 16] = b"0123456789abcdef";
-    //     let upper = (byte >> 4) & 0xF;
-    //     let lower = byte & 0xF;
-    //     Self::putc(SYMBOLS[upper as usize]);
-    //     Self::putc(SYMBOLS[lower as usize]);
-    // }
-
-    // pub fn put_hex_bytes(buffer: &[u8]) {
-    //     for (line, chunk) in buffer.chunks(16).enumerate() {
-    //         if line != 0 {
-    //             Self::putc(b'\n');
-    //         }
-    //         for chunk in chunk.chunks(4) {
-    //             for byte in chunk {
-    //                 Self::put_hex(*byte);
-    //                 Self::putc(b' ');
-    //             }
-    //             Self::putc(b' ');
-    //         }
-    //     }
-    // }
-
-    // pub fn put_hex_usize(value: usize) {
-    //     Self::putc(b'0');
-    //     Self::putc(b'x');
-    //     if value == 0 {
-    //         Self::putc(b'0');
-    //     } else {
-    //         for b in value.to_be_bytes().into_iter().skip_while(|b| *b == 0) {
-    //             Self::put_hex(b);
-    //         }
-    //     }
-    // }
-
-    // pub fn put_memory(ptr: *const u8, len: usize) {
-    //     Self::put_hex_usize(ptr as usize);
-    //     Self::putc(b':');
-    //     for i in 0..len {
-    //         Self::putc(b' ');
-    //         let position = ptr.wrapping_add(i);
-    //         let value = unsafe { position.read_volatile() };
-    //         Self::put_hex(value);
-    //     }
-    // }
-
-    // pub fn put_uint(mut value: u64) {
-    //     let mut power_of_ten = 1;
-    //     let mut next_power_of_ten = 10;
-    //     while next_power_of_ten < value {
-    //         power_of_ten = next_power_of_ten;
-    //         next_power_of_ten *= 10;
-    //     }
-    //     while power_of_ten > 0 {
-    //         let quotient = (value / power_of_ten) as u8;
-    //         value %= power_of_ten;
-    //         Self::putc(b'0' + quotient);
-    //         power_of_ten /= 10;
-    //     }
-    // }
-
     pub fn get_byte(&self) -> Result<u8, UartStatus> {
         while self.flags().is_receive_fifo_empty() {
             core::hint::spin_loop();
@@ -176,34 +99,6 @@ impl Pl011Uart {
             Err(status)
         }
     }
-
-    // pub fn get_bytes(buffer: &mut [u8]) -> Result<usize, UartStatus> {
-    //     while Self::flags().receive_fifo_empty() {
-    //         core::hint::spin_loop();
-    //     }
-    //     let mut count: usize = 0;
-    //     while !Self::flags().receive_fifo_empty() {
-    //         let read = Self::DATA_REGISTER.read();
-    //         let status = UartStatus(read >> 8);
-    //         if !status.is_clear() {
-    //             return Err(status);
-    //         }
-    //         if count < buffer.len() {
-    //             unsafe { *buffer.get_unchecked_mut(count) = read as u8 };
-    //         } else {
-    //             return Ok(count);
-    //         }
-    //         count += 1;
-    //     }
-    //     Ok(count)
-    // }
-
-    // pub fn puts(string: &str) {
-    //     for b in string.bytes() {
-    //         Self::putc(b);
-    //     }
-    //     Self::putc(0);
-    // }
 
     pub fn flags(&self) -> UartFlags {
         UartFlagReg::at(self.0).read()
@@ -405,6 +300,39 @@ pub enum UartWordLength {
     _6Bits = 0b01,
     _7Bits = 0b10,
     _8Bits = 0b11,
+}
+
+#[repr(u32)]
+pub enum UartBitrate {
+    _75Baud = 75,
+    _110Baud = 110,
+    _300Baud = 300,
+    _1200Baud = 1200,
+    _2400Baud = 2400,
+    _4800Baud = 4800,
+    _9600Baud = 9600,
+    _19200Baud = 19200,
+    _38400Baud = 38400,
+    _57600Baud = 57600,
+    _115200Baud = 115200
+}
+
+impl UartBitrate {
+    /// Set UART Baud Rate to 115200 (look at docs for formula for values)
+    /// ```
+    /// BAUDDIV = FUARTCLK / (16 * BaudRate)
+    /// FUARTCLK = 3,000,000 Hz
+    /// = 3,000,000 / (16 * 115,200)
+    /// = 3,000,000 / 1,843,200
+    /// = 1.62760
+    /// = (1 + 40 * 2^-6)
+    /// ````
+    pub fn to_int_frac(self, uart_clock_rate: u32) -> (u32, u32) {
+        let f_uart_clk = FixedPoint::<6, u32>::from_int(uart_clock_rate);
+        let baud_rate: u32 = self as u32;
+        let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
+        baud_rate_divisor.split_int_frac()
+    }
 }
 
 pub struct UartLineControl(BitField<u32>);

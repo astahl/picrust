@@ -21,13 +21,7 @@ use crate::system::peripherals::uart::UART_0;
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
     use core::fmt::Write;
     let mut uart = uart::UART_0;
-    writeln!(&mut uart, "PANIC!");
-    if let Some(msg) = info.payload().downcast_ref::<&str>() {
-        writeln!(&mut uart, "{}", *msg);
-    }
-    if let Some(loc) = info.location() {
-        writeln!(&mut uart, "source: {}", loc);
-    }
+    let _ = writeln!(&mut uart, "Doki Doki! {info}");
     loop {
         // hal::led::status_blink_twice(100);
     }

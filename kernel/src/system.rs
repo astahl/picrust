@@ -3,6 +3,8 @@ pub mod peripherals;
 
 use core::{arch::asm, time::Duration};
 
+use self::peripherals::uart;
+
 extern "C" {
     static __kernel_end: u8;
     static __data_start: u8;

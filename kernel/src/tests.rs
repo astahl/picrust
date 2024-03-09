@@ -1,3 +1,4 @@
+use crate::system::hal::clocks;
 use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
 use crate::system::peripherals::dma::DmaTransferInformation;
@@ -12,6 +13,9 @@ use mystd::io::Write;
 pub fn run() {
     use core::fmt::Write;
     let mut uart = UART_0;
+
+    writeln!(&mut uart, "{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM).unwrap());
+
     writeln!(&mut uart, "Current Exception Level: {}", system::current_exception_level());
     // Uart0::puts("start");
 
