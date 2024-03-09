@@ -23,7 +23,7 @@ bcm2712=[]
 bcm2711=[]
 bcm2837=[]
 raspi3b=["bcm2837", "mmu", "serial_uart"]
-raspi4=["bcm2711"]
+raspi4=["bcm2711", "serial_uart"]
 default=["raspi3b"]
 
 [dependencies]

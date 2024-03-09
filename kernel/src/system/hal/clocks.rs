@@ -4,21 +4,21 @@ use crate::peripherals::mailbox;
 #[derive(Clone, Copy, Debug)]
 #[repr(u32)]
 pub enum Clock {
-    Reserved = 0x000000000,
-    EMMC = 0x000000001,
-    UART = 0x000000002,
-    ARM = 0x000000003,
-    Core = 0x000000004,
-    V3D = 0x000000005,
-    H264 = 0x000000006,
-    ISP = 0x000000007,
-    SDRAM = 0x000000008,
-    Pixel = 0x000000009,
-    PWM = 0x00000000a,
-    HEVC = 0x00000000b,
-    EMMC2 = 0x00000000c,
-    M2MC = 0x00000000d,
-    PixelBVB = 0x00000000e,
+    Reserved =  0x00,
+    EMMC =      0x01,
+    UART =      0x02,
+    ARM =       0x03,
+    Core =      0x04,
+    V3D =       0x05,
+    H264 =      0x06,
+    ISP =       0x07,
+    SDRAM =     0x08,
+    Pixel =     0x09,
+    PWM =       0x0a,
+    HEVC =      0x0b,
+    EMMC2 =     0x0c,
+    M2MC =      0x0d,
+    PixelBVB =  0x0e,
 }
 
 
