@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use mystd::bitfield::BitField;
 
 use crate::system::peripherals::uart::UART_0;
@@ -13,19 +15,12 @@ pub extern "C" fn exc_handler(
     use core::fmt::Write;
     let mut uart = UART_0;
     uart.init();
-    writeln!(&mut uart, "Exception Handler!");
-    // Uart0::puts("Exception Handler!\nException Type: ");
-    // Uart0::put_uint(exception_type as u64);
-    // Uart0::puts("\nEC: ");
-    // Uart0::put_hex(syndrome.exception_class() as u8);
-    // Uart0::puts("\nISS: ");
-    // Uart0::put_hex_bytes(&syndrome.instruction_specific_syndrome().to_be_bytes());
-    // Uart0::puts("\nELR: ");
-    // Uart0::put_hex_bytes(&elr.to_be_bytes());
-    // Uart0::puts("\nSPSR: ");
-    // Uart0::put_hex_bytes(&spsr.to_be_bytes());
-    // Uart0::puts("\nFAR: ");
-    // Uart0::put_hex_bytes(&far.to_be_bytes());
+    writeln!(&mut uart, "Exception Handler!").unwrap_or_default();
+    writeln!(&mut uart, "Exception Type: {:?}", exception_type).unwrap_or_default();
+    writeln!(&mut uart, "{:#?}", syndrome).unwrap_or_default();
+    writeln!(&mut uart, "ELR:  {:0width$x}", elr, width=core::mem::size_of::<usize>() * 2).unwrap_or_default();
+    writeln!(&mut uart, "SPSR: {:0width$x}", spsr, width=core::mem::size_of::<usize>() * 2).unwrap_or_default();
+    writeln!(&mut uart, "FAR:  {:0width$x}", far, width=core::mem::size_of::<usize>() * 2).unwrap_or_default();
 
     // Uart0::putc(b'\n');
     // Uart0::put_memory(elr as *const u8, 16);
@@ -110,6 +105,8 @@ pub enum ExceptionClass {
     Reserved0x3f,
 }
 
+
+#[derive(Debug)]
 pub enum InstructionLength {
     Trapped16bitInstruction,
     Trapped32bitInstruction,
@@ -117,6 +114,17 @@ pub enum InstructionLength {
 
 #[repr(C)]
 pub struct ExceptionSyndrome(BitField<usize>);
+
+impl Debug for ExceptionSyndrome {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Exception Syndrome")
+            .field("Bits", &format_args!("{:#?}", self.0))
+            .field("Exception Class", &self.exception_class())
+            .field("Instruction Length", &self.instruction_length())
+            .field("Instruction Specific Syndrome", &self.instruction_specific_syndrome())
+            .finish()
+    }
+}
 
 impl ExceptionSyndrome {
     pub fn exception_class(&self) -> ExceptionClass {
@@ -129,9 +137,5 @@ impl ExceptionSyndrome {
 
     pub fn instruction_specific_syndrome(&self) -> u32 {
         self.0.field(0, 13) as u32
-    }
-
-    pub fn raw_value(&self) -> usize {
-        self.0 .0
     }
 }

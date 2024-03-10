@@ -39,7 +39,7 @@ impl Led {
     pub fn blink_pattern(&self, pattern: u8, step_duration: core::time::Duration) {
         for i in 0..8 {
             self.set((pattern << i & 0x80) != 0);
-            system::wait(step_duration);
+            system::arm_core::counter::wait(step_duration);
         }
     }
 }
@@ -49,10 +49,10 @@ pub fn status_blink_twice(interval_msec: u64) {
     let duration = core::time::Duration::from_millis(interval_msec);
     let is_on = status.get();
     status.set(!is_on);
-    system::wait(duration);
+    system::arm_core::counter::wait(duration);
     status.set(is_on);
-    system::wait(duration);
+    system::arm_core::counter::wait(duration);
     status.set(!is_on);
-    system::wait(duration);
+    system::arm_core::counter::wait(duration);
     status.set(is_on);
 }

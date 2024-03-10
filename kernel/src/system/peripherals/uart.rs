@@ -157,7 +157,7 @@ impl core::fmt::Write for Pl011Uart {
 }
 
 
-pub struct UartData(BitField<u32>);
+struct UartData(BitField<u32>);
 
 impl UartData {
     pub const fn zero() -> Self {

@@ -18,7 +18,7 @@ pub fn run() {
     let mut uart = UART_0;
 
     writeln!(&mut uart, "{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM).unwrap());
-    writeln!(&mut uart, "Current Exception Level: {}", system::current_exception_level());
+    writeln!(&mut uart, "Current Exception Level: {}", system::arm_core::current_exception_level());
     // Uart0::puts("start");
 
     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
@@ -234,7 +234,7 @@ pub fn test_usb() -> Option<()>{
         writeln!(&mut uart, "USB Power On Timeout: {} msec", timeout.as_millis()).ok()?;
         let turned_on = power_state.with_on().with_wait_set();
         power::PowerDevice::USBHCD.set_state(turned_on);
-        system::wait(timeout);
+        system::arm_core::counter::wait(timeout);
         let power_state = power::PowerDevice::USBHCD.state()?;
         writeln!(&mut uart, "USB Power On: {}", power_state.is_on()).ok()?;
     }
@@ -262,7 +262,7 @@ pub fn test_usb() -> Option<()>{
     usb::DwHciCore::set_reset(reset.with_soft_reset_set());
     let _ = poll_await(usb::DwHciCore::get_reset, |r| !r.is_soft_reset_set(), 100, Duration::from_millis(1)).expect("soft reset bit should clear");
 
-    system::wait(Duration::from_millis(100));
+    system::arm_core::counter::wait(Duration::from_millis(100));
     // reset finished
 
     let usb_config = usb::DwHciCore::usb_config()
@@ -327,6 +327,6 @@ fn poll_await<R: Copy, G: Fn() -> R, F: Fn(R) -> bool>(generate: G, predicate: F
             break Err(TimeoutError());
         }
         timeout_count -= 1;
-        system::wait(timeout_interval);
+        system::arm_core::counter::wait(timeout_interval);
     }
 }
