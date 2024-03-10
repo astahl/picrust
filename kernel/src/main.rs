@@ -36,8 +36,9 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     system::initialize();
-    tests::run();
-    tests::test_dma();
+    //tests::run();
+    //tests::test_dma();
+    tests::test_usb().expect("USB test should pass");
 
     monitor::Monitor::new(|| UART_0.get_byte().unwrap_or(b'0'), |c| UART_0.put_byte(c)).run()
 }

@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 pub struct MMIO<const BASE: usize, const OFFSET: usize>();
 impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
     const ADDRESS: usize = crate::system::peripherals::BCM_HOST.peripheral_address + BASE + OFFSET;
@@ -15,6 +17,19 @@ impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
         let new_value = (!mask & old_value) | (mask & data);
         self.write(new_value);
         old_value
+    }
+}
+
+pub struct TypedMMIO<T, const BASE: usize, const OFFSET: usize>(PhantomData<T>);
+impl<T, const BASE: usize, const OFFSET: usize> TypedMMIO<T, BASE, OFFSET> {
+    const ADDRESS: usize = crate::system::peripherals::BCM_HOST.peripheral_address + BASE + OFFSET;
+
+    pub fn write(data: T) {
+        unsafe { (Self::ADDRESS as *mut T).write_volatile(data) };
+    }
+
+    pub fn read() -> T {
+        unsafe { (Self::ADDRESS as *const T).read_volatile() }
     }
 }
 
@@ -43,6 +58,11 @@ impl<T> DynamicMmioField<T> {
 pub struct Register<const BASE: usize, const OFFSET: usize, T>(usize, core::marker::PhantomData<T>);
 impl<const BASE: usize, const OFFSET: usize, T> Register<BASE, OFFSET, T> {
     const ADDRESS: usize = BASE + OFFSET;
+
+    pub const fn no_offset() -> Self {
+        Self(0, core::marker::PhantomData{})
+    }
+
     pub const fn at(address: usize) -> Self {
         Self(address, core::marker::PhantomData{})
     }
