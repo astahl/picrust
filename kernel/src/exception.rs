@@ -12,7 +12,7 @@ pub extern "C" fn exc_handler(
     spsr: usize,
     far: usize,
 ) -> ! {
-    use core::fmt::Write;
+    use mystd::io::Write;
     let mut uart = UART_0;
     uart.init();
     writeln!(&mut uart, "Exception Handler!").unwrap_or_default();

@@ -19,7 +19,7 @@ use crate::system::peripherals::uart::UART_0;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
-    use core::fmt::Write;
+    use mystd::io::Write;
     let mut uart = uart::UART_0;
     let _ = writeln!(&mut uart, "Doki Doki! {info}");
     loop {

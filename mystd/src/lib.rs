@@ -7,6 +7,7 @@ pub mod drawing;
 pub mod fixed_point;
 pub mod format;
 pub mod io;
+pub mod mutex;
 pub mod parse;
 
 #[cfg(test)]

@@ -106,7 +106,7 @@ impl Pl011Uart {
 }
 
 impl mystd::io::Write for Pl011Uart {
-    fn write(&mut self, buf: &[u8]) -> mystd::io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> mystd::io::Result<mystd::io::Size> {
         while self.flags().is_transmit_fifo_full() {
             core::hint::spin_loop();
         }
@@ -116,7 +116,7 @@ impl mystd::io::Write for Pl011Uart {
             unsafe { reg_ptr.write_volatile(*b as u32); }
             count += 1;
         }
-        Ok(count)
+        Ok(mystd::io::Size::from_usize(count))
     }
 
     fn flush(&mut self) -> mystd::io::Result<()> {
@@ -128,7 +128,7 @@ impl mystd::io::Write for Pl011Uart {
 }
 
 impl mystd::io::Read for Pl011Uart {
-    fn read(&mut self, buf: &mut [u8]) -> mystd::io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> mystd::io::Result<mystd::io::Size> {
         while self.flags().is_receive_fifo_empty() {
             core::hint::spin_loop();
         }
@@ -146,15 +146,15 @@ impl mystd::io::Read for Pl011Uart {
             buf[count] = received.data();
             count += 1;
         }
-        Ok(count)
+        Ok(mystd::io::Size::from_usize(count))
     }
 }
 
-impl core::fmt::Write for Pl011Uart {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.write_all(s.as_bytes()).map_err(|_| core::fmt::Error)
-    }
-}
+// impl core::fmt::Write for Pl011Uart {
+//     fn write_str(&mut self, s: &str) -> core::fmt::Result {
+//         self.write_all(s.as_bytes()).map_err(|_| core::fmt::Error)
+//     }
+// }
 
 
 struct UartData(BitField<u32>);

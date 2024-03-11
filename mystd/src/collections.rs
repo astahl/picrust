@@ -1,6 +1,7 @@
 pub mod ring;
 pub mod line;
 pub mod bunch;
+pub mod sync_ring;
 
 pub trait Sliceable<T>: AsRef<[T]> + AsMut<[T]> {
     fn as_slice(&self) -> &[T] {

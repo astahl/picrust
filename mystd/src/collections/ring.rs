@@ -38,30 +38,9 @@ mod num {
             self.0 <= before
         }
 
-        pub const fn previous(self) -> (bool, Self) {
-            let mut i = self.0;
-            i = i.wrapping_sub(1);
-            i &= Self::MASK;
-            (i <= self.0, Self(i))
-        }
-
-        pub fn decrement(&mut self) -> bool {
-            let before = self.0;
-            self.0 = self.0.wrapping_sub(1);
-            self.0 &= Self::MASK;
-            self.0 >= before
-        }
-
         pub const fn add(self, value: usize) -> (bool, Self) {
             let mut i = self.0;
             i = i.wrapping_add(value & Self::MASK);
-            i &= Self::MASK;
-            (i <= self.0, Self(i))
-        }
-
-        pub const fn sub(self, value: usize) -> (bool, Self) {
-            let mut i = self.0;
-            i = i.wrapping_sub(value & Self::MASK);
             i &= Self::MASK;
             (i <= self.0, Self(i))
         }
