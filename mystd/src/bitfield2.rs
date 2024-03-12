@@ -1,5 +1,11 @@
 use core::marker::PhantomData;
 
+
+#[derive(Clone, Copy, Debug)]
+pub enum BitFieldError {
+    ValueTooLargeForField
+}
+
 pub trait BitFieldable: Copy {
     type Underlying: Copy;
     fn with_bit_cleared(self, position: usize) -> Self;
@@ -33,6 +39,15 @@ impl<const N: usize, T: BitFieldable> BitMask<N, T> {
     }
 
     #[must_use]
+    pub fn set_to(self, value: bool) -> T {
+        if value {
+            self.0.with_bit_set(Self::POSITION)
+        } else {
+            self.0.with_bit_cleared(Self::POSITION)
+        }
+    }
+
+    #[must_use]
     pub fn set(self) -> T {
         self.0.with_bit_set(Self::POSITION)
     }
@@ -45,6 +60,10 @@ impl<const N: usize, T: BitFieldable> BitMask<N, T> {
     pub fn is_set(self) -> bool {
         self.0.is_bit_set(Self::POSITION)
     }
+
+    pub fn value(self) -> bool {
+        self.is_set()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -54,6 +73,7 @@ impl<const FROM: usize, const TO: usize, T: BitFieldable> FieldMask<FROM, TO, T>
     const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
     pub const LSB: usize = Self::MIN_MAX.0;
     pub const MSB: usize = Self::MIN_MAX.1; 
+    pub const WIDTH: usize = Self::MSB - Self::LSB + 1;
     
     pub const fn new(bitfield: T) -> Self {
         Self(bitfield)
@@ -75,6 +95,7 @@ impl<const FROM: usize, const TO: usize, T: BitFieldable> FieldMask<FROM, TO, T>
         self.value().into()
     } 
 
+    /// Accepts the underlying type, but truncates the value to the size of the field.
     #[must_use]
     pub fn set_value(self, value: T::Underlying) -> T {
         self.0.with_field_value(Self::LSB, Self::MSB, value)
@@ -240,6 +261,18 @@ macro_rules! bit_field {
                 Self::new(val)
             }
         }
+
+        impl core::fmt::Debug for $type_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_struct(stringify!($type_name))
+                    .field("binary", &format_args!("{:#0width$b}", &self.0, width=(<$underlying_type>::BITS as usize)))
+                $(
+                    .field(concat!(stringify!($bit_name),"[", stringify!($bit_from) $(, ":", stringify!($bit_to))?, "]"),
+                        &self.$bit_name().value())
+                )*
+                    .finish()
+            }
+        }
     
     };
 }
@@ -261,6 +294,8 @@ bit_field!(pub X(u32) 3 => x);
 
 #[cfg(test)]
 mod tests {
+    use crate::collections::ring::RingArray;
+
     use super::*;
 
     #[test]
@@ -270,5 +305,14 @@ mod tests {
         assert!(x.a().is_set());
         assert!(!z.a().is_set());
         assert_eq!(0b1100100, x.my_field().value());
+    }
+
+    #[test]
+    fn fmt_debug_works() {
+        use core::fmt::Write;
+        let x = MyReg::new(0b1100100);
+        let mut buf: RingArray<u8, 64> = RingArray::new();
+        write!(&mut buf, "{:?}", x).expect("should work");
+        assert_eq!("MyReg { a[2]: true, b[3]: false, my_field[0:7]: 100 }", buf.to_str().unwrap());
     }
 }

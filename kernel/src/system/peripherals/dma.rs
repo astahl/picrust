@@ -1,6 +1,6 @@
 use core::{num::{NonZeroU16, NonZeroU32}, usize};
 
-use mystd::bitfield::BitField;
+use mystd::{bit_field, bitfield::BitField};
 
 use super::mmio::PeripheralRegister;
 
@@ -55,157 +55,33 @@ impl DmaStandardChannel {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct DmaControlAndStatus(BitField<u32>);
+bit_field!(pub DmaControlAndStatus(u32)
+    0 => active,
+    1 => end,
+    2 => interrupted,
+    3 => data_request,
+    4 => paused,
+    5 => paused_by_data_request_state,
+    6 => waiting_for_outstanding_writes,
+    8 => error,
+    16:19 => axi_priority_level,
+    20:23 => axi_panic_priority_level,
+    28 => wait_for_outstanding_writes,
+    29 => disable_debug_signal,
+    30 => abort,
+    31 => reset
+);
 
 impl DmaControlAndStatus{
     pub const MAX_PRIORITY_LEVEL: u32 = 0xf;
 
-    pub fn is_active(&self) -> bool {
-        self.0.bit_test(0)
-    }
-
     #[must_use]
-    pub fn with_active_set(&self) -> Self {
-        Self(self.0.with_bit_set(0))
-    }
-
-    #[must_use]
-    pub fn with_active_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(0))
-    }
-
-    pub fn is_end(&self) -> bool {
-        self.0.bit_test(1)
-    }
-
-    #[must_use]
-    pub fn with_end_cleared(&self) -> Self {
-        // END is write 1 to clear
-        Self(self.0.with_bit_set(1))
-    }
-
-    pub fn is_interrupted(&self) -> bool {
-        self.0.bit_test(2)
-    }
-
-    #[must_use]
-    pub fn with_interrupted_cleared(&self) -> Self {
+    pub fn clear_interrupt(&self) -> Self {
         // INT is write 1 to clear
-        Self(self.0.with_bit_set(2))
-    }
-
-    pub fn is_data_request(&self) -> bool {
-        self.0.bit_test(3)
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.0.bit_test(4)
-    }
-
-    pub fn is_paused_by_data_request_state(&self) -> bool {
-        self.0.bit_test(5)
-    }
-
-    pub fn is_waiting_for_outstanding_writes(&self) -> bool {
-        self.0.bit_test(6)
-    }
-
-    pub fn is_error(&self) -> bool {
-        self.0.bit_test(8)
-    }
-
-    pub fn axi_priority_level(&self) -> u32 {
-        self.0.field(16, 4)
-    }
-
-    #[must_use]
-    pub fn with_axi_priority_level(&self, level: u32) -> Result<Self, DmaError> {
-        if level > Self::MAX_PRIORITY_LEVEL {
-            Err(DmaError::InvalidPriorityLevel)
-        } else {
-            Ok(Self(self.0.with_field_set(16, 4, level)))
-        }
-    }
-
-    pub fn axi_panic_priority_level(&self) -> u32 {
-        self.0.field(20, 4)
-    }
-
-    #[must_use]
-    pub fn with_axi_panic_priority_level(&self, level: u32) -> Result<Self, DmaError> {
-        if level > Self::MAX_PRIORITY_LEVEL {
-            Err(DmaError::InvalidPriorityLevel)
-        } else {
-            Ok(Self(self.0.with_field_set(20, 4, level)))
-        }
-    }
-
-    pub fn will_wait_for_outstanding_writes(&self) -> bool {
-        self.0.bit_test(28)
-    }
-
-    #[must_use]
-    pub fn with_wait_for_outstanding_writes_set(&self) -> Self {
-        Self(self.0.with_bit_set(28))
-    }
-
-    #[must_use]
-    pub fn with_wait_for_outstanding_writes_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(28))
-    }
-
-    #[must_use]
-    pub fn with_debug_pause_signal_disabled(&self) -> Self {
-        Self(self.0.with_bit_set(29))
-    }
-
-    #[must_use]
-    pub fn with_debug_pause_signal_enabled(&self) -> Self {
-        Self(self.0.with_bit_cleared(29))
-    }
-
-    pub fn is_debug_pause_signal_disabled(&self) -> bool {
-        self.0.bit_test(29)
-    }
-
-    #[must_use]
-    pub fn with_abort_set(&self) -> Self {
-        Self(self.0.with_bit_set(30))
-    }
-
-    pub fn is_aborting(&self) -> bool {
-        self.0.bit_test(30)
-    }
-
-    #[must_use]
-    pub fn with_reset_set(&mut self) -> Self {
-        Self(self.0.with_bit_set(31))
-    }
-
-    pub fn is_resetting(&self) -> bool {
-        self.0.bit_test(31)
+        self.interrupted().set()
     }
 }
 
-impl core::fmt::Debug for DmaControlAndStatus {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("DmaControlAndStatus")
-            .field("ACTIVE", &self.is_active())
-            .field("END", &self.is_end())
-            .field("INT", &self.is_interrupted())
-            .field("PAUSED", &self.is_paused())
-            .field("DREQ_STOPS_DMA", &self.is_paused_by_data_request_state())
-            .field("WAITING_FOR_OUTSTANDING_WRITE", &self.is_waiting_for_outstanding_writes())
-            .field("ERROR", &self.is_error())
-            .field("PRIORITY", &self.axi_priority_level())
-            .field("PANIC_PRIORITY", &self.axi_panic_priority_level())
-            .field("DISDEBUG", &self.is_debug_pause_signal_disabled())
-            .field("ABORT", &self.is_aborting())
-            .field("RESET", &self.is_resetting())
-            .finish()
-    }
-}
 
 
 #[repr(C, align(32))]
@@ -217,6 +93,27 @@ pub struct DmaControlBlock {
     stride: Dma2dStride,
     next_control_block_address: u32,
     reserved: [u32;2]
+}
+
+impl core::fmt::Debug for DmaControlBlock {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let is_2d = self.transfer_information._2d_mode().is_set();
+
+        let mut out = f.debug_struct("DmaControlBlock");
+        let part_a = out
+            .field("transfer_information", &self.transfer_information)
+            .field("source_address", &format_args!("{:#x}", self.source_address))
+            .field("destination_address", &format_args!("{:#x}", self.destination_address));
+        let part_b = if is_2d {
+            part_a.field("transfer_length (2d)", unsafe { &self.transfer_length.two_d })
+        } else {
+            part_a.field("transfer_length (linear)",unsafe{ &self.transfer_length.linear})
+        };
+
+        part_b.field("stride", &self.stride)
+            .field("next_control_block_address", &format_args!("{:#x}", self.next_control_block_address))
+            .field("reserved", &self.reserved).finish()
+    }
 }
 
 impl DmaControlBlock {
@@ -239,145 +136,50 @@ impl DmaControlBlock {
 
 
 pub enum DmaTransferWidth {
-    Bit32,
-    Bit128
+    Bit32 = 0,
+    Bit128 = 1
 }
 
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct DmaTransferInformation(BitField<u32>);
+bit_field!(pub DmaTransferInformation(u32)
+    26 => disable_wide_bursts,
+    21:25 => wait_cycles,
+    16:20 => peripheral_mapping,
+    12:15 => burst_transfer_length,
+    11 => src_ignore_reads,
+    10 => src_use_data_request,
+    9 => src_transfer_width: DmaTransferWidth,
+    8 => src_address_increment,
+    7 => dest_ignore_writes,
+    6 => dest_use_data_request,
+    5 => dest_transfer_width: DmaTransferWidth,
+    4 => dest_address_increment,
+    3 => wait_for_write_response,
+    1 => _2d_mode,
+    0 => completion_interrupt
+);
 
 impl DmaTransferInformation {
     pub fn wide_copy() -> Self {
-        *Self::new().dest_address_increment(true)
-            .dest_transfer_width(DmaTransferWidth::Bit128)
-            .src_address_increment(true)
-            .src_transfer_width(DmaTransferWidth::Bit128)
-            .burst_transfer_length(2)
+        Self::zero()
+            .dest_address_increment().set()
+            .dest_transfer_width().set_to(DmaTransferWidth::Bit128 as usize == 1)
+            .src_address_increment().set()
+            .src_transfer_width().set_to(DmaTransferWidth::Bit128 as usize == 1)
+            .burst_transfer_length().set_value(2)
     }
 
     pub fn narrow_copy() -> Self {
-        *Self::new().dest_address_increment(true)
-            .dest_transfer_width(DmaTransferWidth::Bit32)
-            .src_address_increment(true)
-            .src_transfer_width(DmaTransferWidth::Bit32)
-            .burst_transfer_length(8)
+        Self::zero()
+            .dest_address_increment().set()
+            .dest_transfer_width().set_to(DmaTransferWidth::Bit32 as usize == 1)
+            .src_address_increment().set()
+            .src_transfer_width().set_to(DmaTransferWidth::Bit32 as usize == 1)
+            .burst_transfer_length().set_value(8)
     }
 
-    pub const fn new() -> Self {
-        Self(BitField(0))
-    }
-
-    pub fn value(&self) -> u32 {
-        self.0.0
-    }
-
-    pub fn disable_wide_bursts(&mut self) -> &mut Self {
-        self.0.bit_set(26);
-        self
-    }
-
-    pub fn add_wait_cycles(&mut self, cycles: u32) -> &mut Self {
-        debug_assert!(cycles < 32);
-        self.0.field_set(21, 5, cycles);
-        self
-    }
-
-    pub fn peripheral_mapping(&mut self, peripheral_num: u32) -> &mut Self {
-        debug_assert!(peripheral_num < 32);
-        self.0.field_set(16, 5, peripheral_num);
-        self
-    }
-
-    pub fn burst_transfer_length(&mut self, word_count: u32) -> &mut Self {
-        debug_assert!(word_count < 32);
-        self.0.field_set(12, 4, word_count);
-        self
-    }
-
-    pub fn src_ignore_reads(&mut self) -> &mut Self {
-        self.0.bit_set(11);
-        self
-    }
-
-    pub fn src_use_dreq(&mut self) -> &mut Self {
-        self.0.bit_set(10);
-        self
-    }
-
-    pub fn src_transfer_width(&mut self, width: DmaTransferWidth) -> &mut Self {
-        match width {
-            DmaTransferWidth::Bit32 => self.0.bit_clear(9),
-            DmaTransferWidth::Bit128 => self.0.bit_set(9),
-        }
-        self
-    }
-
-    pub fn src_address_increment(&mut self, enable: bool) -> &mut Self {
-        if enable { 
-            self.0.bit_set(8);
-        } else {
-            self.0.bit_clear(8);
-        }
-        self
-    }
-
-    pub fn dest_ignore_writes(&mut self) -> &mut Self {
-        self.0.bit_set(7);
-        self
-    }
-
-    pub fn dest_use_dreq(&mut self) -> &mut Self {
-        self.0.bit_set(6);
-        self
-    }
-
-    pub fn dest_transfer_width(&mut self, width: DmaTransferWidth) -> &mut Self {
-        match width {
-            DmaTransferWidth::Bit32 => self.0.bit_clear(5),
-            DmaTransferWidth::Bit128 => self.0.bit_set(5),
-        }
-        self
-    }
-
-    pub fn dest_address_increment(&mut self, enable: bool) -> &mut Self {
-        if enable { 
-            self.0.bit_set(4);
-        } else {
-            self.0.bit_clear(4);
-        }
-        self
-    }
-
-    pub fn wait_for_write_response(&mut self, enable: bool) -> &mut Self {
-        if enable { 
-            self.0.bit_set(3);
-        } else {
-            self.0.bit_clear(3);
-        }
-        self
-    }
-
-    pub fn set_2d_mode(&mut self, enable: bool) -> &mut Self {
-        if enable { 
-            self.0.bit_set(1);
-        } else {
-            self.0.bit_clear(1);
-        }
-        self
-    }
-
-    pub fn set_completion_interrupt(&mut self, enable: bool) -> &mut Self {
-        if enable { 
-            self.0.bit_set(0);
-        } else {
-            self.0.bit_clear(0);
-        }
-        self
-    }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Dma2dStride{
     pub source: i16,
     pub destination: i16
@@ -397,10 +199,11 @@ impl Dma2dStride {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct DmaTransferLength2d {
     x_byte_len: NonZeroU16, y_count: u16
 }
+
 
 pub union DmaTransferLength {
     linear: NonZeroU32,
@@ -431,69 +234,14 @@ impl DmaTransferLength {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct DmaDebug (BitField<u32>);
 
-impl DmaDebug {
-    pub fn is_dma_lite(&self) -> bool {
-        self.0.bit_test(28)
-    }
-
-    pub fn version(&self) -> u32 {
-        self.0.field(25, 3) 
-    }
-
-    pub fn dma_state(&self) -> u32 {
-        self.0.field(16, 9)
-    }
-
-    pub fn dma_id(&self) -> u32 {
-        self.0.field(8, 8)
-    }
-
-    pub fn outstanding_writes_counter(&self) -> u32 {
-        self.0.field(4, 4)
-    }
-
-    pub fn is_read_error(&self) -> bool {
-        self.0.bit_test(2)
-    }
-
-    #[must_use]
-    pub fn with_read_error_clear(&self) -> Self {
-        Self(self.0.with_bit_set(2))
-    }
-
-    pub fn is_fifo_error(&self) -> bool {
-        self.0.bit_test(1)
-    }
-
-    #[must_use]
-    pub fn with_fifo_error_clear(&self) -> Self {
-        Self(self.0.with_bit_set(1))
-    }
-
-    pub fn is_read_last_not_set_error(&self) -> bool {
-        self.0.bit_test(0)
-    }
-
-    #[must_use]
-    pub fn with_read_last_not_set_error_clear(&self) -> Self {
-        Self(self.0.with_bit_set(0))
-    }
-}
-
-impl core::fmt::Debug for DmaDebug {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("DmaDebug")
-            .field("LITE", &self.is_dma_lite())
-            .field("VERSION", &self.version())
-            .field("DMA_STATE", &self.dma_state())
-            .field("DMA_ID", &self.dma_id())
-            .field("OUTSTANDING_WRITES", &self.outstanding_writes_counter())
-            .field("READ_ERROR", &self.is_read_error())
-            .field("FIFO_ERROR", &self.is_fifo_error())
-            .field("READ_LAST_NOT_SET_ERROR", &self.is_read_last_not_set_error())
-            .finish()
-    }
-}
+bit_field!(pub DmaDebug(u32)
+    28 => dma_lite,
+    25:27 => version,
+    16:24 => dma_state,
+    8:15 => dma_id,
+    4:8 => outstanding_writes_counter,
+    2 => read_error,
+    1 => fifo_error,
+    0 => read_last_not_set_error
+);

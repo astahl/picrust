@@ -2,7 +2,6 @@ use crate::system::hal::clocks;
 use crate::system::peripherals;
 use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
-use crate::system::peripherals::dma::DmaTransferInformation;
 use crate::system::peripherals::dma::DMA_0;
 use crate::system::peripherals::uart::UART_0;
 use crate::system::peripherals::usb::DwHciCoreAhbCfg;
@@ -164,7 +163,7 @@ pub fn test_dma() {
     use core::fmt::Write;
     let mut uart = UART_0;
     use super::peripherals::dma;
-    let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
+    let mut str_buffer = collections::ring::RingArray::<u8, 0x2000>::new();
     // let mut status = dma::Dma0::control_status();
     // status.set_reset();
     // writeln!(str_buffer, "{:?}", dma::Dma0::control_status()).unwrap();
@@ -188,8 +187,9 @@ pub fn test_dma() {
     unsafe {
         let length = 8*1024*1024;
         core::slice::from_raw_parts_mut(src, length).fill(0x55);
-        let transfer_information = DmaTransferInformation::wide_copy();
+        let transfer_information = dma::DmaTransferInformation::wide_copy();
         let cb = DmaControlBlock::linear_copy(transfer_information, src as u32, dest as u32, length as u32, 0);
+        writeln!(str_buffer, "cb = {:#?}", &cb).unwrap();
         control_block_ptr.write_volatile(cb);
         
         DMA_0.set_control_block_address(control_block_ptr as u32);
@@ -198,17 +198,17 @@ pub fn test_dma() {
         writeln!(str_buffer, "Dest = {:x}", dest.read()).unwrap();
         writeln!(str_buffer, "cb: {:x}", DMA_0.control_block_address()).unwrap();
         let status = DMA_0.control_and_status()
-            .with_active_set()
-            .with_axi_priority_level(DmaControlAndStatus::MAX_PRIORITY_LEVEL).unwrap()
-            .with_axi_panic_priority_level(DmaControlAndStatus::MAX_PRIORITY_LEVEL).unwrap()
-            .with_wait_for_outstanding_writes_set();
+            .active().set()
+            .axi_priority_level().set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
+            .axi_panic_priority_level().set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
+            .wait_for_outstanding_writes().set();
         DMA_0.set_control_and_status(status);
-        while !DMA_0.control_and_status().is_end() {
+        while !DMA_0.control_and_status().end().is_set() {
             writeln!(str_buffer, "wait").unwrap();
         }
         writeln!(str_buffer, "cb: {:x}", DMA_0.control_block_address()).unwrap();
         writeln!(str_buffer, "Dest = {:x}", dest.read()).unwrap();
-        writeln!(str_buffer, "Ended? {:?}", DMA_0.control_and_status().is_end()).unwrap();
+        writeln!(str_buffer, "Ended? {:?}", DMA_0.control_and_status().end().is_set()).unwrap();
 
         writeln!(str_buffer, "dbg: {:#?}", DMA_0.debug()).unwrap();
     }
