@@ -1,32 +1,105 @@
+use core::marker::PhantomData;
+
+pub trait BitFieldable: Copy {
+    type Underlying: Copy;
+    fn with_bit_cleared(self, position: usize) -> Self;
+
+    fn with_bit_set(self, position: usize) -> Self;
+
+    fn is_bit_set(self, position: usize) -> bool;
+
+    fn field_value(self, lsb: usize, msb: usize) -> Self::Underlying;
+
+    fn with_field_value(self, lsb: usize, msb: usize, value: Self::Underlying) -> Self;
+
+    fn with_field_all_cleared(self, lsb: usize, msb: usize) -> Self;
+
+    fn with_field_all_set(self, lsb: usize, msb: usize) -> Self;
+}
+
 
 #[derive(Clone, Copy)]
-pub struct BitMask<const N: usize, T: ?Sized + Copy>(T);
+pub struct BitMask<const N: usize, T: BitFieldable>(T);
 
-impl<const N: usize, T: ?Sized + Copy> BitMask<N, T> {
+impl<const N: usize, T: BitFieldable> BitMask<N, T> {
     pub const POSITION: usize = N;
+    
+    pub const fn new(bitfield: T) -> Self {
+        Self(bitfield)
+    }
 
     pub const fn position(self) -> usize {
         Self::POSITION
     }
+
+    #[must_use]
+    pub fn set(self) -> T {
+        self.0.with_bit_set(Self::POSITION)
+    }
+
+    #[must_use]
+    pub fn clear(self) -> T {
+        self.0.with_bit_cleared(Self::POSITION)
+    }
+
+    pub fn is_set(self) -> bool {
+        self.0.is_bit_set(Self::POSITION)
+    }
 }
 
 #[derive(Clone, Copy)]
-        pub struct FieldMask<const FROM: usize, const TO: usize, T: ?Sized + Copy>(T);
+pub struct FieldMask<const FROM: usize, const TO: usize, T: BitFieldable>(T);
 
-        impl<const FROM: usize, const TO: usize, T: ?Sized + Copy> FieldMask<FROM, TO, T> {
-            const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
-            pub const LSB: usize = Self::MIN_MAX.0;
-            pub const MSB: usize = Self::MIN_MAX.1; 
+impl<const FROM: usize, const TO: usize, T: BitFieldable> FieldMask<FROM, TO, T> {
+    const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
+    pub const LSB: usize = Self::MIN_MAX.0;
+    pub const MSB: usize = Self::MIN_MAX.1; 
+    
+    pub const fn new(bitfield: T) -> Self {
+        Self(bitfield)
+    }
 
-            pub const fn msb(self) -> usize {
-                Self::MSB
-            }
+    pub const fn msb(self) -> usize {
+        Self::MSB
+    }
 
-            pub const fn lsb(self) -> usize {
-                Self::LSB
-            }
-        }
+    pub const fn lsb(self) -> usize {
+        Self::LSB
+    }
 
+    pub fn value(self) -> T::Underlying {
+        self.0.field_value(Self::LSB, Self::MSB)
+    }
+
+    pub fn into<U>(self) -> U where U: From<T::Underlying> {
+        self.value().into()
+    } 
+
+    #[must_use]
+    pub fn set_value(self, value: T::Underlying) -> T {
+        self.0.with_field_value(Self::LSB, Self::MSB, value)
+    }
+
+    #[must_use]
+    pub fn all_clear(self) -> T {
+        self.0.with_field_all_cleared(Self::LSB, Self::MSB)
+    }
+
+    #[must_use]
+    pub fn all_set(self) -> T {
+        self.0.with_field_all_set(Self::LSB, Self::MSB)
+    }
+}
+
+
+#[derive(Clone, Copy)]
+pub struct TypedFieldMask<const FROM: usize, const TO: usize, T: BitFieldable, U>(
+    FieldMask<FROM, TO, T>,
+    PhantomData<U>
+);
+
+
+#[macro_export]
 macro_rules! ensure_bit_fits {
     ($type:tt $bit:literal) => {
         #[deny(arithmetic_overflow)]
@@ -34,23 +107,24 @@ macro_rules! ensure_bit_fits {
     }
 }
 
+#[macro_export]
 macro_rules! bit_field_method {
     ($(#[$meta:meta])* $type_name:ident $underlying_type:ty, $field_name:ident $field_from:literal $field_to:literal) => {
         
         $(#[$meta])*
-        pub const fn $field_name(self) -> FieldMask<$field_from, $field_to, $type_name> {
-            ensure_bit_fits!($underlying_type $field_from);
-            ensure_bit_fits!($underlying_type $field_to);
-            FieldMask(self)
+        pub const fn $field_name(self) -> $crate::bitfield2::FieldMask<$field_from, $field_to, $type_name> {
+            $crate::ensure_bit_fits!($underlying_type $field_from);
+            $crate::ensure_bit_fits!($underlying_type $field_to);
+            $crate::bitfield2::FieldMask::new(self)
         }
     
     };
     ($(#[$meta:meta])* $type_name:ident $underlying_type:ty, $bit_name:ident $bit_position:literal) => {
 
         $(#[$meta])*
-        pub const fn $bit_name(self) -> BitMask<$bit_position, $type_name> {
-            ensure_bit_fits!($underlying_type $bit_position);
-            BitMask(self)
+        pub const fn $bit_name(self) -> $crate::bitfield2::BitMask<$bit_position, $type_name> {
+            $crate::ensure_bit_fits!($underlying_type $bit_position);
+            $crate::bitfield2::BitMask::new(self)
         }
 
     };
@@ -58,14 +132,17 @@ macro_rules! bit_field_method {
 
 #[macro_export]
 macro_rules! bit_field {
-    ($v:vis $type_name:ident ($underlying_type:ty) $($(#[$bit_meta:meta])* $bit_from:literal $(:$bit_to:literal)? => $bit_name:ident),*) => {
+    ($v:vis $type_name:ident ($underlying_type:ty) 
+        $(
+            $(#[$bit_meta:meta])* 
+            $bit_from:literal $(:$bit_to:literal)? => $bit_name:ident$(:$field_type:ty)?
+        ),*
+    ) => {
         #[repr(transparent)]
         #[derive(Copy, Clone)]
         $v struct $type_name($underlying_type);
 
         impl $type_name {
-            pub const ZERO: Self = Self::zero();
-
             pub const fn zero() -> Self {
                 $(
                     assert!($bit_from < <$underlying_type>::BITS);
@@ -75,6 +152,10 @@ macro_rules! bit_field {
 
             pub const fn new(value: $underlying_type) -> Self {
                 Self(value)
+            }
+
+            pub const fn is_all_clear(self) -> bool {
+                self.0 == 0
             }
 
             const fn _bit_mask(position: usize) -> $underlying_type {
@@ -117,46 +198,46 @@ macro_rules! bit_field {
             }
 
             $(
-                bit_field_method!($(#[$bit_meta])* $type_name $underlying_type, $bit_name $bit_from $($bit_to)?);
+                $crate::bit_field_method!($(#[$bit_meta])* $type_name $underlying_type, $bit_name $bit_from $($bit_to)?);
             )*
 
         }
 
-        impl<const N: usize> BitMask<N, $type_name> {
-            #[must_use]
-            pub const fn set(self) -> $type_name {
-                self.0.with_bit_set(Self::POSITION)
+        impl $crate::bitfield2::BitFieldable for $type_name {
+            type Underlying = $underlying_type;
+
+            fn with_bit_cleared(self, position: usize) -> Self {
+                self.with_bit_cleared(position)
             }
 
-            #[must_use]
-            pub const fn clear(self) -> $type_name {
-                self.0.with_bit_cleared(Self::POSITION)
+            fn with_bit_set(self, position: usize) -> Self {
+                self.with_bit_set(position)
             }
 
-            pub const fn is_set(self) -> bool {
-                self.0.is_bit_set(Self::POSITION)
+            fn is_bit_set(self, position: usize) -> bool {
+                self.is_bit_set(position)
+            }
+
+            fn field_value(self, lsb: usize, msb: usize) -> $underlying_type {
+                self.field_value(lsb, msb)
+            }
+
+            fn with_field_value(self, lsb: usize, msb: usize, value: $underlying_type) -> Self {
+                self.with_field_value(lsb, msb, value)
+            }
+
+            fn with_field_all_cleared(self, lsb: usize, msb: usize) -> Self {
+                self.with_field_all_cleared(lsb, msb)
+            }
+
+            fn with_field_all_set(self, lsb: usize, msb: usize) -> Self {
+                self.with_field_all_set(lsb, msb)
             }
         }
 
-        impl<const FROM: usize, const TO: usize> FieldMask<FROM, TO, $type_name> {
-
-            pub const fn value(self) -> $underlying_type {
-                self.0.field_value(Self::LSB, Self::MSB)
-            }
-
-            #[must_use]
-            pub const fn set_value(self, value: $underlying_type) -> $type_name {
-                self.0.with_field_value(Self::LSB, Self::MSB, value)
-            }
-
-            #[must_use]
-            pub const fn all_clear(self) -> $type_name {
-                self.0.with_field_all_cleared(Self::LSB, Self::MSB)
-            }
-
-            #[must_use]
-            pub const fn all_set(self) -> $type_name {
-                self.0.with_field_all_set(Self::LSB, Self::MSB)
+        impl From<$underlying_type> for $type_name {
+            fn from(val: $underlying_type) -> Self {
+                Self::new(val)
             }
         }
     

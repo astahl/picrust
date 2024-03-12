@@ -1,3 +1,4 @@
+use mystd::bit_field;
 use mystd::bitfield::BitField;
 use mystd::fixed_point::FixedPoint;
 use mystd::io::Write;
@@ -52,7 +53,7 @@ impl Pl011Uart {
         // disable UART
         UartControlReg::at(self.0).write(UartControl::disabled());
 
-        while UartFlagReg::at(self.0).read().is_busy() {
+        while UartFlagReg::at(self.0).read().busy().is_set() {
             core::hint::spin_loop();
         }
 
@@ -81,19 +82,19 @@ impl Pl011Uart {
     }
 
     pub fn put_byte(&self, data: u8) {
-        while self.flags().is_transmit_fifo_full() {
+        while self.flags().txff().is_set() {
             core::hint::spin_loop();
         }
-        UartDataReg::at(self.0).write(UartData::send(data));
+        UartDataReg::at(self.0).write(UartData::new(data as u32));
     }
 
     pub fn get_byte(&self) -> Result<u8, UartStatus> {
-        while self.flags().is_receive_fifo_empty() {
+        while self.flags().rxfe().is_set() {
             core::hint::spin_loop();
         }
         let read = UartDataReg::at(self.0).read();
-        let (status, data) = read.recv_split();
-        if status.is_clear() {
+        let (status, data): (UartStatus, u8) = (read.status().into(), read.data().value() as u8);
+        if status.is_all_clear() {
             Ok(data)
         } else {
             Err(status)
@@ -107,7 +108,7 @@ impl Pl011Uart {
 
 impl mystd::io::Write for Pl011Uart {
     fn write(&mut self, buf: &[u8]) -> mystd::io::Result<mystd::io::Size> {
-        while self.flags().is_transmit_fifo_full() {
+        while self.flags().txff().is_set() {
             core::hint::spin_loop();
         }
         let reg_ptr = UartDataReg::at(self.0).as_mut_ptr().cast::<u32>();
@@ -120,7 +121,7 @@ impl mystd::io::Write for Pl011Uart {
     }
 
     fn flush(&mut self) -> mystd::io::Result<()> {
-        while !self.flags().is_transmit_fifo_empty() {
+        while !self.flags().txfe().is_set() {
             core::hint::spin_loop();
         }
         Ok(())
@@ -129,21 +130,21 @@ impl mystd::io::Write for Pl011Uart {
 
 impl mystd::io::Read for Pl011Uart {
     fn read(&mut self, buf: &mut [u8]) -> mystd::io::Result<mystd::io::Size> {
-        while self.flags().is_receive_fifo_empty() {
+        while self.flags().rxfe().is_set() {
             core::hint::spin_loop();
         }
 
         let reg_ptr = UartDataReg::at(self.0).as_ptr();
         let mut count = 0;
-        while count < buf.len() && !self.flags().is_receive_fifo_empty() {
+        while count < buf.len() && !self.flags().rxfe().is_set() {
             let received = unsafe { reg_ptr.read_volatile() };
-            if received.is_break_error() {
+            if received.break_error().is_set() {
                 return Err(mystd::io::Error::Interrupted)
             }
-            if received.is_parity_error() || received.is_framing_error() {
+            if received.parity_error().is_set() || received.framing_error().is_set() {
                 return Err(mystd::io::Error::InvalidData)
             }
-            buf[count] = received.data();
+            buf[count] = received.data().value() as u8;
             count += 1;
         }
         Ok(mystd::io::Size::from_usize(count))
@@ -157,142 +158,73 @@ impl mystd::io::Read for Pl011Uart {
 // }
 
 
-struct UartData(BitField<u32>);
-
-impl UartData {
-    pub const fn zero() -> Self {
-        Self(BitField::zero())
-    }
-
-    pub const fn send(value: u8) -> Self {
-        Self(BitField::new(value as u32))
-    }
-
+bit_field!(pub UartData(u32)
     /// Overrun error. This bit is set to 1 if data is received and the receive FIFO is already full.
     /// 
     /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it. 
-    pub fn is_overrun_error(&self) -> bool {
-        self.0.bit_test(11)
-    }
-
+    11 => overrun_error,
     /// Break error. This bit is set to 1 if a break condition was detected, indicating that the received data input was held LOW for longer than a full-word transmission time (defined as start, data, parity and stop bits).
     /// 
     /// In FIFO mode, this error is associated with the character at the top of the FIFO. When a break occurs, only one 0 character is loaded into the FIFO. The next character is only enabled after the receive data input goes to a 1 (marking state), and the next valid start bit is received.
-    pub fn is_break_error(&self) -> bool {
-        self.0.bit_test(10)
-    }
-
+    10 => break_error,
     /// Parity error. When set to 1, it indicates that the parity of the received data character does not match the parity that the EPS and SPS bits in the Line Control Register, UART_LCRH select.
     /// 
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
-    pub fn is_parity_error(&self) -> bool {
-        self.0.bit_test(9)
-    }
-
+    9 => parity_error,
     /// Framing error. When set to 1, it indicates that the received character did not have a valid stop bit (a valid stop bit is 1). 
     /// 
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
-    pub fn is_framing_error(&self) -> bool {
-        self.0.bit_test(8)
-    }
+    8 => framing_error,
+    8:11 => status,
+    0:7 => data: u8
+);
 
-    pub fn status(&self) -> UartStatus {
-        UartStatus(BitField(self.0.field(8, 4)))
-    }
+bit_field!(pub UartStatus(u32)
+    /// Overrun error. This bit is set to 1 if data is received and the receive FIFO is already full.
+    /// 
+    /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it. 
+    3 => overrun_error,
+    /// Break error. This bit is set to 1 if a break condition was detected, indicating that the received data input was held LOW for longer than a full-word transmission time (defined as start, data, parity and stop bits).
+    /// 
+    /// In FIFO mode, this error is associated with the character at the top of the FIFO. When a break occurs, only one 0 character is loaded into the FIFO. The next character is only enabled after the receive data input goes to a 1 (marking state), and the next valid start bit is received.
+    2 => break_error,
+    /// Parity error. When set to 1, it indicates that the parity of the received data character does not match the parity that the EPS and SPS bits in the Line Control Register, UART_LCRH select.
+    /// 
+    /// In FIFO mode, this error is associated with the character at the top of the FIFO.
+    1 => parity_error,
+    /// Framing error. When set to 1, it indicates that the received character did not have a valid stop bit (a valid stop bit is 1). 
+    /// 
+    /// In FIFO mode, this error is associated with the character at the top of the FIFO.
+    0 => framing_error
+);
 
-    pub fn recv_split(&self) -> (UartStatus, u8) {
-        (self.status(), self.data())
-    }
-
-    pub fn data(&self) -> u8 {
-        self.0.0 as u8
-    }
-
-    #[must_use]
-    pub fn with_data(&self, data: u8) -> Self {
-        Self(self.0.with_field_set(0, 8, data as u32))
-    }
-}
-
-pub struct UartStatus(BitField<u32>);
-impl UartStatus {
-    const OE: usize = 3;
-    const BE: usize = 2;
-    const PE: usize = 1;
-    const FE: usize = 0;
-
-    pub fn is_overrun_error(&self) -> bool {
-        self.0.bit_test(Self::OE)
-    }
-
-    pub fn is_break_error(&self) -> bool {
-        self.0.bit_test(Self::BE)
-    }
-
-    pub fn is_parity_error(&self) -> bool {
-        self.0.bit_test(Self::PE)
-    }
-
-    pub fn is_framing_error(&self) -> bool {
-        self.0.bit_test(Self::FE)
-    }
-
-    pub fn is_clear(&self) -> bool {
-        self.0.0 == 0
-    }
-}
-
-pub struct UartFlags(BitField<u32>);
-impl UartFlags {
-    const RI_UNSUPPORTED: usize = 8;
-    const TXFE: usize = 7;
-    const RXFF: usize = 6;
-    const TXFF: usize = 5;
-    const RXFE: usize = 4;
-    const BUSY: usize = 3;
-    const DCD_UNSUPPORTED: usize = 2;
-    const DSR_UNSUPPORTED: usize = 1;
-    const CTS: usize = 0;
-
+bit_field!(pub UartFlags(u32)
+    8 => _ri_unsupported,
     /// Transmit FIFO empty. The meaning of this bit depends on the state of the FEN bit in the Line Control Register, UART_LCRH.
     /// If the FIFO is disabled, this bit is set when the transmit holding register is empty.
     /// If the FIFO is enabled, the TXFE bit is set when the transmit FIFO is empty. This bit does not indicate if there is data in the transmit shift register.
-    pub fn is_transmit_fifo_empty(&self) -> bool {
-        self.0.bit_test(Self::TXFE)
-    }
-
+    7 => txfe,
     /// Receive FIFO full. The meaning of this bit depends on the state of the FEN bit in the UART_LCRH Register.
     /// If the FIFO is disabled, this bit is set when the receive holding register is full.
     /// If the FIFO is enabled, the RXFF bit is set when the receive FIFO is full.
-    pub fn is_receive_fifo_full(&self) -> bool {
-        self.0.bit_test(Self::RXFF)
-    }
-
+    6 => rxff,
     /// Transmit FIFO full. The meaning of this bit depends on the state of the FEN bit in the UART_LCRH Register.
     /// If the FIFO is disabled, this bit is set when the transmit holding register is full.
     /// If the FIFO is enabled, the TXFF bit is set when the transmit FIFO is full.
-    pub fn is_transmit_fifo_full(&self) -> bool {
-        self.0.bit_test(Self::TXFF)
-    }
-
+    5 => txff,
     /// Receive FIFO empty. The meaning of this bit depends on the state of the FEN bit in the UART_LCRH Register.
     /// If the FIFO is disabled, this bit is set when the receive holding register is empty.
     /// If the FIFO is enabled, the RXFE bit is set when the receive FIFO is empty.
-    pub fn is_receive_fifo_empty(&self) -> bool {
-        self.0.bit_test(Self::RXFE)
-    }
-
+    4 => rxfe,
     /// UART busy. If this bit is set to 1, the UART is busy transmitting data. This bit remains set until the complete byte, including all the stop bits, has been sent from the shift register.
     /// This bit is set as soon as the transmit FIFO becomes non- empty, regardless of whether the UART is enabled or not.
-    pub fn is_busy(&self) -> bool {
-        self.0.bit_test(Self::BUSY)
-    }
-
+    3 => busy,
+    2 => _dcd_unsupported,
+    1 => _dsr_unsupported,
     /// Clear to send. This bit is the complement of the UART clear to send, nUARTCTS, modem status input. That is, the bit is 1 when nUARTCTS is LOW.
-    pub fn is_clear_to_send(&self) -> bool {
-        self.0.bit_test(Self::CTS)
-    }
-}
+    0 => cts
+);
+
 
 #[repr(u32)]
 pub enum UartWordLength {
