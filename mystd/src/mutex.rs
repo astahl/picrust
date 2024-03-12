@@ -141,6 +141,38 @@ impl<T> ReadWriteMutex<T> {
             Err(_) => None,
         }
     }
+    
+    /// Blocks in a busy wait until the read lock can be acquired.
+    /// ### Safety
+    /// Unsafe to call while holding the write lock, leading to a deadlock,
+    /// because it doesn't protect against reentrancy.
+    /// To fail in a controlled manner use `try_lock(&self)`
+    pub unsafe fn lock_read(&self) -> ReadMutexGuard<T> {
+        loop {
+            match self.try_lock_read() {
+                Some(guard) => break guard,
+                None => {
+                    core::hint::spin_loop()
+                },
+            }
+        } 
+    }
+
+    /// Blocks in a busy wait until the write lock can be acquired.
+    /// ### Safety
+    /// Unsafe to call while holding the write lock, leading to a deadlock,
+    /// because it doesn't protect against reentrancy.
+    /// To fail in a controlled manner use `try_lock(&self)`
+    pub unsafe fn lock_write(&self) -> WriteMutexGuard<T> {
+        loop {
+            match self.try_lock_write() {
+                Some(guard) => break guard,
+                None => {
+                    core::hint::spin_loop()
+                },
+            }
+        } 
+    }
 
     fn unlock_read_internal(&self) {
         self.counter.fetch_update(atomic::Ordering::SeqCst, atomic::Ordering::SeqCst, |count| {
@@ -247,17 +279,23 @@ mod tests {
 
     #[test]
     fn rw_mutex_works() {
-        let mut mutex: ReadWriteMutex<u32> = 69.into();
+        let mutex: ReadWriteMutex<u32> = 69.into();
+        assert!(!mutex.is_locked_read());
+        assert!(!mutex.is_locked_write());
         {
             let _hold_read1 = mutex.try_lock_read().expect("Should allow first read lock");
             let _hold_read2 = mutex.try_lock_read().expect("Should allow a second read lock");
             assert!(mutex.try_lock_write().is_none(), "Should block write lock while read locks are held");
             assert_eq!(2, mutex.reader_count());
         }
+        assert!(!mutex.is_locked_read());
+        assert!(!mutex.is_locked_write());
         {
             let _hold_write = mutex.try_lock_write().expect("Should be write lockable");
             assert!(mutex.try_lock_write().is_none(), "Should block write lock while write lock is held");
             assert!(mutex.try_lock_read().is_none(), "Should block read lock while write lock is held");
         }
+        assert!(!mutex.is_locked_read());
+        assert!(!mutex.is_locked_write());
     }
 }
