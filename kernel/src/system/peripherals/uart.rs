@@ -1,7 +1,5 @@
 use mystd::bit_field;
-use mystd::bitfield::BitField;
 use mystd::fixed_point::FixedPoint;
-use mystd::io::Write;
 
 use crate::peripherals::gpio;
 use crate::system::hal::clocks::Clock;
@@ -58,7 +56,7 @@ impl Pl011Uart {
         }
 
         // flush transmit fifo
-        UartLineControlReg::at(self.0).update(UartLineControl::with_fifo_disabled);
+        UartLineControlReg::at(self.0).update(|u| u.fifo_enabled().clear());
 
         // todo figure out how to select pins / functions for each uart on pi4
         let pins = PinSet::select(&[14, 15]);
@@ -73,7 +71,7 @@ impl Pl011Uart {
         UartIntegerBaudRateDivisorReg::at(self.0).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(self.0).write(brd_frac);
         
-        UartLineControlReg::at(self.0).write(UartLineControl::new().with_word_length(UartWordLength::_8Bits).with_fifo_enabled());
+        UartLineControlReg::at(self.0).write(UartLineControl::zero().word_length().set_value(UartWordLength::_8Bits as u32).fifo_enabled().set());
         // mask (disable) all interrupts
         UartInterruptMaskSetClearReg::at(self.0).write(UartInterrupts::all_set());
         
@@ -267,297 +265,57 @@ impl UartBitrate {
     }
 }
 
-pub struct UartLineControl(BitField<u32>);
-impl UartLineControl {
-    pub fn new() -> Self {
-        Self(BitField::zero())
-    }
+bit_field!(pub UartLineControl(u32)
+    7 => stick_parity,
+    5:6 => word_length: UartWordLength,
+    4 => fifo_enabled,
+    3 => two_stop_bits,
+    2 => even_parity,
+    1 => parity_enabled,
+    0 => send_break
+);
 
-    pub fn is_stick_parity_selected(self) -> bool {
-        self.0.bit_test(7)
-    }
 
-    pub fn with_stick_parity_select_set(self) -> Self {
-        Self(self.0.with_bit_set(7))
-    }
-
-    pub fn with_stick_parity_select_cleared(self) -> Self {
-        Self(self.0.with_bit_cleared(7))
-    }
-
-    pub fn word_length(self) -> UartWordLength {
-        unsafe { core::mem::transmute(self.0.field(5, 2) & 0b11) }
-    }
-
-    pub fn with_word_length(self, word_length: UartWordLength) -> Self {
-        Self(self.0.with_field_set(5, 2, word_length as u32))
-    }
-
-    pub fn is_fifo_enabled(self) -> bool {
-        self.0.bit_test(4)
-    }
-
-    pub fn with_fifo_enabled(self) -> Self {
-        Self(self.0.with_bit_set(4))
-    }
-
-    pub fn with_fifo_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(4))
-    }
-
-    pub fn is_two_stop_bits_selected(self) -> bool {
-        self.0.bit_test(3)
-    }
-
-    pub fn with_two_stop_bits_selected(self) -> Self {
-        Self(self.0.with_bit_set(3))
-    }
-
-    pub fn with_one_stop_bit_selected(self) -> Self {
-        Self(self.0.with_bit_cleared(3))
-    }
-
-    pub fn is_even_parity_selected(self) -> bool {
-        self.0.bit_test(2)
-    }
-
-    pub fn with_even_parity_selected(self) -> Self {
-        Self(self.0.with_bit_set(2))
-    }
-
-    pub fn with_odd_parity_selected(self) -> Self {
-        Self(self.0.with_bit_cleared(2))
-    }
-
-    pub fn is_parity_enabled(self) -> bool {
-        self.0.bit_test(1)
-    }
-
-    pub fn with_parity_enabled(self) -> Self {
-        Self(self.0.with_bit_set(1))
-    }
-
-    pub fn with_parity_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(1))
-    }
-
-    pub fn is_send_break_enabled(self) -> bool {
-        self.0.bit_test(0)
-    }
-
-    pub fn with_send_break_enabled(self) -> Self {
-        Self(self.0.with_bit_set(0))
-    }
-
-    pub fn with_send_break_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(0))
-    }
-}
-
-pub struct UartControl (BitField<u32>);
+bit_field!(pub UartControl (u32)
+    15 => cts_hardware_flow_control,
+    14 => rts_hardware_flow_control,
+    11 => request_to_send,
+    9 => receive_enable,
+    8 => transmit_enable,
+    7 => loopback_enable,
+    0 => uart_enable
+);
 
 impl UartControl {
     pub fn disabled() -> Self {
-        Self(BitField::zero())
+        Self::zero()
     }
 
     pub fn enabled() -> Self {
-        Self(BitField::zero())
-            .with_receive_enabled()
-            .with_transmit_enabled()
-            .with_uart_enabled()
-    }
-
-    pub fn is_cts_hardware_flow_control_enabled(self) -> bool {
-        self.0.bit_test(15)
-    }
-
-    pub fn with_cts_hardware_flow_control_enabled(self) -> Self {
-        Self(self.0.with_bit_set(15))
-    }
-
-    pub fn with_cts_hardware_flow_control_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(15))
-    }
-
-    pub fn is_rts_hardware_flow_control_enabled(self) -> bool {
-        self.0.bit_test(14)
-    }
-
-    pub fn with_rts_hardware_flow_control_enabled(self) -> Self {
-        Self(self.0.with_bit_set(14))
-    }
-
-    pub fn with_rts_hardware_flow_control_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(14))
-    }
-
-    pub fn is_request_to_send_set(self) -> bool {
-        self.0.bit_test(11)
-    }
-
-    pub fn with_request_to_send_set(self) -> Self {
-        Self(self.0.with_bit_set(11))
-    }
-
-    pub fn with_request_to_send_cleared(self) -> Self {
-        Self(self.0.with_bit_cleared(11))
-    }
-
-    pub fn is_receive_enabled(self) -> bool {
-        self.0.bit_test(9)
-    }
-
-    pub fn with_receive_enabled(self) -> Self {
-        Self(self.0.with_bit_set(9))
-    }
-
-    pub fn with_receive_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(9))
-    }
-
-    pub fn is_transmit_enabled(self) -> bool {
-        self.0.bit_test(8)
-    }
-
-    pub fn with_transmit_enabled(self) -> Self {
-        Self(self.0.with_bit_set(8))
-    }
-
-    pub fn with_transmit_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(8))
-    }
-
-    pub fn is_loopback_enabled(self) -> bool {
-        self.0.bit_test(7)
-    }
-
-    pub fn with_loopback_enabled(self) -> Self {
-        Self(self.0.with_bit_set(7))
-    }
-
-    pub fn with_loopback_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(7))
-    }
-
-    pub fn is_uart_enabled(self) -> bool {
-        self.0.bit_test(0)
-    }
-
-    pub fn with_uart_enabled(self) -> Self {
-        Self(self.0.with_bit_set(0))
-    }
-
-    pub fn with_uart_disabled(self) -> Self {
-        Self(self.0.with_bit_cleared(0))
+        Self::zero()
+            .receive_enable().set()
+            .transmit_enable().set()
+            .uart_enable().set()
     }
 }
 
-
-pub struct UartInterrupts(BitField<u32>);
+bit_field!(UartInterrupts(u32)
+    10 => overrun_error,
+    9 => break_error,
+    8 => parity_error,
+    7 => framing_error,
+    6 => receive_timeout,
+    5 => transmit,
+    4 => receive,
+    1 => n_uartcts_modem
+);
 
 impl UartInterrupts {
     pub fn all_clear() -> Self {
-        Self(BitField::zero())
+        Self::zero()
     }
 
     pub fn all_set() -> Self {
-        Self(BitField::new(0x7f2))
-    }
-
-    pub fn is_overrun_error_set(&self) -> bool {
-        self.0.bit_test(10)
-    }
-
-    pub fn with_overrun_error_set(&self) -> Self {
-        Self(self.0.with_bit_set(10))
-    }
-
-    pub fn with_overrun_error_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(10))
-    }
-
-    pub fn is_break_error_set(&self) -> bool {
-        self.0.bit_test(9)
-    }
-
-    pub fn with_break_error_set(&self) -> Self {
-        Self(self.0.with_bit_set(9))
-    }
-
-    pub fn with_break_error_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(9))
-    }
-
-    pub fn is_parity_error_set(&self) -> bool {
-        self.0.bit_test(8)
-    }
-
-    pub fn with_parity_error_set(&self) -> Self {
-        Self(self.0.with_bit_set(8))
-    }
-
-    pub fn with_parity_error_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(8))
-    }
-
-    pub fn is_framing_error_set(&self) -> bool {
-        self.0.bit_test(7)
-    }
-
-    pub fn with_framing_error_set(&self) -> Self {
-        Self(self.0.with_bit_set(7))
-    }
-
-    pub fn with_framing_error_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(7))
-    }
-
-    pub fn is_receive_timeout_set(&self) -> bool {
-        self.0.bit_test(6)
-    }
-
-    pub fn with_receive_timeout_set(&self) -> Self {
-        Self(self.0.with_bit_set(6))
-    }
-
-    pub fn with_receive_timeout_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(6))
-    }
-
-    pub fn is_transmit_set(&self) -> bool {
-        self.0.bit_test(5)
-    }
-
-    pub fn with_transmit_set(&self) -> Self {
-        Self(self.0.with_bit_set(5))
-    }
-
-    pub fn with_transmit_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(5))
-    }
-
-    pub fn is_receive_set(&self) -> bool {
-        self.0.bit_test(4)
-    }
-
-    pub fn with_receive_set(&self) -> Self {
-        Self(self.0.with_bit_set(4))
-    }
-
-    pub fn with_receive_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(4))
-    }
-
-    pub fn is_n_uartcts_modem_set(&self) -> bool {
-        self.0.bit_test(1)
-    }
-
-    pub fn with_n_uartcts_modem_set(&self) -> Self {
-        Self(self.0.with_bit_set(1))
-    }
-
-    pub fn with_n_uartcts_modem_cleared(&self) -> Self {
-        Self(self.0.with_bit_cleared(1))
+        Self::new(0x7f2)
     }
 }
