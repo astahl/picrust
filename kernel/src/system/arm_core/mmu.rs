@@ -216,10 +216,10 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     r &= !((1 << 25) |   // clear EE, little endian translation tables
            (1 << 24) |   // clear E0E
            (1 << 19) |   // clear WXN
-           //(1 << 12) |   // clear I, no instruction cache
+           (1 << 12) |   // clear I, no instruction cache
            (1 << 4) |    // clear SA0, no Stack Pointer Alignment check at EL0
            (1 << 3) |    // clear SA, no Stack Pointer Alignment check at EL1
-           //(1 << 2) |    // clear C, no cache at all
+           (1 << 2) |    // clear C, no cache at all
            (1 << 1)); // clear A, no aligment check
     r |= 1 << 0; // set M, enable MMU
     unsafe {

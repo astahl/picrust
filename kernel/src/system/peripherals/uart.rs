@@ -8,9 +8,12 @@ use super::gpio::PinSet;
 use super::mmio::PeripheralRegister;
 
 #[derive(Clone, Copy)]
-pub struct Pl011Uart(usize);
+pub enum Uart {
+    Pl011Uart(usize),
+    MiniUart(usize)
+}
 
-pub const UART_0: Pl011Uart = Pl011Uart(0x201000);
+pub const UART_0: Uart = Uart::Pl011Uart(0x201000);
 // pub type Uart2 = Pl011Uart<0x201400>;
 // pub type Uart3 = Pl011Uart<0x201600>;
 // pub type Uart4 = Pl011Uart<0x201800>;
@@ -35,8 +38,13 @@ type UartIntegrationTestInputReg = PeripheralRegister<0x84, u32>;
 type UartIntegrationTestOutputReg = PeripheralRegister<0x88, u32>;
 type UartTestDataReg = PeripheralRegister<0x8c, u32>;
 
-impl Pl011Uart {
-
+impl Uart {
+    fn base_address(&self) -> usize {
+        match self {
+            Uart::Pl011Uart(a) => *a,
+            Uart::MiniUart(a) => *a,
+        }
+    }
     pub fn init(&self) {
         // NOTE: The UART_LCRH, UART_IBRD, and UART_FBRD registers must not be changed:
         // when the UART is enabled
@@ -49,14 +57,18 @@ impl Pl011Uart {
         // 5. Enable the UART.
         
         // disable UART
-        UartControlReg::at(self.0).write(UartControl::disabled());
+        let base_address = match self {
+            Uart::Pl011Uart(a) => *a,
+            Uart::MiniUart(a) => *a,
+        };
+        UartControlReg::at(base_address).write(UartControl::disabled());
 
-        while UartFlagReg::at(self.0).read().busy().is_set() {
+        while UartFlagReg::at(base_address).read().busy().is_set() {
             core::hint::spin_loop();
         }
 
         // flush transmit fifo
-        UartLineControlReg::at(self.0).update(|u| u.fifo_enabled().clear());
+        UartLineControlReg::at(base_address).update(|u| u.fifo_enabled().clear());
 
         // todo figure out how to select pins / functions for each uart on pi4
         let pins = PinSet::select(&[14, 15]);
@@ -64,33 +76,33 @@ impl Pl011Uart {
         gpio::Gpio::set_pull_resistors(pins, gpio::Resistor::None);
 
         // Clear all pending UART interrupts
-        UartInterruptClearReg::at(self.0).write(UartInterrupts::all_set());
+        UartInterruptClearReg::at(base_address).write(UartInterrupts::all_set());
         
         let clock_rate = Clock::UART.rate().unwrap_or(3_000_000);
         let (brd_int, brd_frac) = UartBitrate::_1200Baud.to_int_frac(clock_rate);
-        UartIntegerBaudRateDivisorReg::at(self.0).write(brd_int);
-        UartFractionalBaudRateDivisorReg::at(self.0).write(brd_frac);
+        UartIntegerBaudRateDivisorReg::at(base_address).write(brd_int);
+        UartFractionalBaudRateDivisorReg::at(base_address).write(brd_frac);
         
-        UartLineControlReg::at(self.0).write(UartLineControl::zero().word_length().set_value(UartWordLength::_8Bits as u32).fifo_enabled().set());
+        UartLineControlReg::at(base_address).write(UartLineControl::zero().word_length().set_value(UartWordLength::_8Bits as u32).fifo_enabled().set());
         // mask (disable) all interrupts
-        UartInterruptMaskSetClearReg::at(self.0).write(UartInterrupts::all_set());
+        UartInterruptMaskSetClearReg::at(base_address).write(UartInterrupts::all_set());
         
         // enable UART
-        UartControlReg::at(self.0).write(UartControl::enabled());
+        UartControlReg::at(base_address).write(UartControl::enabled());
     }
 
     pub fn put_byte(&self, data: u8) {
         while self.flags().txff().is_set() {
             core::hint::spin_loop();
         }
-        UartDataReg::at(self.0).write(UartData::new(data as u32));
+        UartDataReg::at(self.base_address()).write(UartData::new(data as u32));
     }
 
     pub fn get_byte(&self) -> Result<u8, UartStatus> {
         while self.flags().rxfe().is_set() {
             core::hint::spin_loop();
         }
-        let read = UartDataReg::at(self.0).read();
+        let read = UartDataReg::at(self.base_address()).read();
         let (status, data): (UartStatus, u8) = (read.status().into(), read.data().value() as u8);
         if status.is_all_clear() {
             Ok(data)
@@ -100,16 +112,16 @@ impl Pl011Uart {
     }
 
     pub fn flags(&self) -> UartFlags {
-        UartFlagReg::at(self.0).read()
+        UartFlagReg::at(self.base_address()).read()
     }
 }
 
-impl mystd::io::Write for Pl011Uart {
+impl mystd::io::Write for Uart {
     fn write(&mut self, buf: &[u8]) -> mystd::io::Result<mystd::io::Size> {
         while self.flags().txff().is_set() {
             core::hint::spin_loop();
         }
-        let reg_ptr = UartDataReg::at(self.0).as_mut_ptr().cast::<u32>();
+        let reg_ptr = UartDataReg::at(self.base_address()).as_mut_ptr().cast::<u32>();
         let mut count = 0;
         for b in buf {
             unsafe { reg_ptr.write_volatile(*b as u32); }
@@ -126,13 +138,13 @@ impl mystd::io::Write for Pl011Uart {
     }
 }
 
-impl mystd::io::Read for Pl011Uart {
+impl mystd::io::Read for Uart {
     fn read(&mut self, buf: &mut [u8]) -> mystd::io::Result<mystd::io::Size> {
         while self.flags().rxfe().is_set() {
             core::hint::spin_loop();
         }
 
-        let reg_ptr = UartDataReg::at(self.0).as_ptr();
+        let reg_ptr = UartDataReg::at(self.base_address()).as_ptr();
         let mut count = 0;
         while count < buf.len() && !self.flags().rxfe().is_set() {
             let received = unsafe { reg_ptr.read_volatile() };
@@ -148,12 +160,6 @@ impl mystd::io::Read for Pl011Uart {
         Ok(mystd::io::Size::from_usize(count))
     }
 }
-
-// impl core::fmt::Write for Pl011Uart {
-//     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-//         self.write_all(s.as_bytes()).map_err(|_| core::fmt::Error)
-//     }
-// }
 
 
 bit_field!(pub UartData(u32)
@@ -309,13 +315,3 @@ bit_field!(UartInterrupts(u32)
     4 => receive,
     1 => n_uartcts_modem
 );
-
-impl UartInterrupts {
-    pub fn all_clear() -> Self {
-        Self::zero()
-    }
-
-    pub fn all_set() -> Self {
-        Self::new(0x7f2)
-    }
-}

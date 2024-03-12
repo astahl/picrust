@@ -8,6 +8,7 @@ pub enum BitFieldError {
 
 pub trait BitFieldable: Copy {
     type Underlying: Copy;
+    const BIT_WIDTH: usize;
     fn with_bit_cleared(self, position: usize) -> Self;
 
     fn with_bit_set(self, position: usize) -> Self;
@@ -59,6 +60,10 @@ impl<const N: usize, T: BitFieldable> BitMask<N, T> {
 
     pub fn is_set(self) -> bool {
         self.0.is_bit_set(Self::POSITION)
+    }
+
+    pub fn is_clear(self) -> bool {
+        !self.is_set()
     }
 
     pub fn value(self) -> bool {
@@ -165,14 +170,19 @@ macro_rules! bit_field {
 
         impl $type_name {
             pub const fn zero() -> Self {
-                $(
-                    assert!($bit_from < <$underlying_type>::BITS);
-                )*
                 Self(0)
+            }
+
+            pub const fn all_set() -> Self {
+                Self((0 as $underlying_type).wrapping_sub(1))
             }
 
             pub const fn new(value: $underlying_type) -> Self {
                 Self(value)
+            }
+
+            pub const fn to_underlying(self) -> $underlying_type {
+                self.0
             }
 
             pub const fn is_all_clear(self) -> bool {
@@ -226,6 +236,7 @@ macro_rules! bit_field {
 
         impl $crate::bitfield2::BitFieldable for $type_name {
             type Underlying = $underlying_type;
+            const BIT_WIDTH: usize = <$underlying_type>::BITS as usize;
 
             fn with_bit_cleared(self, position: usize) -> Self {
                 self.with_bit_cleared(position)
@@ -273,6 +284,20 @@ macro_rules! bit_field {
                     .finish()
             }
         }
+
+        impl core::ops::BitOr<$type_name> for $type_name {
+            type Output = Self;
+            fn bitor(self, rhs: Self) -> Self {
+                Self::new(self.0 | rhs.0)
+            }
+        }
+
+        impl core::ops::BitAnd<$type_name> for $type_name {
+            type Output = Self;
+            fn bitand(self, rhs: Self) -> Self {
+                Self::new(self.0 & rhs.0)
+            }
+        }
     
     };
 }
@@ -282,11 +307,12 @@ bit_field!(
     2 => a, 
     /// probably fine
     3 => b,
-    /// #The best field
+    /// # The best field
     /// 
     /// A field so good it shows
     0:7 => my_field    
 );
+
 
 bit_field!(pub X(u32) 3 => x);
 

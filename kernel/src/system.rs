@@ -7,14 +7,14 @@ use core::cell::RefCell;
 use mystd::{io::{SplitWriter, Write}, mutex::{Mutex, MutexGuard}};
 use peripherals::uart;
 
-use crate::system::peripherals::uart::Pl011Uart;
+use peripherals::uart::Uart;
 
 extern "C" {
     static __kernel_end: u8;
     static __data_start: u8;
 }
 
-pub type CombinedWriter = mystd::io::SplitWriter<Pl011Uart, Pl011Uart>;
+pub type CombinedWriter = mystd::io::SplitWriter<Uart, Uart>;
 
 pub struct Stdout {
     inner: &'static Mutex<RefCell<CombinedWriter>>
@@ -86,7 +86,7 @@ pub fn initialize() {
     let status_led = hal::led::Led::Status;
     status_led.on();
     if cfg!(feature = "mmu") {
-        //arm_core::mmu::mmu_init().unwrap();
+    //    arm_core::mmu::mmu_init().unwrap();
     }
     status_led.off();
     writeln!(std_out(), "System Initialized").expect("second write should work");

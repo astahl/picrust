@@ -80,7 +80,7 @@ pub enum Tag {
     SetOnboardLedStatus = 0x00038041,
 }
 
-const MBOX_BASE: usize = 0xB880; //0x201000;
+const MBOX_BASE: usize = 0xB880;
 impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
     const MBOX_READ: MMIO<MBOX_BASE, 0x00> = MMIO();
     const MBOX_POLL: MMIO<MBOX_BASE, 0x10> = MMIO();

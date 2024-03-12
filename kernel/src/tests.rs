@@ -240,59 +240,63 @@ pub fn test_usb() -> Option<()>{
     }
 
     let ahb_config = usb::DwHciCore::ahb_config()
-        .with_global_interrupt_disabled();
+        .enable_global_interrupt().set();
     usb::DwHciCore::set_ahb_config(ahb_config);
 
     // todo! hook up irq 9 
 
     // DWHCIDeviceInitCore enter
     let usb_config = usb::DwHciCore::usb_config()
-        .with_ulpi_ext_vbus_drv_cleared()
-        .with_term_sel_dl_pulse_cleared();
+        .ulpi_ext_vbus_drv().clear()
+        .term_sel_dl_pulse().clear();
     usb::DwHciCore::set_usb_config(usb_config);
 
     // reset dwhci device
-    let mut reset = usb::DwHciCoreReset::clear();
+    let mut reset = usb::DwHciCoreReset::zero();
     usb::DwHciCore::set_reset(reset);
     
 	// wait for AHB master IDLE state
-    reset = poll_await(usb::DwHciCore::get_reset, usb::DwHciCoreReset::is_ahb_idle_set, 100, Duration::from_millis(1)).expect("ahb should turn idle");
+    reset = poll_await(usb::DwHciCore::get_reset, |r| r.ahb_idle().is_set(), 100, Duration::from_millis(1)).expect("ahb should turn idle");
 
     // soft reset
-    usb::DwHciCore::set_reset(reset.with_soft_reset_set());
-    let _ = poll_await(usb::DwHciCore::get_reset, |r| !r.is_soft_reset_set(), 100, Duration::from_millis(1)).expect("soft reset bit should clear");
+    usb::DwHciCore::set_reset(reset.soft_reset().set());
+    let _ = poll_await(usb::DwHciCore::get_reset, |r| r.soft_reset().is_clear(), 100, Duration::from_millis(1)).expect("soft reset bit should clear");
 
     system::arm_core::counter::wait(Duration::from_millis(100));
     // reset finished
 
     let usb_config = usb::DwHciCore::usb_config()
-        .with_ulpi_utmi_sel_cleared()
-        .with_phyif_cleared();
+        .ulpi_utmi_sel().clear()
+        .phyif().clear();
     usb::DwHciCore::set_usb_config(usb_config);
 
     // Internal DMA mode only
     let (_, hw_cfg2, _, _) = usb::DwHciCore::hw_config();
     let mut usb_config = usb::DwHciCore::usb_config();
-    usb_config = if let (usb::FsPhyType::Dedicated, usb::HsPhyType::Ulpi) = (hw_cfg2.fs_phy_type(), hw_cfg2.hs_phy_type()) {
-        usb_config.with_ulpi_clk_sus_m_set().with_ulpi_fsls_set()
+    usb_config = if let (usb::FsPhyType::Dedicated, usb::HsPhyType::Ulpi) = (hw_cfg2.fs_phy_type().into(), hw_cfg2.hs_phy_type().into()) {
+        usb_config
+            .ulpi_clk_sus_m().set()
+            .ulpi_fsls().set()
     } else {
-        usb_config.with_ulpi_clk_sus_m_cleared().with_ulpi_fsls_cleared()
+        usb_config
+            .ulpi_clk_sus_m().clear()
+            .ulpi_fsls().clear()
     };
     usb::DwHciCore::set_usb_config(usb_config);
 
-    let num_host_channels = hw_cfg2.num_host_channels();
+    let num_host_channels = hw_cfg2.num_host_channels_actual();
     assert!(num_host_channels >= 4 && num_host_channels <= 16);
 
     let ahb_config = usb::DwHciCore::ahb_config()
-        .with_dma_enabled()
-        .with_wait_axi_writes_set()
-        .with_max_axi_burst(0);
+        .enable_dma().set()
+        .wait_axi_writes().set()
+        .max_axi_burst().set_value(0);
     usb::DwHciCore::set_ahb_config(ahb_config);
 
 	// HNP and SRP are not used
     let usb_config = usb::DwHciCore::usb_config()
-        .with_srp_capable_cleared()
-        .with_hnp_capable_cleared();
+        .srp_capable().clear()
+        .hnp_capable().clear();
     usb::DwHciCore::set_usb_config(usb_config);
 
     // DWHCIDeviceEnableCommonInterrupts
@@ -303,7 +307,7 @@ pub fn test_usb() -> Option<()>{
 
     // DWHCIDeviceEnableGlobalInterrupts enter
     let ahb_config = usb::DwHciCore::ahb_config()
-        .with_global_interrupt_enabled();
+        .enable_global_interrupt().set();
     usb::DwHciCore::set_ahb_config(ahb_config);
     // DWHCIDeviceEnableGlobalInterrupts finished
 
