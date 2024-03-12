@@ -9,14 +9,14 @@ use writer::Writer;
 const LINE_LEN: usize = 256;
 type Buffer = mystd::collections::line::LineArray<u8, LINE_LEN>;
 
-pub struct Monitor<In: Fn() -> u8, Out: Fn(u8)> {
+pub struct Monitor<In: Fn() -> u8, Out: mystd::io::Write> {
     input: In,
     writer: Writer<Out>,
     line_buffer: Buffer,
     context: command::CommandContext,
 }
 
-impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
+impl<In: Fn() -> u8, Out: mystd::io::Write> Monitor<In, Out> {
     pub fn new(input: In, output: Out) -> Self {
         Self {
             input,
@@ -62,7 +62,7 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
         }
     }
 
-    fn echo_prompt(&self) {
+    fn echo_prompt(&mut self) {
         self.writer.newline();
         let mut formatting = format::Formatting::default();
         formatting.leading_zeros = format::LeadingZeros::Skip;
@@ -71,11 +71,11 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
         self.writer.putc(b'>');
     }
 
-    fn echo_line_buffer(&self) {
+    fn echo_line_buffer(&mut self) {
         self.writer.puts(self.line_buffer.as_slice());
     }
 
-    fn echo_error(&self, position: usize) {
+    fn echo_error(&mut self, position: usize) {
         self.echo_line_buffer();
         self.writer.newline();
         for _ in 0..position {
@@ -84,7 +84,7 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
         self.writer.puts(b"^! Error");
     }
 
-    fn echo_backspace(&self) {
+    fn echo_backspace(&mut self) {
         self.writer.puts(&[0x08, 0x20, 0x08]);
     }
 
@@ -109,7 +109,7 @@ impl<In: Fn() -> u8, Out: Fn(u8)> Monitor<In, Out> {
 
     fn submit(&mut self) {
         match command::Command::parse(self.line_buffer.as_slice()) {
-            Ok(command) => command.run(&self.writer, &mut self.context),
+            Ok(command) => command.run(&mut self.writer, &mut self.context),
             Err(err) => match err {
                 command::CommandParseError::IllegalToken { position } => self.echo_error(position),
             },

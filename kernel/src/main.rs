@@ -11,11 +11,13 @@ mod exception;
 mod system;
 mod tests;
 use core::{arch::global_asm, str};
+use mystd::io::Write;
 use system::hal;
 use system::peripherals;
 use system::peripherals::uart;
 
 use crate::system::peripherals::uart::UART_0;
+use crate::system::Stdout;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
@@ -39,8 +41,8 @@ pub extern "C" fn main() -> ! {
     //tests::run();
     //tests::test_dma();
     tests::test_usb().expect("USB test should pass");
-
-    monitor::Monitor::new(|| UART_0.get_byte().unwrap_or(b'0'), |c| UART_0.put_byte(c)).run()
+    
+    monitor::Monitor::new(|| UART_0.get_byte().unwrap_or(b'0'), system::std_out()).run()
 }
 
 global_asm!(".section .font", ".incbin \"901447-10.bin\"");

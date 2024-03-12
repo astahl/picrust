@@ -156,8 +156,20 @@ where W1: self::Write, W2: self::Write;
 impl<W1, W2> SplitWriter<W1, W2>
 where W1: self::Write, W2: self::Write
 {
+    pub const fn empty() -> Self {
+        Self(None, None)
+    }
+
     pub const fn with_writers(w1: W1, w2: W2) -> Self {
         Self(Some(w1), Some(w2))
+    }
+
+    pub fn replace_first(&mut self, w1: W1) -> Option<W1> {
+        self.0.replace(w1)
+    }
+
+    pub fn replace_second(&mut self, w2: W2) -> Option<W2> {
+        self.1.replace(w2)
     }
 }
 

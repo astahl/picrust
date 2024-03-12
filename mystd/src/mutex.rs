@@ -1,4 +1,5 @@
 use core::{ops::{Deref, DerefMut}, sync::atomic};
+
 pub struct Mutex<T> {
     is_locked: atomic::AtomicBool, 
     inner: core::cell::UnsafeCell<T>
@@ -13,6 +14,9 @@ impl<T> Mutex<T> {
         }
     }
 
+    /// Tries to acquire the lock and returns None if it fails.
+    /// ### Panic
+    /// Panics when the atomic compare_exchange contract is violated, which really shouldn't happen.
     pub fn try_lock(&self) -> Option<MutexGuard<T>> {
         match self.is_locked.compare_exchange(false, true, atomic::Ordering::Acquire, atomic::Ordering::Relaxed) {
             Ok(false) => Some(MutexGuard::with_locked_mutex(self)),
@@ -21,9 +25,25 @@ impl<T> Mutex<T> {
         }
     }
 
-    pub fn unlock(guard: MutexGuard<'_, T>) {
-        drop(guard)
+    /// Blocks in a busy wait until the lock can be acquired.
+    /// ### Safety
+    /// Unsafe to call while holding the lock, leading to a deadlock,
+    /// because it doesn't protect against reentrancy.
+    /// To fail in a controlled manner use `try_lock(&self)`
+    pub unsafe fn lock(&self) -> MutexGuard<T> {
+        loop {
+            match self.try_lock() {
+                Some(guard) => break guard,
+                None => {
+                    core::hint::spin_loop()
+                },
+            }
+        } 
     }
+
+    // pub fn unlock(guard: MutexGuard<'_, T>) {
+    //     drop(guard)
+    // }
 
     fn unlock_internal(&self) {
         self.is_locked.store(false, atomic::Ordering::Release);

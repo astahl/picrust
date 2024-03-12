@@ -1,41 +1,41 @@
 use mystd::format;
 
-pub struct Writer<Out: Fn(u8)>(Out);
+pub struct Writer<Out: mystd::io::Write>(Out);
 
-impl<Out: Fn(u8)> Writer<Out> {
+impl<Out: mystd::io::Write> Writer<Out> {
 
     pub fn new(output: Out) -> Self {
         Self(output)
     }
 
-    pub fn putc(&self, char: u8) {
-        (self.0)(char);
+    pub fn putc(&mut self, char: u8) {
+        self.0.write(&[char]).expect("putc should work");
     }
 
-    pub fn putc_repeat(&self, char: u8, mut count: usize) {
+    pub fn putc_repeat(&mut self, char: u8, mut count: usize) {
         while count > 0 {
             self.putc(char);
             count -= 1;
         }
     }
 
-    pub fn puts_n<const N: usize>(&self, str: &[u8; N]) {
+    pub fn puts_n<const N: usize>(&mut self, str: &[u8; N]) {
         for i in 0..N {
             self.putc(str[i]);
         }
     }
 
-    pub fn puts(&self, str: &[u8]) {
+    pub fn puts(&mut self, str: &[u8]) {
         for c in str {
             self.putc(*c);
         }
     }
 
-    pub fn put_iter<I: Iterator<Item = u8>>(&self, iter: I) {
+    pub fn put_iter<I: Iterator<Item = u8>>(&mut self, iter: I) {
         iter.for_each(|c| self.putc(c));
     }
 
-    pub fn binary(&self, value: u8, formatting: Option<format::Formatting>) {
+    pub fn binary(&mut self, value: u8, formatting: Option<format::Formatting>) {
         let [b7, b6, b5, b4, b3, b2, b1, b0] =
             format::to_binary(value, &formatting.unwrap_or_default());
         self.putc(b7);
@@ -48,7 +48,7 @@ impl<Out: Fn(u8)> Writer<Out> {
         self.putc(b0);
     }
 
-    pub fn decimal_usize(&self, value: usize, formatting: Option<format::Formatting>) {
+    pub fn decimal_usize(&mut self, value: usize, formatting: Option<format::Formatting>) {
         let formatting = formatting.unwrap_or_default();
 
         match (value, &formatting.leading_zeros) {
@@ -83,13 +83,13 @@ impl<Out: Fn(u8)> Writer<Out> {
         }
     }
 
-    pub fn hex(&self, value: u8, formatting: Option<format::Formatting>) {
+    pub fn hex(&mut self, value: u8, formatting: Option<format::Formatting>) {
         let [upper, lower] = format::to_hex_u8(value, &formatting.unwrap_or_default());
         self.putc(upper);
         self.putc(lower);
     }
 
-    pub fn hex_usize(&self, value: usize, formatting: Option<format::Formatting>) {
+    pub fn hex_usize(&mut self, value: usize, formatting: Option<format::Formatting>) {
         let formatting = formatting.unwrap_or_default();
 
         match (value, &formatting.leading_zeros) {
@@ -124,11 +124,11 @@ impl<Out: Fn(u8)> Writer<Out> {
         }
     }
 
-    pub fn newline(&self) {
+    pub fn newline(&mut self) {
         self.putc(b'\n');
     }
 
-    pub fn carriage_return(&self) {
+    pub fn carriage_return(&mut self) {
         self.putc(b'\r');
     }
 }

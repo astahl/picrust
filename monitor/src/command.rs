@@ -50,7 +50,7 @@ impl Command {
         return Ok(Command::PrintMemoryContinue);
     }
 
-    pub fn run<Out: Fn(u8)>(&self, out: &writer::Writer<Out>, context: &mut CommandContext) {
+    pub fn run<Out: mystd::io::Write>(&self, out: &mut writer::Writer<Out>, context: &mut CommandContext) {
         match self {
             Command::DoNothing => {}
             Command::ExecuteMemory { start, params } => unsafe {
@@ -76,9 +76,9 @@ impl Command {
         }
     }
 
-    fn print_memory<Out: Fn(u8)>(
+    fn print_memory<Out: mystd::io::Write>(
         &self,
-        out: &writer::Writer<Out>,
+        out: &mut writer::Writer<Out>,
         address: usize,
         length: usize,
         cursor: CursorType,
