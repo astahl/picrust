@@ -7,20 +7,25 @@ SECTIONS
 	. = 0x80000;
 	__kernel_start = .;
 	.text :	{ 
+	__kernel_txt_start = .;
 		KEEP(*(.text.boot)) *(.text .text.* .gnu.linkonce.t*)	
+	__kernel_txt_end = .;
 	}
 	. = ALIGN(0x1000);
 	.rodata : {	
+		__rodata_start = .;
 		*(.rodata* .gnu.linkonce.r*)
 		. = ALIGN(0x1000);
 		__font_start = .;
 		*(.font*)
 		__font_end = .;
+		__rodata_end = .;
 	}
 	. = ALIGN(0x1000);
 	.data : { 
 		PROVIDE(__data_start = .);
 		*(.data .data.* .gnu.linkonce.d*)	
+		__data_end = .;
 	}
 	. = ALIGN(0x1000);
 	.bss (NOLOAD) : {
@@ -30,8 +35,9 @@ SECTIONS
 		. = ALIGN(8);
 		__bss_end = .;
 	}
-	. = ALIGN(0x1000);
 	__kernel_end = .;
+	. = ALIGN(0x1000);
+	__free_memory_start = .;
 	/DISCARD/ : { 
 		*(.comment) 
 		*(.gnu*) 

@@ -158,12 +158,13 @@ macro_rules! bit_field_method {
 
 #[macro_export]
 macro_rules! bit_field {
-    ($v:vis $type_name:ident ($underlying_type:ty) 
+    ($(#[$meta:meta])* $v:vis $type_name:ident ($underlying_type:ty) 
         $(
             $(#[$bit_meta:meta])* 
             $bit_from:literal $(:$bit_to:literal)? => $bit_name:ident$(:$field_type:ty)?
-        ),*
+        ),* $(,)?
     ) => {
+        $(#[$meta])*
         #[repr(transparent)]
         #[derive(Copy, Clone)]
         $v struct $type_name($underlying_type);

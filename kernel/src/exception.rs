@@ -24,6 +24,7 @@ pub extern "C" fn exc_handler(
 
     // Uart0::putc(b'\n');
     // Uart0::put_memory(elr as *const u8, 16);
+    panic!("EXCEPTION");
     loop {
         core::hint::spin_loop();
     }
