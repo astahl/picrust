@@ -2,7 +2,7 @@ pub mod hal;
 pub mod peripherals;
 pub mod arm_core;
 
-use core::{cell::RefCell, fmt::Display};
+use core::{cell::RefCell, fmt::{Debug, Display}};
 
 use mystd::{io::{SplitWriter, Write}, mutex::{Mutex, MutexGuard}};
 use peripherals::uart;
@@ -28,9 +28,9 @@ extern "C" {
 
 struct MemoryBlock(*const u8, *const u8);
 
-impl core::fmt::Display for MemoryBlock {
+impl core::fmt::Debug for MemoryBlock {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "[{:#p}-{:#p}]({} bytes)", self.0, self.1, self.byte_size())
+        write!(f, "[{:#p} - {:#p}]({})", self.0, self.1, mystd::format::ByteValue(self.byte_size()))
     }
 }
 
@@ -47,6 +47,35 @@ impl MemoryBlock{
         unsafe { self.0.offset_from(self.1).unsigned_abs() }
     }
 }
+
+struct MemoryMap();
+
+impl Debug for MemoryMap {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        unsafe{
+        let stack = core::ptr::addr_of!(__main_stack);
+        let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
+        let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
+        let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);
+        let font = MemoryBlock::from_symbols(&__font_start, &__font_end);
+        let data = MemoryBlock::from_symbols(&__data_start, &__data_end);
+        let bss = MemoryBlock::from_symbols(&__bss_start, &__bss_end);
+        let ram = core::ptr::addr_of!(__free_memory_start);
+        f.debug_struct("MemoryMap")
+            .field("Stack Top", &format_args!("{stack:#p}"))
+            .field("Kernel", &kernel)
+            .field("Kernel Code", &kernel_text)
+            .field("Read-Only Data Segment", &rodata)
+            .field("Font", &font)
+            .field("Data Segment", &data)
+            .field("BSS Segment", &bss)
+            .field("Heap Bottom", &format_args!("{ram:#p}"))
+            .finish()
+        }
+    }
+}
+
+
 
 pub type CombinedWriter = mystd::io::SplitWriter<Uart, Uart>;
 
@@ -120,26 +149,7 @@ pub fn initialize() {
         init_serial_uart();
         writeln!(std_out(), "System Initialize...").unwrap();
         // print a memory map
-        unsafe {
-            let mut out = std_out().lock();
-            let stack = core::ptr::addr_of!(__main_stack);
-            let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
-            let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
-            let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);
-            let font = MemoryBlock::from_symbols(&__font_start, &__font_end);
-            let data = MemoryBlock::from_symbols(&__data_start, &__data_end);
-            let bss = MemoryBlock::from_symbols(&__bss_start, &__bss_end);
-            let ram = core::ptr::addr_of!(__free_memory_start);
-            writeln!(out, "STACK: {:#p}", stack).unwrap();
-            writeln!(out, "RAM: {:#p}", ram).unwrap();
-            writeln!(out, "KERNEL: {kernel}").unwrap();
-            writeln!(out, " KERNEL TEXT: {kernel_text}").unwrap();
-            writeln!(out, " RODATA: {rodata}").unwrap();
-            writeln!(out, "  FONT: {font}").unwrap();
-            writeln!(out, " DATA: {data}").unwrap();
-            writeln!(out, " BSS: {bss}").unwrap();
-        }
-
+        writeln!(std_out(), "{:#?}", MemoryMap()).unwrap();
     }
     let status_led = hal::led::Led::Status;
     status_led.on();

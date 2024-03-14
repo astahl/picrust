@@ -2,9 +2,8 @@ ENTRY(_start)
 
 SECTIONS
 {
-	. = 0x40000;
-	__main_stack = .;
 	. = 0x80000;
+	__main_stack = .;
 	__kernel_start = .;
 	.text :	{ 
 	__kernel_txt_start = .;
