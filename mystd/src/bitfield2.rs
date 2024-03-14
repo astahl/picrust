@@ -1,18 +1,22 @@
-use core::marker::PhantomData;
+use core::{convert::Infallible, fmt::Debug, marker::PhantomData};
 
 
 #[derive(Clone, Copy, Debug)]
 pub enum BitFieldError {
-    ValueTooLargeForField
+    ValueTooLargeForField,
+    UnexpectedValue,
 }
 
 pub trait BitFieldable: Copy {
     type Underlying: Copy;
     const BIT_WIDTH: usize;
+    
+    fn with_bit_value(self, position: usize, value: bool) -> Self;
+
     fn with_bit_cleared(self, position: usize) -> Self;
-
+    
     fn with_bit_set(self, position: usize) -> Self;
-
+    
     fn is_bit_set(self, position: usize) -> bool;
 
     fn field_value(self, lsb: usize, msb: usize) -> Self::Underlying;
@@ -23,6 +27,8 @@ pub trait BitFieldable: Copy {
 
     fn with_field_all_set(self, lsb: usize, msb: usize) -> Self;
 }
+
+
 
 
 #[derive(Clone, Copy)]
@@ -70,6 +76,7 @@ impl<const N: usize, T: BitFieldable> BitMask<N, T> {
         self.is_set()
     }
 }
+
 
 #[derive(Clone, Copy)]
 pub struct FieldMask<const FROM: usize, const TO: usize, T: BitFieldable>(T);
@@ -119,17 +126,73 @@ impl<const FROM: usize, const TO: usize, T: BitFieldable> FieldMask<FROM, TO, T>
 
 
 #[derive(Clone, Copy)]
-pub struct TypedFieldMask<const FROM: usize, const TO: usize, T: BitFieldable, U>(
-    FieldMask<FROM, TO, T>,
+pub struct TypedBitMask<const N: usize, T, U>(T, PhantomData<U>)
+    where T: BitFieldable, U: From<bool> + Into<bool> + Debug
+
+;
+
+impl<const N: usize, T, U> TypedBitMask<N, T, U>
+where T: BitFieldable, U: From<bool> + Into<bool> + Debug
+{
+    pub const POSITION: usize = N;
+    
+    pub const fn new(bitfield: T) -> Self {
+        Self(bitfield, PhantomData{})
+    }
+
+    pub fn value(self) -> U {
+        U::from(self.0.is_bit_set(Self::POSITION))
+    }
+
+    #[must_use]
+    pub fn set_value(self, value: U) -> T {
+        self.0.with_bit_value(Self::POSITION, value.into())
+    }
+
+    pub fn untyped(self) -> BitMask<N, T> {
+        BitMask(self.0)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct TypedFieldMask<const FROM: usize, const TO: usize, T, U>(
+    T,
     PhantomData<U>
-);
+) where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug;
+
+impl<const FROM: usize, const TO: usize, T, U> TypedFieldMask<FROM, TO, T, U>
+where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug
+{
+    const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
+    pub const LSB: usize = Self::MIN_MAX.0;
+    pub const MSB: usize = Self::MIN_MAX.1; 
+    pub const WIDTH: usize = Self::MSB - Self::LSB + 1;
+    
+    pub const fn new(bitfield: T) -> Self {
+        Self(bitfield, PhantomData{})
+    }
+
+    pub fn value(self) -> Result<U, U::Error> {
+        U::try_from(self.0.field_value(Self::LSB, Self::MSB))
+    }
+
+    /// Accepts the underlying type, but truncates the value to the size of the field.
+    #[must_use]
+    pub fn set_value(self, value: U) -> T {
+        self.0.with_field_value(Self::LSB, Self::MSB, value.into())
+    }
+
+    pub fn untyped(self) -> FieldMask<FROM, TO, T> {
+        FieldMask(self.0)
+    }
+}
 
 
 #[macro_export]
 macro_rules! ensure_bit_fits {
     ($type:tt $bit:literal) => {
         #[deny(arithmetic_overflow)]
-        let _ = (1 as $type << $bit > 0);
+        const _: $type = (1 as $type << $bit);
     }
 }
 
@@ -145,6 +208,7 @@ macro_rules! bit_field_method {
         }
     
     };
+
     ($(#[$meta:meta])* $type_name:ident $underlying_type:ty, $bit_name:ident $bit_position:literal) => {
 
         $(#[$meta])*
@@ -153,6 +217,26 @@ macro_rules! bit_field_method {
             $crate::bitfield2::BitMask::new(self)
         }
 
+    };
+
+    ($(#[$meta:meta])* $type_name:ident $underlying_type:ty, $bit_name:ident $bit_position:literal $bit_type:ty) => {
+
+        $(#[$meta])*
+        pub const fn $bit_name(self) -> $crate::bitfield2::TypedBitMask<$bit_position, $type_name, $bit_type> {
+            $crate::ensure_bit_fits!($underlying_type $bit_position);
+            $crate::bitfield2::TypedBitMask::new(self)
+        }
+    };
+
+    ($(#[$meta:meta])* $type_name:ident $underlying_type:ty, $field_name:ident $field_from:literal $field_to:literal $field_type:ty) => {
+        
+        $(#[$meta])*
+        pub const fn $field_name(self) -> $crate::bitfield2::TypedFieldMask<$field_from, $field_to, $type_name, $field_type> {
+            $crate::ensure_bit_fits!($underlying_type $field_from);
+            $crate::ensure_bit_fits!($underlying_type $field_to);
+            $crate::bitfield2::TypedFieldMask::new(self)
+        }
+    
     };
 }
 
@@ -206,6 +290,14 @@ macro_rules! bit_field {
                 Self::new(self.0 | Self::_bit_mask(position))
             }
 
+            pub const fn with_bit_value(self, position: usize, value: bool) -> Self {
+                if value {
+                    self.with_bit_cleared(position)
+                } else {
+                    self.with_bit_set(position)
+                }
+            }
+
             pub const fn is_bit_set(self, position: usize) -> bool {
                 self.0 & Self::_bit_mask(position) != 0
             }
@@ -230,7 +322,7 @@ macro_rules! bit_field {
             }
 
             $(
-                $crate::bit_field_method!($(#[$bit_meta])* $type_name $underlying_type, $bit_name $bit_from $($bit_to)?);
+                $crate::bit_field_method!($(#[$bit_meta])* $type_name $underlying_type, $bit_name $bit_from $($bit_to)? $($field_type)?);
             )*
 
         }
@@ -245,6 +337,10 @@ macro_rules! bit_field {
 
             fn with_bit_set(self, position: usize) -> Self {
                 self.with_bit_set(position)
+            }
+
+            fn with_bit_value(self, position: usize, value: bool) -> Self {
+                self.with_bit_value(position, value)
             }
 
             fn is_bit_set(self, position: usize) -> bool {
@@ -303,6 +399,79 @@ macro_rules! bit_field {
     };
 }
 
+
+#[derive(Debug, PartialEq)]
+pub enum Fuzzy {
+    /// When Buzz is gone
+    Off = 0b0,
+    /// When Doki doki
+    On = 0b01,
+    /// what?
+    Ex = 0x10,
+    Yes = 0x11,
+}
+
+
+// impl TryFrom<u32> for Buzz {
+//     type Error = BitFieldError;
+
+//     fn try_from(value: u32) -> Result<Self, Self::Error> {
+//         match value {
+//             0b0 => Ok(Buzz::Off),
+//             0b1 => Ok(Buzz::On),
+//             0b10 => Ok(Buzz::Ex),
+//             0b11 => Ok(Buzz::YED),
+//             _ => Err(BitFieldError::UnexpectedValue)
+//         }
+//     }
+// }
+
+impl From<u8> for Fuzzy {
+    fn from(value: u8) -> Self {
+        match value {
+            0b0 => Fuzzy::Off,
+            0b1 => Fuzzy::On,
+            0b10 => Fuzzy::Ex,
+            0b11 => Fuzzy::Yes,
+            _ => panic!("Value out of range")
+        }
+    }
+}
+
+impl Into<u8> for Fuzzy {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
+
+#[derive(Debug, PartialEq)]
+pub enum Buzzy {
+    /// When Buzz is gone
+    Off = 0b0,
+    /// When Doki doki
+    On = 0b1
+}
+
+
+impl From<bool> for Buzzy {
+    fn from(value: bool) -> Self {
+        match value {
+            false => Buzzy::Off,
+            true => Buzzy::On,
+        }
+    }
+}
+
+impl Into<bool> for Buzzy {
+    fn into(self) -> bool {
+        match self {
+            Buzzy::Off => false,
+            Buzzy::On => true,
+        }
+    }
+}
+
 bit_field!(
     pub MyReg(u8) 
     2 => a, 
@@ -311,11 +480,19 @@ bit_field!(
     /// # The best field
     /// 
     /// A field so good it shows
-    0:7 => my_field    
+    0:7 => my_field,
+    1 => buzzys: Buzzy, 
+    3:4 => fuzzys: Fuzzy, 
 );
 
 
-bit_field!(pub X(u32) 3 => x);
+bit_field!(pub X(u32) 
+    3 => x,
+    // 4:5 => y: YFieldValue {
+    //     0b01 => Odd,
+    //     0b10 => SEnfd,
+    // }
+);
 
 
 
@@ -327,18 +504,20 @@ mod tests {
 
     #[test]
     fn test_name() {
-        let x = MyReg::new(0b1100100);
+        let x = MyReg::new(0b1100110);
         let z = MyReg::zero();
         assert!(x.a().is_set());
         assert!(!z.a().is_set());
-        assert_eq!(0b1100100, x.my_field().value());
+        assert_eq!(0b1100110, x.my_field().value());
+        assert_eq!(Buzzy::On, x.buzzys().value());
+        assert_eq!(Fuzzy::Off, x.fuzzys().value().unwrap());
     }
 
     #[test]
     fn fmt_debug_works() {
         use core::fmt::Write;
-        let x = MyReg::new(0b1100100);
-        let mut buf: RingArray<u8, 64> = RingArray::new();
+        let x = MyReg::new(0b1111100);
+        let mut buf: RingArray<u8, 256> = RingArray::new();
         write!(&mut buf, "{:?}", x).expect("should work");
         assert_eq!("MyReg { a[2]: true, b[3]: false, my_field[0:7]: 100 }", buf.to_str().unwrap());
     }
