@@ -273,7 +273,7 @@ pub fn test_usb() -> Option<()>{
     // Internal DMA mode only
     let (_, hw_cfg2, _, _) = usb::DwHciCore::hw_config();
     let mut usb_config = usb::DwHciCore::usb_config();
-    usb_config = if let (usb::FsPhyType::Dedicated, usb::HsPhyType::Ulpi) = (hw_cfg2.fs_phy_type().into(), hw_cfg2.hs_phy_type().into()) {
+    usb_config = if let (Ok(usb::FsPhyType::Dedicated), Ok(usb::HsPhyType::Ulpi)) = (hw_cfg2.fs_phy_type().value(), hw_cfg2.hs_phy_type().value()) {
         usb_config
             .ulpi_clk_sus_m().set()
             .ulpi_fsls().set()

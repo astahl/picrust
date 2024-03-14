@@ -83,7 +83,7 @@ impl Uart {
         UartIntegerBaudRateDivisorReg::at(base_address).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(base_address).write(brd_frac);
         
-        UartLineControlReg::at(base_address).write(UartLineControl::zero().word_length().set_value(UartWordLength::_8Bits as u32).fifo_enabled().set());
+        UartLineControlReg::at(base_address).write(UartLineControl::zero().word_length().set_value(UartWordLength::_8Bits).fifo_enabled().set());
         // mask (disable) all interrupts
         UartInterruptMaskSetClearReg::at(base_address).write(UartInterrupts::all_set());
         
@@ -103,7 +103,7 @@ impl Uart {
             core::hint::spin_loop();
         }
         let read = UartDataReg::at(self.base_address()).read();
-        let (status, data): (UartStatus, u8) = (read.status().into(), read.data().value() as u8);
+        let (status, data): (UartStatus, u8) = (read.status().into(), read.data().value().unwrap() as u8);
         if status.is_all_clear() {
             Ok(data)
         } else {
@@ -154,7 +154,7 @@ impl mystd::io::Read for Uart {
             if received.parity_error().is_set() || received.framing_error().is_set() {
                 return Err(mystd::io::Error::InvalidData)
             }
-            buf[count] = received.data().value() as u8;
+            buf[count] = received.data().value().unwrap();
             count += 1;
         }
         Ok(mystd::io::Size::from_usize(count))
@@ -229,15 +229,6 @@ bit_field!(pub UartFlags(u32)
     0 => cts
 );
 
-
-#[repr(u32)]
-pub enum UartWordLength {
-    _5Bits = 0b00,
-    _6Bits = 0b01,
-    _7Bits = 0b10,
-    _8Bits = 0b11,
-}
-
 #[repr(u32)]
 pub enum UartBitrate {
     _75Baud = 75,
@@ -273,7 +264,12 @@ impl UartBitrate {
 
 bit_field!(pub UartLineControl(u32)
     7 => stick_parity,
-    5:6 => word_length: UartWordLength,
+    5:6 => word_length: enum UartWordLength {
+        _5Bits = 0b00,
+        _6Bits = 0b01,
+        _7Bits = 0b10,
+        _8Bits = 0b11,
+    },
     4 => fifo_enabled,
     3 => two_stop_bits,
     2 => even_parity,

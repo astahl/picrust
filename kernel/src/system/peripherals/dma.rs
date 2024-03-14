@@ -135,11 +135,6 @@ impl DmaControlBlock {
 }
 
 
-pub enum DmaTransferWidth {
-    Bit32 = 0,
-    Bit128 = 1
-}
-
 bit_field!(pub DmaTransferInformation(u32)
     26 => disable_wide_bursts,
     21:25 => wait_cycles,
@@ -147,7 +142,10 @@ bit_field!(pub DmaTransferInformation(u32)
     12:15 => burst_transfer_length,
     11 => src_ignore_reads,
     10 => src_use_data_request,
-    9 => src_transfer_width: DmaTransferWidth,
+    9 => src_transfer_width: enum DmaTransferWidth {
+        Bit32,
+        Bit128,
+    },
     8 => src_address_increment,
     7 => dest_ignore_writes,
     6 => dest_use_data_request,
@@ -162,18 +160,18 @@ impl DmaTransferInformation {
     pub fn wide_copy() -> Self {
         Self::zero()
             .dest_address_increment().set()
-            .dest_transfer_width().set_to(DmaTransferWidth::Bit128 as usize == 1)
+            .dest_transfer_width().set_value(DmaTransferWidth::Bit128)
             .src_address_increment().set()
-            .src_transfer_width().set_to(DmaTransferWidth::Bit128 as usize == 1)
+            .src_transfer_width().set_value(DmaTransferWidth::Bit128)
             .burst_transfer_length().set_value(2)
     }
 
     pub fn narrow_copy() -> Self {
         Self::zero()
             .dest_address_increment().set()
-            .dest_transfer_width().set_to(DmaTransferWidth::Bit32 as usize == 1)
+            .dest_transfer_width().set_value(DmaTransferWidth::Bit32)
             .src_address_increment().set()
-            .src_transfer_width().set_to(DmaTransferWidth::Bit32 as usize == 1)
+            .src_transfer_width().set_value(DmaTransferWidth::Bit32)
             .burst_transfer_length().set_value(8)
     }
 

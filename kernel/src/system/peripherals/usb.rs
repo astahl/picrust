@@ -106,8 +106,15 @@ bit_field!(pub DwHciCoreHwCfg1(u32));
 bit_field!(pub DwHciCoreHwCfg2(u32)
     0:2 => op_mode,
     3:4 => architecture,
-    6:7 => hs_phy_type: HsPhyType,
-    8:9 => fs_phy_type: FsPhyType,
+    6:7 => hs_phy_type: enum HsPhyType {
+        NotSupported = 0b00,
+        Utmi = 0b01,
+        Ulpi = 0b10,
+        UtmiAndUlpi = 0b11
+    },
+    8:9 => fs_phy_type: enum FsPhyType {
+        Dedicated = 0b01,
+    },
     14:17 => num_host_channels
 );
 bit_field!(pub DwHciCoreHwCfg3(u32)
@@ -118,34 +125,6 @@ bit_field!(pub DwHciCoreHwCfg4(u32)
     25 => enable_ded_fifo,
     26:29 => num_in_eps
 );
-
-#[repr(u32)]
-pub enum HsPhyType {
-    NotSupported = 0b00,
-    Utmi = 0b01,
-    Ulpi = 0b10,
-    UtmiAndUlpi = 0b11
-}
-
-impl From<u32> for HsPhyType {
-    fn from(value: u32) -> Self {
-        unsafe { core::mem::transmute(value & 0b11) }
-    }
-}
-
-#[repr(u32)]
-pub enum FsPhyType {
-    Unknown0 = 0b00,
-    Dedicated = 0b01,
-    Unknown2 = 0b10,
-    Unknown3 = 0b11
-}
-
-impl From<u32> for FsPhyType {
-    fn from(value: u32) -> Self {
-        unsafe { core::mem::transmute(value & 0b11) }
-    }
-}
 
 impl DwHciCoreHwCfg2 {
     pub fn num_host_channels_actual(self) -> u32 {
