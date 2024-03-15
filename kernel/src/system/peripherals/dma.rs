@@ -1,8 +1,11 @@
 use core::{num::{NonZeroU16, NonZeroU32}, usize};
 
-use mystd::{bit_field, bitfield::BitField};
+use mystd::bit_field;
 
 use super::mmio::PeripheralRegister;
+
+pub const DMA_BASE: usize = 0x7000;
+pub const DMA_CHANNEL_SZ: usize = 0x100;
 
 #[derive(Debug)]
 pub enum DmaError {
@@ -15,13 +18,13 @@ pub enum DmaError {
 
 pub struct DmaStandardChannel(usize);
 
-pub const DMA_0: DmaStandardChannel = DmaStandardChannel(0x7000);
-pub const DMA_1: DmaStandardChannel = DmaStandardChannel(0x7100);
-pub const DMA_2: DmaStandardChannel = DmaStandardChannel(0x7200);
-pub const DMA_3: DmaStandardChannel = DmaStandardChannel(0x7300);
-pub const DMA_4: DmaStandardChannel = DmaStandardChannel(0x7400);
-pub const DMA_5: DmaStandardChannel = DmaStandardChannel(0x7500);
-pub const DMA_6: DmaStandardChannel = DmaStandardChannel(0x7600);
+pub const DMA_0: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 0 * DMA_CHANNEL_SZ);
+pub const DMA_1: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 1 * DMA_CHANNEL_SZ);
+pub const DMA_2: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 2 * DMA_CHANNEL_SZ);
+pub const DMA_3: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 3 * DMA_CHANNEL_SZ);
+pub const DMA_4: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 4 * DMA_CHANNEL_SZ);
+pub const DMA_5: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 5 * DMA_CHANNEL_SZ);
+pub const DMA_6: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 6 * DMA_CHANNEL_SZ);
 
 type ControlAndStatusReg = PeripheralRegister<0x00, DmaControlAndStatus>; 
 type ControlBlockAddressReg = PeripheralRegister<0x04, u32>; 

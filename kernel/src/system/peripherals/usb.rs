@@ -1,10 +1,10 @@
 
 
 
-const USB_BASE: usize = 0x980000;
-const USB_CORE_BASE: usize = USB_BASE;
-const USB_HOST_BASE: usize = USB_BASE + 0x400;
-const USB_POWER_BASE: usize = USB_BASE + 0xe00;
+pub const USB_BASE: usize = 0x980000;
+pub const USB_CORE_BASE: usize = USB_BASE;
+pub const USB_HOST_BASE: usize = USB_BASE + 0x400;
+pub const USB_POWER_BASE: usize = USB_BASE + 0xe00;
 
 
 use super::mmio::TypedMMIO;

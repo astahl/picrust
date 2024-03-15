@@ -56,8 +56,8 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 
     const MMIO_BASE: usize = peripherals::BCM_HOST.peripheral_address;
 
-    let data_page_index = unsafe { core::ptr::addr_of!(crate::system::__data_start) } as usize / PAGESIZE;
-    let page_table_ptr = unsafe { core::ptr::addr_of!(crate::system::__kernel_end) };
+    let data_page_index = unsafe { core::ptr::addr_of!(crate::__data_start) } as usize / PAGESIZE;
+    let page_table_ptr = unsafe { core::ptr::addr_of!(crate::__kernel_end) };
 
     let page_table_entry_ptr = page_table_ptr.cast::<usize>().cast_mut();
 

@@ -10,7 +10,7 @@ compile_error!("Can't compile for multiple Raspberry Pi Models.");
 mod exception;
 mod system;
 mod tests;
-use core::{arch::global_asm, str};
+use core::arch::global_asm;
 use mystd::io::Write;
 use system::hal;
 use system::peripherals;
@@ -27,6 +27,7 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 extern "C" {
     static __font_start: u64;
     static __font_end: u64;
+    static __data_start: u8;
     static mut __kernel_end: u64;
 }
 
@@ -37,8 +38,9 @@ pub extern "C" fn main() -> ! {
     //tests::test_dma();
     tests::test_usb().expect("USB test should pass");
     writeln!(system::std_out(), "Done.").expect("System out should work");
-    loop {
-    }
+    panic!("Let's go monitor!");
+    // loop {
+    // }
 }
 
 global_asm!(".section .font", ".incbin \"901447-10.bin\"");

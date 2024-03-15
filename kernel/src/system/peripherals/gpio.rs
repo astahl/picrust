@@ -2,7 +2,7 @@ use crate::peripherals::mmio::MMIO;
 
 pub struct Gpio();
 
-const GPIO_BASE: usize = 0x200000;
+pub const GPIO_BASE: usize = 0x200000;
 
 #[derive(Clone, Copy)]
 pub struct PinSet(u32, u32);

@@ -13,7 +13,9 @@ pub enum Uart {
     MiniUart(usize)
 }
 
-pub const UART_0: Uart = Uart::Pl011Uart(0x201000);
+pub const UART_BASE: usize = 0x201000;
+
+pub const UART_0: Uart = Uart::Pl011Uart(UART_BASE);
 // pub type Uart2 = Pl011Uart<0x201400>;
 // pub type Uart3 = Pl011Uart<0x201600>;
 // pub type Uart4 = Pl011Uart<0x201800>;

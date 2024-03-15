@@ -1,53 +1,7 @@
-use core::fmt::{Display, Write};
+use core::fmt::{Debug, Display, Write};
 
-use crate::peripherals::mailbox;
+use crate::{peripherals::mailbox, system::peripherals};
 
-pub struct ByteSize(pub usize);
-
-impl Display for ByteSize {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        const MASK: usize = 0x3ff;
-        const NAMES: [&'static str; 7] = [
-            "Exbibyte", "Pebibyte", "Tebibyte", "Gibibyte", "Mebibyte", "Kibibyte", "Byte",
-        ];
-        let separator = "+";
-        let mut needs_separator = false;
-        f.write_char('(');
-        for i in 0..7 {
-            let val = (self.0 >> ((6 - i) * 10)) & MASK;
-            if val != 0 {
-                write!(
-                    f,
-                    "{}{} {}",
-                    if needs_separator { separator } else { "" },
-                    val,
-                    NAMES[i]
-                )?;
-                needs_separator = true;
-            }
-            if val > 1 {
-                f.write_char('s')?;
-            }
-        }
-        f.write_char(')');
-        Ok(())
-    }
-}
-
-pub struct Memory {
-    pub base_address: usize,
-    pub size: ByteSize,
-}
-
-impl Display for Memory {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "Memory[{} starting at 0x{:x}]",
-            self.size, self.base_address
-        )
-    }
-}
 
 #[derive(Debug)]
 pub enum Type {
@@ -355,22 +309,16 @@ pub struct BoardInfo {
     pub serial: u64,
 }
 
-pub fn get_arm_memory() -> Option<Memory> {
+pub fn get_arm_memory() -> Option<MemoryBlock> {
     let (base_address, size): (u32, u32) =
         mailbox::simple_single_call(mailbox::Tag::HwGetArmMemory as u32, 8).ok()?;
-    Some(Memory {
-        base_address: base_address as usize,
-        size: ByteSize(size as usize),
-    })
+    Some(MemoryBlock::from_address_and_size(base_address as usize, size as usize))
 }
 
-pub fn get_vc_memory() -> Option<Memory> {
+pub fn get_vc_memory() -> Option<MemoryBlock> {
     let (base_address, size): (u32, u32) =
         mailbox::simple_single_call(mailbox::Tag::HwGetVcMemory as u32, ()).ok()?;
-    Some(Memory {
-        base_address: base_address as usize,
-        size: ByteSize(size as usize),
-    })
+    Some(MemoryBlock::from_address_and_size(base_address as usize, size as usize))
 }
 
 pub fn get_board_info() -> Option<BoardInfo> {
@@ -392,3 +340,96 @@ pub fn get_board_info() -> Option<BoardInfo> {
         serial,
     })
 }
+
+
+extern "C" {
+    static __main_stack: u8;
+    static __kernel_start: u8;
+    static __kernel_txt_start: u8;
+    static __kernel_txt_end: u8;
+    static __rodata_start: u8;
+    static __font_start: u8;
+    static __font_end: u8;
+    static __rodata_end: u8;
+    static __data_start: u8;
+    static __data_end: u8;
+    static __bss_start: u8;
+    static __bss_end: u8;
+    static __kernel_end: u8;
+    static __free_memory_start: u8;
+}
+
+pub struct MemoryBlock(*const u8, *const u8);
+
+impl core::fmt::Debug for MemoryBlock {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "[{:#x} - {:#x}]", self.0 as usize, self.1 as usize)?;
+        if f.alternate() {
+            write!(f, "({})", mystd::format::ByteValue(self.byte_size()))?;
+        }
+        Ok(())
+    }
+}
+
+impl core::fmt::Display for MemoryBlock {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
+
+impl MemoryBlock{
+    pub const fn from_symbols<T>(start: &T, end: &T) -> Self {
+        Self(core::ptr::addr_of!(*start).cast(), core::ptr::addr_of!(*end).cast())
+    }
+
+    pub const fn from<T>(entity: &T) -> Self {
+        Self::from_start_and_count(entity, 1)
+    }
+
+    pub const fn from_address_and_size(address: usize, size: usize) -> Self {
+        Self(address as *const u8, (address + size) as *const u8)
+    }
+
+    pub const fn from_start_and_count<T>(start: &T, count: usize) -> Self {
+        Self(core::ptr::addr_of!(*start).cast(), core::ptr::addr_of!(*start).wrapping_add(count).cast())
+    }
+
+    pub fn byte_size(&self) -> usize {
+        (self.0 as usize).abs_diff(self.1 as usize)
+    }
+}
+
+pub struct MemoryMap();
+
+impl core::fmt::Debug for MemoryMap {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        unsafe{
+        let stack = core::ptr::addr_of!(__main_stack);
+        let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
+        let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
+        let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);
+        let font = MemoryBlock::from_symbols(&__font_start, &__font_end);
+        let data = MemoryBlock::from_symbols(&__data_start, &__data_end);
+        let bss = MemoryBlock::from_symbols(&__bss_start, &__bss_end);
+        let ram = core::ptr::addr_of!(__free_memory_start);
+        let arm_ram = self::get_arm_memory().ok_or(core::fmt::Error)?;
+        let vc_ram = self::get_vc_memory().ok_or(core::fmt::Error)?;
+        let peripherals = MemoryBlock::from_address_and_size(peripherals::BCM_HOST.peripheral_address, peripherals::BCM_HOST.peripheral_size);
+        f.debug_struct("MemoryMap")
+            .field("Stack Top", &format_args!("{stack:#p}"))
+            .field("Kernel", &kernel)
+            .field("Kernel Code", &kernel_text)
+            .field("Read-Only Data Segment", &rodata)
+            .field("Font", &font)
+            .field("Data Segment", &data)
+            .field("BSS Segment", &bss)
+            .field("Heap Bottom", &format_args!("{ram:#p}"))
+            .field("ARM", &arm_ram)
+            .field("VC", &vc_ram)
+            .field("Peripherals", &peripherals)
+            .field("Peripherals", &peripherals::PeripheralMap())
+            .finish()
+        }
+    }
+}
+
