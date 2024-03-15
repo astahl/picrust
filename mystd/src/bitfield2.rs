@@ -493,13 +493,41 @@ macro_rules! bit_field {
 
         impl core::fmt::Debug for $type_name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                f.debug_struct(stringify!($type_name))
-                    .field("binary", &format_args!("{:#0width$b}", &self.0, width=(<$underlying_type>::BITS as usize)))
+                let mut builder = f.debug_struct(stringify!($type_name));
+                builder.field("binary", &format_args!("{:#0width$b}", &self.0, width=(<$underlying_type>::BITS as usize)));
                 $(
-                    .field(concat!(stringify!($bit_name),"[", stringify!($bit_from) $(, ":", stringify!($bit_to))?, "]"),
-                        &self.$bit_name().value())
+                    builder.field(concat!(stringify!($bit_name),"[", stringify!($bit_from) $(, ":", stringify!($bit_to))?, "]"),
+                        &self.$bit_name().value());
                 )*
-                    .finish()
+                builder.finish()
+            }
+        }
+
+        impl core::fmt::Binary for $type_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                core::fmt::Binary::fmt(&self.0, f)
+            }
+        }
+
+        impl core::fmt::UpperHex for $type_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                core::fmt::UpperHex::fmt(&self.0, f)
+            }
+        }
+
+        impl core::fmt::LowerHex for $type_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                core::fmt::LowerHex::fmt(&self.0, f)
+            }
+        }
+
+        impl core::fmt::Display for $type_name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                if Self::BIT_WIDTH > 16 {
+                    core::fmt::LowerHex::fmt(self, f)
+                } else {
+                    core::fmt::Binary::fmt(self, f)
+                }
             }
         }
 
