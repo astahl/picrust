@@ -21,7 +21,7 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     let mut uart = uart::UART_0;
     let _ = writeln!(uart, "Doki Doki! {info}");
     hal::led::status_blink_twice(100);
-    monitor::Monitor::new(|| uart.get_byte().unwrap_or(b'0'), uart).run();
+    monitor::Monitor::new(uart, uart).run();
 }
 
 extern "C" {
@@ -34,8 +34,8 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     system::initialize();
-    //tests::run();
-    //tests::test_dma();
+    tests::run();
+    tests::test_dma();
     tests::test_usb().expect("USB test should pass");
     writeln!(system::std_out(), "Done.").expect("System out should work");
     panic!("Let's go monitor!");

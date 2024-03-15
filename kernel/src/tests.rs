@@ -1,3 +1,4 @@
+use crate::println_log;
 use crate::system::hal::clocks;
 use crate::system::peripherals;
 use crate::system::peripherals::dma::DmaControlAndStatus;
@@ -13,13 +14,10 @@ use mystd::collections;
 use mystd::io::Write;
 
 pub fn run() {
+    println_log!("{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM));
+    println_log!("Current Exception Level: {}", system::arm_core::current_exception_level());
+   
     use core::fmt::Write;
-    let mut uart = UART_0;
-
-    writeln!(&mut uart, "{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM).unwrap());
-    writeln!(&mut uart, "Current Exception Level: {}", system::arm_core::current_exception_level());
-    // Uart0::puts("start");
-
     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
 
     use hal::framebuffer::color;
@@ -101,7 +99,7 @@ pub fn run() {
     fb.clear(color::BLACK);
     fb.write_text(text.as_bytes(), font, mapping);
 
-    uart.write_all(text.as_bytes());
+    println_log!("{text}");
     // Uart0::put_uint(core as u64);
     // Uart0::puts("Hallo\n");
     //
@@ -160,10 +158,7 @@ pub fn run() {
 }
 
 pub fn test_dma() {
-    use core::fmt::Write;
-    let mut uart = UART_0;
     use super::peripherals::dma;
-    let mut str_buffer = collections::ring::RingArray::<u8, 0x2000>::new();
     // let mut status = dma::Dma0::control_status();
     // status.set_reset();
     // writeln!(str_buffer, "{:?}", dma::Dma0::control_status()).unwrap();
@@ -174,29 +169,27 @@ pub fn test_dma() {
 
     let mem_start = unsafe { core::ptr::addr_of_mut!(super::__kernel_end).wrapping_add(0x100000) };
 
-    writeln!(str_buffer, "MEM START = {:x}", mem_start as usize).unwrap();
+    println_log!("MEM START = {:x}", mem_start as usize);
     let control_block_ptr: *mut dma::DmaControlBlock = mem_start.cast();
     let src = mem_start.wrapping_add(0x100000).cast::<u8>();
     let dest = src.wrapping_add(0x100000);
-    writeln!(str_buffer, "CB Addr = {:p}", control_block_ptr).unwrap();
-    writeln!(str_buffer, "Src Addr = {:p}", src).unwrap();
-    writeln!(str_buffer, "Dest Addr = {:p}", dest).unwrap();
-    uart.write_all(str_buffer.make_continuous());
-    str_buffer.clear();
+    println_log!("CB Addr = {:p}", control_block_ptr);
+    println_log!("Src Addr = {:p}", src);
+    println_log!("Dest Addr = {:p}", dest);
     
     unsafe {
         let length = 8*1024*1024;
         core::slice::from_raw_parts_mut(src, length).fill(0x55);
         let transfer_information = dma::DmaTransferInformation::wide_copy();
         let cb = DmaControlBlock::linear_copy(transfer_information, src as u32, dest as u32, length as u32, 0);
-        writeln!(str_buffer, "cb = {:#?}", &cb).unwrap();
+        println_log!("cb = {:#?}", &cb);
         control_block_ptr.write_volatile(cb);
         
         DMA_0.set_control_block_address(control_block_ptr as u32);
 
-        writeln!(str_buffer, "Src = {:x}", src.read()).unwrap();
-        writeln!(str_buffer, "Dest = {:x}", dest.read()).unwrap();
-        writeln!(str_buffer, "cb: {:x}", DMA_0.control_block_address()).unwrap();
+        println_log!("Src = {:x}", src.read());
+        println_log!("Dest = {:x}", dest.read());
+        println_log!("cb: {:x}", DMA_0.control_block_address());
         let status = DMA_0.control_and_status()
             .active().set()
             .axi_priority_level().set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
@@ -204,39 +197,33 @@ pub fn test_dma() {
             .wait_for_outstanding_writes().set();
         DMA_0.set_control_and_status(status);
         while !DMA_0.control_and_status().end().is_set() {
-            writeln!(str_buffer, "wait").unwrap();
+            println_log!("wait for transfer end");
         }
-        writeln!(str_buffer, "cb: {:x}", DMA_0.control_block_address()).unwrap();
-        writeln!(str_buffer, "Dest = {:x}", dest.read()).unwrap();
-        writeln!(str_buffer, "Ended? {:?}", DMA_0.control_and_status().end().is_set()).unwrap();
-
-        writeln!(str_buffer, "dbg: {:#?}", DMA_0.debug()).unwrap();
+        println_log!("cb: {:x}", DMA_0.control_block_address());
+        println_log!("Dest = {:x}", dest.read());
+        println_log!("Ended? {:?}", DMA_0.control_and_status().end().is_set());
+        println_log!("dbg: {:#?}", DMA_0.debug());
     }
-    uart.write_all(str_buffer.make_continuous());
-    
-
 }
 
 pub fn test_usb() -> Option<()>{
     use core::time::Duration;
-    use core::fmt::Write;
     use peripherals::usb;
     use peripherals::power;
-    let mut uart = UART_0;
-
-    writeln!(&mut uart, "USB Vendor-ID {:#x}", usb::DwHciCore::vendor_id()).ok()?;
+   
+    println_log!("USB Vendor-ID {:#x}", usb::DwHciCore::vendor_id());
 
     let power_state = power::PowerDevice::USBHCD.state()?;
-    writeln!(&mut uart, "USB Exists: {}", power_state.exists()).ok()?;
-    writeln!(&mut uart, "USB Power On: {}", power_state.is_on()).ok()?;
+    println_log!("USB Exists: {}", power_state.exists());
+    println_log!("USB Power On: {}", power_state.is_on());
     if !power_state.is_on() {
         let timeout = core::time::Duration::from_millis(power::PowerDevice::USBHCD.timing_ms()? as u64);
-        writeln!(&mut uart, "USB Power On Timeout: {} msec", timeout.as_millis()).ok()?;
+        println_log!("USB Power On Timeout: {} msec", timeout.as_millis());
         let turned_on = power_state.with_on().with_wait_set();
         power::PowerDevice::USBHCD.set_state(turned_on);
         system::arm_core::counter::wait(timeout);
         let power_state = power::PowerDevice::USBHCD.state()?;
-        writeln!(&mut uart, "USB Power On: {}", power_state.is_on()).ok()?;
+        println_log!("USB Power On: {}", power_state.is_on());
     }
 
     let ahb_config = usb::DwHciCore::ahb_config()

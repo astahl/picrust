@@ -74,14 +74,42 @@ fn init_serial_uart() {
     // writer.replace_second(uart::UART_0);
 }
 
+#[macro_export]
+macro_rules! println_log {
+    ($($param:tt)*) => {
+        writeln!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
+    };
+}
+
+#[macro_export]
+macro_rules! print_log {
+    ($($param:tt)*) => {
+        write!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
+    };
+}
+
+#[cfg(debug_assertions)]
+#[macro_export]
+macro_rules! println_debug {
+    ($($param:tt)*) => {
+        writeln!($crate::system::std_out(), $($param)*).expect("debug write should always work!");
+    };
+}
+
+#[cfg(not(debug_assertions))]
+#[macro_export]
+macro_rules! println_debug {
+    ($($param:tt)*) => {};
+}
+
 pub fn initialize() {
     // let core_id = system::get_core_num();
     // if core_id == 0 {
     if cfg!(feature = "serial_uart") {
         init_serial_uart();
-        writeln!(std_out(), "System Initialize...").unwrap();
+        print_log!("System Initialize...");
         // print a memory map
-        writeln!(std_out(), "{:#?}", hal::info::MemoryMap()).unwrap();
+        println_debug!("{:#?}", hal::info::MemoryMap());
     }
     let status_led = hal::led::Led::Status;
     status_led.on();

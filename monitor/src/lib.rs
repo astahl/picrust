@@ -9,14 +9,14 @@ use writer::Writer;
 const LINE_LEN: usize = 256;
 type Buffer = mystd::collections::line::LineArray<u8, LINE_LEN>;
 
-pub struct Monitor<In: Fn() -> u8, Out: mystd::io::Write> {
+pub struct Monitor<In: mystd::io::Read, Out: mystd::io::Write> {
     input: In,
     writer: Writer<Out>,
     line_buffer: Buffer,
     context: command::CommandContext,
 }
 
-impl<In: Fn() -> u8, Out: mystd::io::Write> Monitor<In, Out> {
+impl<In: mystd::io::Read, Out: mystd::io::Write> Monitor<In, Out> {
     pub fn new(input: In, output: Out) -> Self {
         Self {
             input,
@@ -30,7 +30,11 @@ impl<In: Fn() -> u8, Out: mystd::io::Write> Monitor<In, Out> {
         self.writer.putc(0x0c);
         self.echo_prompt();
         loop {
-            let c = (self.input)().to_ascii_uppercase();
+            let mut buf = [0_u8];
+            if self.input.read_exact(buf.as_mut_slice()).is_err() {
+                continue;
+            }
+            let c = buf[0].to_ascii_uppercase();
             match c {
                 0x7F | 0x08 => {
                     if let Some(_) = self.line_buffer.pop_back() {

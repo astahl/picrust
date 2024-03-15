@@ -1,4 +1,4 @@
-use core::fmt::{Debug, Display, Write};
+use core::{fmt::{Debug, Display, Write}, ptr::null};
 
 use crate::{peripherals::mailbox, system::peripherals};
 
@@ -359,6 +359,7 @@ extern "C" {
     static __free_memory_start: u8;
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MemoryBlock(*const u8, *const u8);
 
 impl core::fmt::Debug for MemoryBlock {
@@ -378,8 +379,10 @@ impl core::fmt::Display for MemoryBlock {
 }
 
 impl MemoryBlock{
-    pub const fn from_symbols<T>(start: &T, end: &T) -> Self {
-        Self(core::ptr::addr_of!(*start).cast(), core::ptr::addr_of!(*end).cast())
+    pub fn from_symbols<T>(start: &T, end: &T) -> Self {
+        let st = core::ptr::addr_of!(*start).cast::<u8>();
+        let end = core::ptr::addr_of!(*end).cast::<u8>();
+        Self(st.min(end), st.max(end))
     }
 
     pub const fn from<T>(entity: &T) -> Self {
@@ -404,26 +407,26 @@ pub struct MemoryMap();
 impl core::fmt::Debug for MemoryMap {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe{
-        let stack = core::ptr::addr_of!(__main_stack);
+        let stack = MemoryBlock::from_symbols(*null(), &__main_stack);
         let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
         let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
         let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);
         let font = MemoryBlock::from_symbols(&__font_start, &__font_end);
         let data = MemoryBlock::from_symbols(&__data_start, &__data_end);
         let bss = MemoryBlock::from_symbols(&__bss_start, &__bss_end);
-        let ram = core::ptr::addr_of!(__free_memory_start);
         let arm_ram = self::get_arm_memory().ok_or(core::fmt::Error)?;
+        let heap = MemoryBlock::from_symbols(&__kernel_end, &*arm_ram.1);
         let vc_ram = self::get_vc_memory().ok_or(core::fmt::Error)?;
         let peripherals = MemoryBlock::from_address_and_size(peripherals::BCM_HOST.peripheral_address, peripherals::BCM_HOST.peripheral_size);
         f.debug_struct("MemoryMap")
-            .field("Stack Top", &format_args!("{stack:#p}"))
+            .field("Stack", &stack)
             .field("Kernel", &kernel)
             .field("Kernel Code", &kernel_text)
             .field("Read-Only Data Segment", &rodata)
             .field("Font", &font)
             .field("Data Segment", &data)
             .field("BSS Segment", &bss)
-            .field("Heap Bottom", &format_args!("{ram:#p}"))
+            .field("Heap", &heap)
             .field("ARM", &arm_ram)
             .field("VC", &vc_ram)
             .field("Peripherals", &peripherals)
