@@ -523,9 +523,11 @@ macro_rules! bit_field {
 
         impl core::fmt::Display for $type_name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                if Self::BIT_WIDTH > 16 {
+                if core::mem::size_of::<$type_name>() > 2 {
+                    // above 16 bits in length we default to hex
                     core::fmt::LowerHex::fmt(self, f)
                 } else {
+                    // up to 16 bits we default to binary
                     core::fmt::Binary::fmt(self, f)
                 }
             }
