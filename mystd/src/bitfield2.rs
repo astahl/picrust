@@ -1,4 +1,4 @@
-use core::{fmt::Debug, marker::PhantomData};
+use core::{fmt::Debug, marker::PhantomData, ops::BitAnd};
 
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -272,12 +272,12 @@ macro_rules! bit_field_method {
 #[macro_export]
 macro_rules! bit_field_type_definition {
 
-    ($underlying_type:ty;$bit_position:literal;$bit_to:literal;) => {};
-    ($underlying_type:ty;$bit_position:literal;) => {};
+    ($bit_position:literal;$bit_to:literal;) => {};
+    ($bit_position:literal;) => {};
     (
-        $underlying_type:ty;$bit_from:literal;$bit_to:literal;
+        $bit_from:literal;$bit_to:literal;
         $(#[$meta:meta])*
-        $v:vis enum $name:ident { 
+        $v:vis enum $name:ident<$underlying_type:ty> { 
             $(
                 $(#[$value_meta:meta])* 
                 $value_name:ident = $value_expr:literal
@@ -286,13 +286,13 @@ macro_rules! bit_field_type_definition {
         }
     ) => {
         $(#[$meta])*
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, PartialEq, Clone, Copy)]
         #[repr($underlying_type)]
         $v enum $name { 
             $(
                 $(#[$value_meta])*
                 $value_name = $value_expr
-            ),* 
+            ),*
         }
 
         impl Into<$underlying_type> for $name {
@@ -313,9 +313,9 @@ macro_rules! bit_field_type_definition {
         }
     };
     (
-        $underlying_type:ty; $bit_position:literal;
+        $bit_position:literal;
         $(#[$meta:meta])*
-        $v:vis enum $name:ident { 
+        $v:vis enum $name:ident<$underlying_type:ty> { 
             $(#[$value_false_meta:meta])* 
             $value_false_name:ident,
             $(#[$value_true_meta:meta])* 
@@ -491,6 +491,12 @@ macro_rules! bit_field {
             }
         }
 
+        impl Into<$underlying_type> for $type_name {
+            fn into(self) -> $underlying_type {
+                self.0
+            }
+        }
+
         impl core::fmt::Debug for $type_name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let mut builder = f.debug_struct(stringify!($type_name));
@@ -533,27 +539,29 @@ macro_rules! bit_field {
             }
         }
 
-        impl core::ops::BitOr<$type_name> for $type_name {
+        impl<T: Into<$underlying_type>> core::ops::BitOr<T> for $type_name{
             type Output = Self;
-            fn bitor(self, rhs: Self) -> Self {
-                Self::new(self.0 | rhs.0)
+        
+            fn bitor(self, rhs: T) -> Self::Output {
+                Self::new(self.0 | rhs.into())
             }
         }
 
-        impl core::ops::BitAnd<$type_name> for $type_name {
+        impl<T: Into<$underlying_type>> core::ops::BitAnd<T> for $type_name{
             type Output = Self;
-            fn bitand(self, rhs: Self) -> Self {
-                Self::new(self.0 & rhs.0)
+        
+            fn bitand(self, rhs: T) -> Self::Output {
+                Self::new(self.0 & rhs.into())
             }
         }
     
 
         $(
             $crate::bit_field_type_definition!(
-            $underlying_type; $bit_from; $($bit_to;)?
+            $bit_from; $($bit_to;)?
             $(
                 $(#[$field_type_meta])* 
-                $v enum $field_type_definition $field_typedef
+                $v enum $field_type_definition<$underlying_type> $field_typedef
             )?
             );
         )*
@@ -605,6 +613,8 @@ impl Into<u8> for Fuzzy {
         self as u8
     }
 }
+
+
 
 
 #[derive(Debug, PartialEq)]

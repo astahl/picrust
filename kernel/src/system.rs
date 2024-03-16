@@ -114,7 +114,7 @@ pub fn initialize() {
     let status_led = hal::led::Led::Status;
     status_led.on();
     if cfg!(feature = "mmu") {
-        //arm_core::mmu::mmu_init().unwrap();
+        arm_core::mmu::mmu_init().unwrap();
     }
     status_led.off();
     let _a = std_out().lock();
