@@ -208,61 +208,56 @@ where T: BitFieldable, U: From<T::Underlying> + Into<T::Underlying> + Debug
 
 #[macro_export]
 macro_rules! ensure_bit_fits {
-    ($type:tt $bit:literal) => {
+    ($bit:literal, $underlying_type:ty) => {
         #[deny(arithmetic_overflow)]
-        const _: $type = (1 as $type << $bit);
-    }
+        const _: $underlying_type = (1 as $underlying_type << $bit);
+    };
+    ($field_from:literal : $field_to:literal, $underlying_type:ty) => {
+        #[deny(arithmetic_overflow)]
+        const _: $underlying_type = (1 as $underlying_type << $field_from);
+        const _: $underlying_type = (1 as $underlying_type << $field_to);
+    };
 }
 
 #[macro_export]
 macro_rules! bit_field_method {
     (
-        $type_name:ident; $underlying_type:ty;
         $(#[$meta:meta])* 
         $field_from:literal:$field_to:literal => $field_name:ident
     ) => {
         $(#[$meta])*
-        pub const fn $field_name(self) -> $crate::bitfield2::FieldMask<$field_from, $field_to, $type_name> {
-            $crate::ensure_bit_fits!($underlying_type $field_from);
-            $crate::ensure_bit_fits!($underlying_type $field_to);
+        pub const fn $field_name(self) -> $crate::bitfield2::FieldMask<$field_from, $field_to, Self> {
             $crate::bitfield2::FieldMask::new(self)
         }
     };
 
     (
-        $type_name:ident; $underlying_type:ty;
         $(#[$meta:meta])* 
         $bit_position:literal => $bit_name:ident
     ) => {
         $(#[$meta])*
-        pub const fn $bit_name(self) -> $crate::bitfield2::BitMask<$bit_position, $type_name> {
-            $crate::ensure_bit_fits!($underlying_type $bit_position);
+        pub const fn $bit_name(self) -> $crate::bitfield2::BitMask<$bit_position, Self> {
             $crate::bitfield2::BitMask::new(self)
         }
     };
 
     (
-        $type_name:ident; $underlying_type:ty;
         $(#[$meta:meta])* 
         $bit_position:literal => $bit_name:ident: $bit_type:ty
     ) => {
         $(#[$meta])*
-        pub const fn $bit_name(self) -> $crate::bitfield2::TypedBitMask<$bit_position, $type_name, $bit_type> {
-            $crate::ensure_bit_fits!($underlying_type $bit_position);
+        pub const fn $bit_name(self) -> $crate::bitfield2::TypedBitMask<$bit_position, Self, $bit_type> {
             $crate::bitfield2::TypedBitMask::new(self)
         }
     };
 
     (
-        $type_name:ident; $underlying_type:ty;
         $(#[$meta:meta])* 
         $field_from:literal:$field_to:literal => $field_name:ident: $field_type:ty
     ) => {
         
         $(#[$meta])*
-        pub const fn $field_name(self) -> $crate::bitfield2::TypedFieldMask<$field_from, $field_to, $type_name, $field_type> {
-            $crate::ensure_bit_fits!($underlying_type $field_from);
-            $crate::ensure_bit_fits!($underlying_type $field_to);
+        pub const fn $field_name(self) -> $crate::bitfield2::TypedFieldMask<$field_from, $field_to, Self, $field_type> {
             $crate::bitfield2::TypedFieldMask::new(self)
         }
     
@@ -438,9 +433,16 @@ macro_rules! bit_field {
                 Self::new(self.0 | mask)
             }
 
+            const fn __bounds_check_method() {
+                $(
+                    $crate::ensure_bit_fits!(
+                        $bit_from$(:$bit_to)?, $underlying_type
+                    );
+                )*
+            }
+
             $(
                 $crate::bit_field_method!(
-                    $type_name; $underlying_type;
                     $(#[$bit_meta])* 
                     $bit_from$(:$bit_to)? => $bit_name$(:$field_type)?$(:$field_type_definition)?
                 );
@@ -502,6 +504,8 @@ macro_rules! bit_field {
                 let mut builder = f.debug_struct(stringify!($type_name));
                 builder.field("binary", &format_args!("{:#0width$b}", &self.0, width=(<$underlying_type>::BITS as usize)));
                 $(
+                    #[allow(unused_doc_comments)]
+                    $(#[$bit_meta])* 
                     builder.field(concat!(stringify!($bit_name),"[", stringify!($bit_from) $(, ":", stringify!($bit_to))?, "]"),
                         &self.$bit_name().value());
                 )*
@@ -656,13 +660,14 @@ bit_field!(
     /// 
     /// A field so good it shows
     0:7 => my_field,
+    #[cfg(feature = "blarg")]
     1 => buzzys: Buzzy, 
     // 3:4 => fuzzys: Fuzzy,
 });
 
 
 bit_field!(pub X(u32) {
-    3 => x,
+    31 => x,
     4:5 => y: 
     /// Please note that this does not have the zero value
     enum YFieldValue {
