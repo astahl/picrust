@@ -180,7 +180,9 @@ bit_field!(pub IdAa64Mmfr0El1(usize){
 
     /// # PARange
     /// Physical Address range supported
-    3:0 => pa_range: enum PhysicalAddressRangeSupport {
+    3:0 => pa_range: 
+    #[derive(PartialOrd)]
+    enum PhysicalAddressRangeSupport {
         /// 32 bits, 4GB.
         _32Bits4GB = 0b0000,
         /// 36 bits, 64GB.

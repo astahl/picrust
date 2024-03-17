@@ -25,7 +25,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 
     let mm_feats = memory_model_features::read();
     
-    if mm_feats.pa_range() == memory_model_features::PhysicalAddressRangeSupport::_32Bits4GB {
+    if mm_feats.pa_range().value().expect("PAR should work") < memory_model_features::PhysicalAddressRangeSupport::_36Bits64GB {
         return Err(MMUInitError::PhysicalAddressRangeAtLeast36bitNotSupported);
     }
     if mm_feats.t_gran4() == memory_model_features::Granule4KBSupport::NotSupported {

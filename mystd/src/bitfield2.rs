@@ -7,7 +7,7 @@ pub enum BitFieldError {
     UnexpectedValue,
 }
 
-pub trait BitFieldable: Clone + Copy {
+pub trait BitField: Clone + Copy {
     type Underlying: Copy;
     const BIT_WIDTH: usize;
     
@@ -32,9 +32,9 @@ pub trait BitFieldable: Clone + Copy {
 
 
 #[derive(Clone, Copy)]
-pub struct BitMask<const N: usize, T: BitFieldable>(T);
+pub struct BitMask<const N: usize, T: BitField>(T);
 
-impl<const N: usize, T: BitFieldable> BitMask<N, T> {
+impl<const N: usize, T: BitField> BitMask<N, T> {
     pub const POSITION: usize = N;
     
     pub const fn new(bitfield: T) -> Self {
@@ -46,8 +46,8 @@ impl<const N: usize, T: BitFieldable> BitMask<N, T> {
     }
 
     #[must_use]
-    pub fn set_to(self, value: bool) -> T {
-        if value {
+    pub fn set_value<U: Into<bool>>(self, value: U) -> T {
+        if value.into() {
             self.0.with_bit_set(Self::POSITION)
         } else {
             self.0.with_bit_cleared(Self::POSITION)
@@ -79,9 +79,9 @@ impl<const N: usize, T: BitFieldable> BitMask<N, T> {
 
 
 #[derive(Clone, Copy)]
-pub struct FieldMask<const FROM: usize, const TO: usize, T: BitFieldable>(T);
+pub struct FieldMask<const FROM: usize, const TO: usize, T: BitField>(T);
 
-impl<const FROM: usize, const TO: usize, T: BitFieldable> FieldMask<FROM, TO, T> {
+impl<const FROM: usize, const TO: usize, T: BitField> FieldMask<FROM, TO, T> {
     const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
     pub const LSB: usize = Self::MIN_MAX.0;
     pub const MSB: usize = Self::MIN_MAX.1; 
@@ -127,12 +127,12 @@ impl<const FROM: usize, const TO: usize, T: BitFieldable> FieldMask<FROM, TO, T>
 
 #[derive(Clone, Copy)]
 pub struct TypedBitMask<const N: usize, T, U>(T, PhantomData<U>)
-    where T: BitFieldable, U: From<bool> + Into<bool> + Debug
+    where T: BitField, U: From<bool> + Into<bool> + Debug
 
 ;
 
 impl<const N: usize, T, U> TypedBitMask<N, T, U>
-where T: BitFieldable, U: From<bool> + Into<bool> + Debug
+where T: BitField, U: From<bool> + Into<bool> + Debug
 {
     pub const POSITION: usize = N;
     
@@ -158,10 +158,10 @@ where T: BitFieldable, U: From<bool> + Into<bool> + Debug
 pub struct TypedFieldMask<const FROM: usize, const TO: usize, T, U>(
     T,
     PhantomData<U>
-) where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug;
+) where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug;
 
 impl<const FROM: usize, const TO: usize, T, U> PartialEq<U> for TypedFieldMask<FROM, TO, T, U>
-where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug + PartialEq<U> + Copy
+where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug + PartialEq<U> + Copy
 {
     fn eq(&self, other: &U) -> bool {
         match self.value() {
@@ -172,7 +172,7 @@ where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug +
 }
 
 impl<const FROM: usize, const TO: usize, T, U> TypedFieldMask<FROM, TO, T, U>
-where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug
+where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug
 {
     const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
     pub const LSB: usize = Self::MIN_MAX.0;
@@ -198,7 +198,7 @@ where T: BitFieldable, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug
 }
 
 impl<const FROM: usize, const TO: usize, T, U> TypedFieldMask<FROM, TO, T, U>
-where T: BitFieldable, U: From<T::Underlying> + Into<T::Underlying> + Debug
+where T: BitField, U: From<T::Underlying> + Into<T::Underlying> + Debug
 {
     pub fn value_into(self) -> U {
         U::from(self.0.field_value(Self::LSB, Self::MSB))
@@ -370,6 +370,7 @@ macro_rules! bit_field {
                         $( #[ $field_type_meta:meta ] )* 
                         enum $field_type_definition:ident $field_typedef:tt
                     )?
+                    $(= $field_default_expr:expr)?
             ),* $(,)?
         }
     ) => {
@@ -417,9 +418,9 @@ macro_rules! bit_field {
 
             pub const fn with_bit_value(self, position: usize, value: bool) -> Self {
                 if value {
-                    self.with_bit_cleared(position)
-                } else {
                     self.with_bit_set(position)
+                } else {
+                    self.with_bit_cleared(position)
                 }
             }
 
@@ -463,7 +464,7 @@ macro_rules! bit_field {
 
         }
 
-        impl $crate::bitfield2::BitFieldable for $type_name {
+        impl $crate::bitfield2::BitField for $type_name {
             type Underlying = $underlying_type;
             const BIT_WIDTH: usize = <$underlying_type>::BITS as usize;
 
@@ -497,6 +498,24 @@ macro_rules! bit_field {
 
             fn with_field_all_set(self, lsb: usize, msb: usize) -> Self {
                 self.with_field_all_set(lsb, msb)
+            }
+        }
+
+        impl Default for $type_name {
+            fn default() -> Self {
+                #[allow(unused_mut)]
+                let mut result = Self::zero();
+                $(
+                    #[allow(unused_doc_comments)]
+                    $(#[$bit_meta])* 
+                    {
+                        $( 
+                        result = result
+                            .$bit_name().set_value($field_default_expr)
+                        )?
+                    }
+                )*
+                result
             }
         }
 
@@ -663,12 +682,12 @@ impl Into<bool> for Buzzy {
 
 bit_field!(
     pub MyReg(u8) { 
-        2 => a,
+        2 => a = true,
         /// probably fine
         3 => b: enum ABool {
             Ass, 
             Bee
-        },
+        } = ABool::Bee,
         /// # The best field
         /// 
         /// A field so good it shows
@@ -677,7 +696,7 @@ bit_field!(
         3:4 => fuzzys: Fuzzy,
         #[cfg(feature = "blarg")]
         /// eh?
-        6 => not_today
+        6 => not_today = true
 });
 
 
@@ -716,6 +735,12 @@ mod tests {
     fn test_created_types() {
         let x = X::zero().y().set_value(YFieldValue::Odd); 
         assert_eq!(Ok(YFieldValue::Odd), x.y().value())
+    }
+
+    #[test]
+    fn default_works() {
+        let x = MyReg::default();
+        assert_eq!(ABool::Bee, x.b().value());
     }
 
     #[test]
