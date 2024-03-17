@@ -303,6 +303,8 @@ bit_field!(TableDescriptor(u64)
     },
 );
 
+// Models the "Effective Value of TCR_ELx.DS". In reality it's a bit more complicated, 
+// but until we support chips that support FEAT_LPA2 totally irrelevant
 const TCR_ELX_DS: bool = crate::system::arm_core::features::FEAT_LPA2;
 use crate::system::arm_core::features::FEAT_LPA;
 
