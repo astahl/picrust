@@ -117,7 +117,7 @@ pub fn initialize() {
         arm_core::mmu::mmu_init().unwrap();
     }
     status_led.off();
-    let _a = std_out().lock();
+    //let _a = std_out().lock();
     //writeln!(std_out(), "System Initialized").expect("second write should work");
 }
 

@@ -21,6 +21,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // check for 4k granule and at least 36 bits physical address bus */
 
     use crate::system::arm_core::registers::aarch64::general_sys_ctrl;
+    use general_sys_ctrl::mair_el1 as memory_attributes;
     use general_sys_ctrl::id_aa64mmfr0_el1 as memory_model_features;
 
     let mm_feats = memory_model_features::read();
@@ -177,6 +178,31 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     unsafe {
         asm!("msr mair_el1, {}", in(reg) r);
     }
+
+    // let mut memory_attributes_array = memory_attributes::MairEl1::zero();
+
+    // // index 0: Inner and Outer Normal Memory WriteBack Non-transient RW-Allocate (0b1111_1111)
+    // let write_back_non_transient_allocate = memory_attributes::NormalCacheType {
+    //     write_policy: memory_attributes::CacheWritePolicy::WriteBack,
+    //     transistence: memory_attributes::CacheTransistence::NonTransient,
+    //     read_allocate_policy: memory_attributes::AllocatePolicy::Allocate,
+    //     write_allocate_policy: memory_attributes::AllocatePolicy::Allocate
+    // };
+    // let memory_type = memory_attributes::NormalMemoryType { caching: Some(write_back_non_transient_allocate) };
+    // memory_attributes_array.set_attr_n(0, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
+
+    // // index 1: Device nGnRE
+    // let memory_type =memory_attributes::DeviceMemoryType::NGnRE;
+    // memory_attributes_array.set_attr_n(1, memory_attributes::MemoryAttributeDescriptor::Device { memory_type });
+
+    // // index 2: Inner and Outer Normal non cacheable
+    // let memory_type = memory_attributes::NormalMemoryType { caching: None };
+    // memory_attributes_array.set_attr_n(2, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
+
+
+    // assert_eq!(r as u64, memory_attributes_array.into(), "OOPS");
+    // memory_attributes::write(memory_attributes_array);
+
 
     // next, specify mapping characteristics in translate control register
     let r: usize = (0 << 37) | // TBI=0, no tagging
