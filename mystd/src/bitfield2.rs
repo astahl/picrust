@@ -221,15 +221,6 @@ macro_rules! ensure_bit_fits {
 
 #[macro_export]
 macro_rules! bit_field_method {
-    (
-        $(#[$meta:meta])* 
-        $field_from:literal:$field_to:literal => $field_name:ident
-    ) => {
-        $(#[$meta])*
-        pub const fn $field_name(self) -> $crate::bitfield2::FieldMask<$field_from, $field_to, Self> {
-            $crate::bitfield2::FieldMask::new(self)
-        }
-    };
 
     (
         $(#[$meta:meta])* 
@@ -243,7 +234,18 @@ macro_rules! bit_field_method {
 
     (
         $(#[$meta:meta])* 
-        $bit_position:literal => $bit_name:ident: $bit_type:ty
+        $field_from:literal : $field_to:literal => $field_name:ident
+    ) => {
+        $(#[$meta])*
+        pub const fn $field_name(self) -> $crate::bitfield2::FieldMask<$field_from, $field_to, Self> {
+            $crate::bitfield2::FieldMask::new(self)
+        }
+    };
+
+
+    (
+        $(#[$meta:meta])* 
+        $bit_position:literal => $bit_name:ident : $bit_type:ty
     ) => {
         $(#[$meta])*
         pub const fn $bit_name(self) -> $crate::bitfield2::TypedBitMask<$bit_position, Self, $bit_type> {
@@ -253,7 +255,7 @@ macro_rules! bit_field_method {
 
     (
         $(#[$meta:meta])* 
-        $field_from:literal:$field_to:literal => $field_name:ident: $field_type:ty
+        $field_from:literal : $field_to:literal => $field_name:ident : $field_type:ty
     ) => {
         
         $(#[$meta])*
@@ -349,16 +351,27 @@ macro_rules! bit_field_type_definition {
 
 #[macro_export]
 macro_rules! bit_field {
-    ($(#[$meta:meta])* $v:vis $type_name:ident ($underlying_type:ty) {
-        $(
-            $(#[$bit_meta:meta])* 
-            $bit_from:literal $(:$bit_to:literal)? => $bit_name:ident
-                $(:$field_type:ty)?
-                $(: 
-                    $(#[$field_type_meta:meta])* 
-                    enum $field_type_definition:ident $field_typedef:tt
-                )?
-        ),* $(,)?}
+    // ($(#[$meta:meta])* $v:vis $type_name:ident ($underlying_type:ty) $fields_block:tt) => {
+    //     $(#[$meta])*
+    //     #[repr(transparent)]
+    //     #[derive(Copy, Clone)]
+    //     $v struct $type_name($underlying_type);
+
+
+    // };
+    (
+        $( #[ $meta:meta ] )* 
+        $v:vis $type_name:ident ($underlying_type:ty) {
+            $(
+                $( #[ $bit_meta:meta ] )* 
+                $bit_from:literal $(: $bit_to:literal )? => $bit_name:ident
+                    $(: $field_type:ty )?
+                    $(: 
+                        $( #[ $field_type_meta:meta ] )* 
+                        enum $field_type_definition:ident $field_typedef:tt
+                    )?
+            ),* $(,)?
+        }
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
@@ -650,19 +663,21 @@ impl Into<bool> for Buzzy {
 
 bit_field!(
     pub MyReg(u8) { 
-    2 => a, 
-    /// probably fine
-    3 => b: enum ABool {
-        Ass, 
-        Bee
-    },
-    /// # The best field
-    /// 
-    /// A field so good it shows
-    0:7 => my_field,
-    #[cfg(feature = "blarg")]
-    1 => buzzys: Buzzy, 
-    // 3:4 => fuzzys: Fuzzy,
+        2 => a,
+        /// probably fine
+        3 => b: enum ABool {
+            Ass, 
+            Bee
+        },
+        /// # The best field
+        /// 
+        /// A field so good it shows
+        0:7 => my_field,
+        1 => buzzys: Buzzy,
+        3:4 => fuzzys: Fuzzy,
+        #[cfg(feature = "blarg")]
+        /// eh?
+        6 => not_today
 });
 
 
@@ -693,8 +708,8 @@ mod tests {
         assert!(x.a().is_set());
         assert!(!z.a().is_set());
         assert_eq!(0b1100110, x.my_field().value());
-        // assert_eq!(Buzzy::On, x.buzzys().value());
-        // assert_eq!(Fuzzy::Off, x.fuzzys().value().unwrap());
+        assert_eq!(Buzzy::On, x.buzzys().value());
+        assert_eq!(Fuzzy::Off, x.fuzzys().value().unwrap());
     }
 
     #[test]
@@ -709,6 +724,6 @@ mod tests {
         let x = MyReg::new(0b1111100);
         let mut buf: RingArray<u8, 256> = RingArray::new();
         write!(&mut buf, "{:?}", x).expect("should work");
-        assert_eq!("MyReg { a[2]: true, b[3]: false, my_field[0:7]: 100 }", buf.to_str().unwrap());
+        assert_eq!("MyReg { binary: 0b1111100, a[2]: true, b[3]: Bee, my_field[0:7]: 124, buzzys[1]: Off, fuzzys[3:4]: Ok(Yes) }", buf.to_str().unwrap());
     }
 }
