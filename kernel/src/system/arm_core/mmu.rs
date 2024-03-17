@@ -235,7 +235,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 
 
 
-bit_field!(TableDescriptor(u64)
+bit_field!(TableDescriptor(u64) {
     /// # NSTable \[63]
     /// 
     /// Table descriptor bit\[63] is one of the following:
@@ -301,7 +301,7 @@ bit_field!(TableDescriptor(u64)
         Block = 0b01,
         Table = 0b11,
     },
-);
+});
 
 // Models the "Effective Value of TCR_ELx.DS". In reality it's a bit more complicated, 
 // but until we support chips that support FEAT_LPA2 totally irrelevant
@@ -446,7 +446,7 @@ impl TryFrom<u64> for Stage2MemoryAttr {
     }
 }
 
-bit_field!(BlockDescriptor(u64)
+bit_field!(BlockDescriptor(u64) {
     // upper attributes
 
     /// # AMEC \[63]
@@ -636,9 +636,9 @@ bit_field!(BlockDescriptor(u64)
         Invalid10 = 0b10,
         Page = 0b11,
     }
-);
+});
 
-bit_field!(PageDescriptor(u64)
+bit_field!(PageDescriptor(u64) {
     // upper attributes
 
     /// # AMEC \[63]
@@ -812,5 +812,5 @@ bit_field!(PageDescriptor(u64)
     1:0 => format: DescriptorFormat,
 
     1:0 => level_3_format: Level3DescriptorFormat,
-);
+});
 

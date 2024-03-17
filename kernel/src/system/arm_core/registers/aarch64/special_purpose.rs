@@ -12,7 +12,7 @@ pub fn current_el() -> CurrentEl {
 
 bit_field!(
     /// Holds the current Exception level.
-    pub CurrentEl(usize)
+    pub CurrentEl(usize){
 
     /// Current Exception level.
     /// * 0b00 EL0.
@@ -29,4 +29,4 @@ bit_field!(
     ///     - When the highest implemented Exception level is EL2, this field resets to 2.
     ///     - Otherwise, this field resets to 3.
     3:2 => el
-);
+});

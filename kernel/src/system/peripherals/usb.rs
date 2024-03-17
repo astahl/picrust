@@ -73,15 +73,15 @@ impl DwHciCore {
     }
 }
 
-bit_field!(pub DwHciCoreAhbCfg(u32)
+bit_field!(pub DwHciCoreAhbCfg(u32){
     0 => enable_global_interrupt,
     1:2 => max_axi_burst,
     4 => wait_axi_writes,
     5 => enable_dma
-);
+});
 
 
-bit_field!(pub DwHciCoreUsbCfg(u32)
+bit_field!(pub DwHciCoreUsbCfg(u32){
     3 => phyif,
     4 => ulpi_utmi_sel,
     8 => srp_capable,
@@ -90,20 +90,20 @@ bit_field!(pub DwHciCoreUsbCfg(u32)
     19 => ulpi_clk_sus_m,
     20 => ulpi_ext_vbus_drv,
     22 => term_sel_dl_pulse
-);
+});
 
 
-bit_field!(pub DwHciCoreReset(u32)
+bit_field!(pub DwHciCoreReset(u32){
     0 => soft_reset,
     4 => rx_fifo_flush,
     5 => tx_fifo_flush,
     6:10 => tx_fifo_num,
     31 => ahb_idle
-);
+});
 
 
-bit_field!(pub DwHciCoreHwCfg1(u32));
-bit_field!(pub DwHciCoreHwCfg2(u32)
+bit_field!(pub DwHciCoreHwCfg1(u32){});
+bit_field!(pub DwHciCoreHwCfg2(u32){
     0:2 => op_mode,
     3:4 => architecture,
     6:7 => hs_phy_type: enum HsPhyType {
@@ -116,15 +116,15 @@ bit_field!(pub DwHciCoreHwCfg2(u32)
         Dedicated = 0b01,
     },
     14:17 => num_host_channels
-);
-bit_field!(pub DwHciCoreHwCfg3(u32)
+});
+bit_field!(pub DwHciCoreHwCfg3(u32){
     16:31 => dfifo_depth
-);
+});
 
-bit_field!(pub DwHciCoreHwCfg4(u32)
+bit_field!(pub DwHciCoreHwCfg4(u32){
     25 => enable_ded_fifo,
     26:29 => num_in_eps
-);
+});
 
 impl DwHciCoreHwCfg2 {
     pub fn num_host_channels_actual(self) -> u32 {
@@ -133,7 +133,7 @@ impl DwHciCoreHwCfg2 {
 }
 
 
-bit_field!(pub DwHciCoreInterrupts(u32)
+bit_field!(pub DwHciCoreInterrupts(u32){
     1 => mode_mismatch,
     3 => sof,
     4 => rx_sts_q_lvl,
@@ -144,4 +144,4 @@ bit_field!(pub DwHciCoreInterrupts(u32)
     29 => disconnect,
     30 => sess_req,
     31 => wkup
-);
+});

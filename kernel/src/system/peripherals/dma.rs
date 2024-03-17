@@ -58,7 +58,7 @@ impl DmaStandardChannel {
     }
 }
 
-bit_field!(pub DmaControlAndStatus(u32)
+bit_field!(pub DmaControlAndStatus(u32) {
     0 => active,
     1 => end,
     2 => interrupted,
@@ -73,7 +73,7 @@ bit_field!(pub DmaControlAndStatus(u32)
     29 => disable_debug_signal,
     30 => abort,
     31 => reset
-);
+});
 
 impl DmaControlAndStatus{
     pub const MAX_PRIORITY_LEVEL: u32 = 0xf;
@@ -138,7 +138,7 @@ impl DmaControlBlock {
 }
 
 
-bit_field!(pub DmaTransferInformation(u32)
+bit_field!(pub DmaTransferInformation(u32) {
     26 => disable_wide_bursts,
     21:25 => wait_cycles,
     16:20 => peripheral_mapping,
@@ -157,7 +157,7 @@ bit_field!(pub DmaTransferInformation(u32)
     3 => wait_for_write_response,
     1 => _2d_mode,
     0 => completion_interrupt
-);
+});
 
 impl DmaTransferInformation {
     pub fn wide_copy() -> Self {
@@ -236,7 +236,7 @@ impl DmaTransferLength {
 }
 
 
-bit_field!(pub DmaDebug(u32)
+bit_field!(pub DmaDebug(u32) {
     28 => dma_lite,
     25:27 => version,
     16:24 => dma_state,
@@ -245,4 +245,4 @@ bit_field!(pub DmaDebug(u32)
     2 => read_error,
     1 => fifo_error,
     0 => read_last_not_set_error
-);
+});

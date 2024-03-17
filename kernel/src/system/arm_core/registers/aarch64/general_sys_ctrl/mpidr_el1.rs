@@ -16,7 +16,7 @@ pub fn read() -> MpidrEl1 {
 }
 
 
-bit_field!(pub MpidrEl1(usize)
+bit_field!(pub MpidrEl1(usize){
     // 63:40 => RES0,
     /// Affinity level 3. See the description of Aff0 for more information. Aff3 is not supported in AArch32 state.
     /// 
@@ -57,4 +57,4 @@ bit_field!(pub MpidrEl1(usize)
     /// * `0x0`, `0x1`, `0x2`, or `0x3` in a cluster with four processors.
     //#[cfg(feature = "cortex_a72")]
     1:0 => cpu_id
-);
+});

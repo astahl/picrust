@@ -21,7 +21,7 @@ bit_field!(
     /// ### Accessing TCR_EL1
     /// 
     /// When HCR_EL2.E2H is 1, without explicit synchronization, access from EL3 using the mnemonic TCR_EL1 or TCR_EL12 are not guaranteed to be ordered with respect to accesses using the other mnemonic.
-    pub TcrEl1(u64)
+    pub TcrEl1(u64){
         // 63:60 => reserved 0
     
         /// ## DS, Bit 59
@@ -811,4 +811,4 @@ bit_field!(
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
         5:0 => t0sz
     
-    );
+    });

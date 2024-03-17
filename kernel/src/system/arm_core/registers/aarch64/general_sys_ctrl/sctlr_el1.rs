@@ -16,7 +16,7 @@ bit_field!(
     /// ### Attributes
     /// 
     /// SCTLR_EL1 is a 64-bit register.
-    pub SctlrEl1(u64)
+    pub SctlrEl1(u64) {
     
         /// ## TIDCP, bit \[63]
         /// 
@@ -1227,5 +1227,5 @@ bit_field!(
         ///     - When EL2 is not implemented and EL3 is not implemented, this field resets to 0.
         ///     - Otherwise, this field resets to an architecturally UNKNOWN value.
         0 => m
-    );
+    });
     

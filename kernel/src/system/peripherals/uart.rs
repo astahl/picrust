@@ -164,7 +164,7 @@ impl mystd::io::Read for Uart {
 }
 
 
-bit_field!(pub UartData(u32)
+bit_field!(pub UartData(u32){
     /// Overrun error. This bit is set to 1 if data is received and the receive FIFO is already full.
     /// 
     /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it. 
@@ -183,9 +183,9 @@ bit_field!(pub UartData(u32)
     8 => framing_error,
     8:11 => status,
     0:7 => data: u8
-);
+});
 
-bit_field!(pub UartStatus(u32)
+bit_field!(pub UartStatus(u32){
     /// Overrun error. This bit is set to 1 if data is received and the receive FIFO is already full.
     /// 
     /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it. 
@@ -202,9 +202,9 @@ bit_field!(pub UartStatus(u32)
     /// 
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
     0 => framing_error
-);
+});
 
-bit_field!(pub UartFlags(u32)
+bit_field!(pub UartFlags(u32){
     8 => _ri_unsupported,
     /// Transmit FIFO empty. The meaning of this bit depends on the state of the FEN bit in the Line Control Register, UART_LCRH.
     /// If the FIFO is disabled, this bit is set when the transmit holding register is empty.
@@ -229,7 +229,7 @@ bit_field!(pub UartFlags(u32)
     1 => _dsr_unsupported,
     /// Clear to send. This bit is the complement of the UART clear to send, nUARTCTS, modem status input. That is, the bit is 1 when nUARTCTS is LOW.
     0 => cts
-);
+});
 
 #[repr(u32)]
 pub enum UartBitrate {
@@ -264,7 +264,7 @@ impl UartBitrate {
     }
 }
 
-bit_field!(pub UartLineControl(u32)
+bit_field!(pub UartLineControl(u32){
     7 => stick_parity,
     5:6 => word_length: enum UartWordLength {
         _5Bits = 0b00,
@@ -277,10 +277,10 @@ bit_field!(pub UartLineControl(u32)
     2 => even_parity,
     1 => parity_enabled,
     0 => send_break
-);
+});
 
 
-bit_field!(pub UartControl (u32)
+bit_field!(pub UartControl (u32){
     15 => cts_hardware_flow_control,
     14 => rts_hardware_flow_control,
     11 => request_to_send,
@@ -288,7 +288,7 @@ bit_field!(pub UartControl (u32)
     8 => transmit_enable,
     7 => loopback_enable,
     0 => uart_enable
-);
+});
 
 impl UartControl {
     pub fn disabled() -> Self {
@@ -303,7 +303,7 @@ impl UartControl {
     }
 }
 
-bit_field!(UartInterrupts(u32)
+bit_field!(UartInterrupts(u32){
     10 => overrun_error,
     9 => break_error,
     8 => parity_error,
@@ -312,4 +312,4 @@ bit_field!(UartInterrupts(u32)
     5 => transmit,
     4 => receive,
     1 => n_uartcts_modem
-);
+});

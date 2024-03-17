@@ -354,7 +354,7 @@ macro_rules! bit_field_type_definition {
 
 #[macro_export]
 macro_rules! bit_field {
-    ($(#[$meta:meta])* $v:vis $type_name:ident ($underlying_type:ty) 
+    ($(#[$meta:meta])* $v:vis $type_name:ident ($underlying_type:ty) {
         $(
             $(#[$bit_meta:meta])* 
             $bit_from:literal $(:$bit_to:literal)? => $bit_name:ident
@@ -363,7 +363,7 @@ macro_rules! bit_field {
                     $(#[$field_type_meta:meta])* 
                     enum $field_type_definition:ident $field_typedef:tt
                 )?
-        ),* $(,)?
+        ),* $(,)?}
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
@@ -645,7 +645,7 @@ impl Into<bool> for Buzzy {
 }
 
 bit_field!(
-    pub MyReg(u8) 
+    pub MyReg(u8) { 
     2 => a, 
     /// probably fine
     3 => b: enum ABool {
@@ -658,10 +658,10 @@ bit_field!(
     0:7 => my_field,
     1 => buzzys: Buzzy, 
     // 3:4 => fuzzys: Fuzzy,
-);
+});
 
 
-bit_field!(pub X(u32) 
+bit_field!(pub X(u32) {
     3 => x,
     4:5 => y: 
     /// Please note that this does not have the zero value
@@ -671,7 +671,7 @@ bit_field!(pub X(u32)
         SEnfd = 0x2,
         A = 4,
     },
-);
+});
 
 
 

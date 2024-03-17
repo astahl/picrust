@@ -10,7 +10,7 @@ pub fn read() -> IdAa64Mmfr0El1 {
 }
 
 
-bit_field!(pub IdAa64Mmfr0El1(usize)
+bit_field!(pub IdAa64Mmfr0El1(usize){
     /// # ECV
     /// Indicates presence of Enhanced Counter Virtualization.
     /// All other values are reserved.
@@ -197,6 +197,6 @@ bit_field!(pub IdAa64Mmfr0El1(usize)
         /// 52 bits, 4PB.
         _52Bits4PB = 0b0110
     }
-);
+});
 
 
