@@ -284,7 +284,10 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // }
     // println_debug!("TTBR1 is set {:#x}", ttbr1_address);
 
-    let sctlr = SctlrEl1::load_register()
+    let sctlr = SctlrEl1::load_register();
+
+    println_debug!("SCTLR_EL1 is {:#?}", sctlr);
+    let sctlr = sctlr
         .span().set()   // No FEAT_PAN -> RES1
         .tscxt().set()  // No FEAT_CSV2_2  -> RES1
         .lsmaoe().set() // No FEAT_LSMAOC -> RES1
@@ -294,20 +297,20 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         .ee().clear()   // little endian translation tables
         .e0e().clear()  // little endian translation tables
         .wxn().clear()
-    //    .i().clear()    // no i-cache
-        .i().set()
-    //    .sa0().clear()  // no stack pointer alignment check at EL0
-        .sa0().set()
-    //    .sa().clear()   // no stack pointer alignment check at EL1
-        .sa().set()
-    //    .c().clear()    // no d-cache
-        .c().set()
-    //    .a().clear()    // no data alignment check
-        .a().set()
+        .i().clear()    // no i-cache
+    //    .i().set()
+        .sa0().clear()  // no stack pointer alignment check at EL0
+    //    .sa0().set()
+        .sa().clear()   // no stack pointer alignment check at EL1
+    //    .sa().set()
+        .c().clear()    // no d-cache
+    //    .c().set()
+        .a().clear()    // no data alignment check
+    //    .a().set()
         .m().set()      // enable MMU
         ;
 
-    //println_debug!("About to set SCTLR_EL1 {:#?}", sctlr);
+    println_debug!("About to set SCTLR_EL1 {:#?}", sctlr);
     sctlr.write_register();    
     // finally, toggle some bits in system control register to enable page translation
     // let mut r: usize = 0;
@@ -420,20 +423,25 @@ impl TranslationTable4KB {
         // LEVEL 0 
         // init Level 0 (might not be necessary, depending on T0SZ)
         // map first 512 GB to the first entry in the next table 
-        self.level0[0] = TableDescriptor::default().with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
+        self.level0[0] = TableDescriptor::default()
+            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
         // reject addresses over 512 GB
         self.level0[1..].fill(TableDescriptor::invalid());
         
         // LEVEL 1
         // Map first 1 GB to the next table
-        self.level1[0] = TableDescriptor::default().with_next_level_table_at(self.level2.as_ptr() as u64, ADDRESSING).to_underlying();
+        self.level1[0] = TableDescriptor::default()
+            .with_next_level_table_at(self.level2.as_ptr() as u64, ADDRESSING)
+            .to_underlying();
         // reject addresses over 1 GB
         self.level1[1..].fill(TableDescriptor::invalid().to_underlying());
 
         // LEVEL 2 First 1 GB
         // Here we map each block of 2MB of IA\[29:12] directly to each OA via blocks
         // Map first 2 MB to the next table, so we can set no execute for the stack
-        self.level2[0] = TableDescriptor::default().with_next_level_table_at(self.level3_0.as_ptr() as u64, ADDRESSING).to_underlying();
+        self.level2[0] = TableDescriptor::default()
+            .with_next_level_table_at(self.level3_0.as_ptr() as u64, ADDRESSING)
+            .to_underlying();
         // Map the rest of 2 MB Blocks to output addresses
         const BLOCK_SIZE: usize = TranslationTable4KB::L2_BLOCK_SIZE;
         const PERIPHERAL_BLOCKS_BEGIN: usize = BCM_HOST.peripheral_address / BLOCK_SIZE;
@@ -446,7 +454,8 @@ impl TranslationTable4KB {
             let output_address = i * BLOCK_SIZE;
             self.level2[i] = BlockDescriptor::default()
                 .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
-                .contiguous().set()
+                .af().set()
+                //.contiguous().set()
                 .sh().set_value(Shareability::InnerShareable)
                 .stage_1_mem_attr_indx().set_value(NORMAL_MEMORY_ATTR_IDX)
                 .to_underlying();
@@ -455,7 +464,8 @@ impl TranslationTable4KB {
             let output_address = i * BLOCK_SIZE;
             self.level2[i] = BlockDescriptor::default()
                 .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
-                .contiguous().set()
+                .af().set()
+                //.contiguous().set()
                 .sh().set_value(Shareability::OuterShareable)
                 .stage_1_mem_attr_indx().set_value(DEVICE_MEMORY_ATTR_IDX)
                 .to_underlying();
@@ -471,7 +481,9 @@ impl TranslationTable4KB {
             let output_address = i * Self::PAGE_SIZE;
             self.level3_0[i] = PageDescriptor::default()
                 .with_output_address(output_address as u64, ADDRESSING)
-                .contiguous().set();
+                .sh().set_value(Shareability::OuterShareable)
+                .af().set()
+                //.contiguous().set();
         }
 
         for i in stack_pages_begin..stack_pages_end {

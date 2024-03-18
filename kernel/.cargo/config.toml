@@ -2,12 +2,14 @@
 rel3="build --release --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 rel4="build --release --target=aarch64-unknown-none --no-default-features --features=raspi4"
 run3="run --release --target=aarch64-unknown-none --no-default-features --features=raspi3b"
+rundbg3="run --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 run="run --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 #run="run --release --target=aarch64-unknown-none --no-default-features --features=raspi4" # supported in next qemu version
 img3="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -O binary kernel_bcm2837.img"
 img4="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -O binary kernel_bcm2711.img"
 inspect3="objdump --release --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -h -f -s -S -C -d"
 inspect4="objdump --release --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -h -f -s -S -C -d"
+inspectdbg3="objdump --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -h -f -s -S -C -d"
 
 [build]
 target=["aarch64-unknown-none"]
