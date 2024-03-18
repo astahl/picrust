@@ -110,7 +110,7 @@ global_asm!(
         msr     hcr_el2, x2
         mrs     x2, hcr_el2 // todo what does this read do??
         // System Control Register EL1, reset value on Cortex A72 is 0x00C50838
-        // 0x30d01804 = 0b0011_0000_1101_0000_0001_1000_0000_0100
+        // 0x30d00800 = 0b0011_0000_1101_0000_0000_1000_0000_0000
         //                  ^^      ^^ ^         ^ ^          ^
         //                   |      || |         | |          C, bit [2] = Stage 1 Cacheability control, for data access
         //                   |      || |         | EOS, bit [11] = When FEAT_ExS is implemented, else RES1
@@ -134,7 +134,7 @@ global_asm!(
         //                                      No Trap Load Multiple and Store Multiple to Device-nGRE/Device-nGnRE/Device-nGnRnE memory.
         //                                      0b0 All memory accesses by A32 and T32 Load Multiple and Store Multiple at EL0 that are marked at stage 1 as Device-nGRE/Device-nGnRE/Device-nGnRnE memory are trapped and generate a stage 1 Alignment fault.
         //                                      0b1 All memory accesses by A32 and T32 Load Multiple and Store Multiple at EL0 that are marked at stage 1 as Device-nGRE/Device-nGnRE/Device-nGnRnE memory are not trapped.
-        movz    x2, #0x1804
+        movz    x2, #0x0800
         movk    x2, #0x30d0, lsl #16
         msr     sctlr_el1, x2
         // set up exception handlers

@@ -4,13 +4,13 @@ use mystd::bit_field;
 
 
 pub fn read() -> IdAa64Mmfr0El1 {
-    let value: usize;
+    let value: u64;
     unsafe { asm!("mrs {0}, id_aa64mmfr0_el1", out(reg) value) };
     value.into()
 }
 
 
-bit_field!(pub IdAa64Mmfr0El1(usize){
+bit_field!(pub IdAa64Mmfr0El1(u64){
     /// # ECV
     /// Indicates presence of Enhanced Counter Virtualization.
     /// All other values are reserved.

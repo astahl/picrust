@@ -1,4 +1,19 @@
+use core::arch::asm;
+
 use mystd::bit_field;
+
+impl TcrEl1 {
+    pub fn load_register() -> Self {
+        let value: u64;
+        unsafe { asm!("mrs {0}, tcr_el1", out(reg) value) };
+        value.into()
+    }
+    
+    pub fn write_register(self) {
+        let val = self.0;
+        unsafe { asm!("msr tcr_el1, {}", in(reg) val) };
+    }
+}
 
 bit_field!(
     /// ## D19.2.139 TCR_EL1, Translation Control Register (EL1)
@@ -60,6 +75,7 @@ bit_field!(
         /// 
         /// ### Otherwise:
         /// Reserved, RES0, and the Effective value of this bit is 0b0.
+        #[cfg(feature = "arm_feat_lpa2")]
         59 => ds,
     
         /// ## TCMA1, bit 58
@@ -81,6 +97,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_mte2")]
         58 => tcma1,
     
         /// ## TCMA0, bit 57
@@ -102,8 +119,8 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_mte2")]
         57 => tcma0,
-    
         /// ## E0PD1, bit 56
         /// 
         /// ### When FEAT_E0PD is implemented:
@@ -123,6 +140,7 @@ bit_field!(
         /// 
         /// ### Otherwise:
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_e0pd")]
         56 => e0pd1,
     
         /// ## E0PD0, bit 55
@@ -144,6 +162,7 @@ bit_field!(
         /// 
         /// ### Otherwise:
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_e0pd")]
         55 => e0pd0,
     
         /// ## NFD1, bit 54
@@ -173,6 +192,7 @@ bit_field!(
         /// 
         /// ### Otherwise:
         /// Reserved, RES0.
+        #[cfg(any(feature = "arm_feat_sve", feature = "arm_feat_tme"))]
         54 => nfd1,
     
         /// ## NFD0, bit 53
@@ -202,6 +222,7 @@ bit_field!(
         /// 
         /// ### Otherwise:
         /// Reserved, RES0.
+        #[cfg(any(feature = "arm_feat_sve", feature = "arm_feat_tme"))]
         53 => nfd0,
     
         /// ## TBID1, bit 52
@@ -225,6 +246,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_pauth")]
         52 => tbid1,
     
         /// ## TBID0, bit 51
@@ -250,6 +272,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_pauth")]
         51 => tbid0,
     
         /// ## HWU162, bit 50
@@ -271,6 +294,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         50 => hwu162,
     
         /// ## HWU161, bit 49

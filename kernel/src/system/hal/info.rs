@@ -362,6 +362,16 @@ extern "C" {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MemoryBlock(*const u8, *const u8);
 
+impl MemoryBlock {
+    pub fn bottom(self) -> *const u8 {
+        self.0
+    }
+
+    pub fn top(self) -> *const u8 {
+        self.1
+    }
+}
+
 impl core::fmt::Debug for MemoryBlock {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "[{:#x} - {:#x}]", self.0 as usize, self.1 as usize)?;
@@ -385,6 +395,12 @@ impl MemoryBlock{
         Self(st.min(end), st.max(end))
     }
 
+    pub fn from_zero_to_symbol<T>(end: &T) -> Self {
+        let st = null::<u8>();
+        let end = core::ptr::addr_of!(*end).cast::<u8>();
+        Self(st, end)
+    }
+
     pub const fn from<T>(entity: &T) -> Self {
         Self::from_start_and_count(entity, 1)
     }
@@ -403,11 +419,16 @@ impl MemoryBlock{
 }
 
 pub struct MemoryMap();
+impl MemoryMap {
+    pub fn main_stack() -> MemoryBlock {
+        unsafe { MemoryBlock::from_zero_to_symbol(&__main_stack) }
+    }
+}
 
 impl core::fmt::Debug for MemoryMap {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe{
-        let stack = MemoryBlock::from_symbols(*null(), &__main_stack);
+        let stack = Self::main_stack();
         let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
         let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
         let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);

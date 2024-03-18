@@ -4,7 +4,7 @@ pub mod arm_core;
 
 use core::{cell::RefCell, fmt::{Debug, Display}};
 
-use mystd::{io::{SplitWriter, Write}, mutex::{Mutex, MutexGuard}};
+use mystd::{io::SplitWriter, mutex::{Mutex, MutexGuard}};
 use peripherals::uart;
 
 use peripherals::uart::Uart;
@@ -70,7 +70,8 @@ fn init_serial_uart() {
     uart::UART_0.init();
     writer.replace_first(uart::UART_0);
     //writer.replace_second(uart::UART_0);
-    writeln!(writer, "OUT_WRITER at {:#?}", hal::info::MemoryBlock::from(&OUT_WRITER));
+    use mystd::io::Write;
+    writeln!(writer, "OUT_WRITER at {:#?}", hal::info::MemoryBlock::from(&OUT_WRITER)).expect("WE JUST INITIALISED IT SHEESH");
     // writer.replace_second(uart::UART_0);
 }
 
@@ -84,7 +85,10 @@ macro_rules! println_log {
 #[macro_export]
 macro_rules! print_log {
     ($($param:tt)*) => {
-        write!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
+        {
+            use mystd::io::Write;
+            write!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
+        }
     };
 }
 
@@ -92,7 +96,10 @@ macro_rules! print_log {
 #[macro_export]
 macro_rules! println_debug {
     ($($param:tt)*) => {
-        writeln!($crate::system::std_out(), $($param)*).expect("debug write should always work!");
+        {
+            use mystd::io::Write;
+            writeln!($crate::system::std_out(), $($param)*).expect("debug write should always work!");
+        }
     };
 }
 

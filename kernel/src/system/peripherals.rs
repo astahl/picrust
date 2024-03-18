@@ -18,16 +18,16 @@ pub struct BcmHost {
 
 #[cfg(feature = "bcm2711")]
 pub const BCM_HOST: BcmHost = BcmHost {
-    peripheral_address: 0xFE000000,
-    peripheral_size: 0x01800000,
-    sdram_address: 0xC0000000,
+    peripheral_address: 0xFE00_0000,
+    peripheral_size: 0x0180_0000,
+    sdram_address: 0xC000_0000,
 };
 
 #[cfg(any(feature = "bcm2837"))]
 pub const BCM_HOST: BcmHost = BcmHost {
-    peripheral_address: 0x3F000000,
-    peripheral_size: 0x01000000,
-    sdram_address: 0xC0000000,
+    peripheral_address: 0x3F00_0000,
+    peripheral_size: 0x0100_0000,
+    sdram_address: 0xC000_0000,
 };
 
 pub struct PeripheralMap();

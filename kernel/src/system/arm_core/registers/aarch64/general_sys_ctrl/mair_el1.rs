@@ -1,14 +1,16 @@
-use core::{arch::asm, num::NonZeroU8};
+use core::arch::asm;
 
-pub fn read() -> MairEl1 {
-    let value: u64;
-    unsafe { asm!("mrs {0}, mair_el1", out(reg) value) };
-    value.into()
-}
-
-pub fn write(value: MairEl1) {
-    let val = u64::from_le_bytes(value.0);
-    unsafe { asm!("msr mair_el1, {}", in(reg) val) };
+impl MairEl1 {
+    pub fn load_register() -> Self {
+        let value: u64;
+        unsafe { asm!("mrs {0}, mair_el1", out(reg) value) };
+        value.into()
+    }
+    
+    pub fn write_register(self) {
+        let val = u64::from_le_bytes(self.0);
+        unsafe { asm!("msr mair_el1, {}", in(reg) val) };
+    }
 }
 
 #[derive(Clone, Copy)]
