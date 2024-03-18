@@ -24,12 +24,6 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     monitor::Monitor::new(uart, uart).run();
 }
 
-extern "C" {
-    static __font_start: u64;
-    static __font_end: u64;
-    static __data_start: u8;
-    static mut __kernel_end: u64;
-}
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
@@ -43,7 +37,7 @@ pub extern "C" fn main() -> ! {
     // }
 }
 
-global_asm!(".section .font", ".incbin \"901447-10.bin\"");
+//global_asm!(".section .font", ".incbin \"901447-10.bin\"");
 
 global_asm!(
     r#"
@@ -62,7 +56,7 @@ global_asm!(
     2: 
         // We're on the main core!
         // We want the stack to start below our code
-        ldr     x1, =__main_stack
+        mov     x1, #0x80000
         // Ensure we end up on Exception Level 1 (starting on EL3 or EL2)
         bl      _enter_el1
     "#

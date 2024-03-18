@@ -45,7 +45,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     }
 
     println_debug!("Checked support, everything should work! going ahead...");
-    let table_ptr = (0x20_0000 as *mut TranslationTable4KB).wrapping_sub(1);
+    let table_ptr = ((32 * 1024 * 1024) as *mut TranslationTable4KB);
     unsafe {
         table_ptr.as_mut().unwrap_unchecked().init_lower_region();
     }
@@ -272,7 +272,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     println_debug!("TCR is set {}", translate_control);
     // tell the MMU where our translation tables are. TTBR_ENABLE bit not documented, but required
     // lower half, user space
-    let ttbr0_address = table_ptr as u64 | 1;
+    let ttbr0_address = table_ptr as u64;
     unsafe {
         asm!("msr ttbr0_el1, {}", in(reg) ttbr0_address);
     }
