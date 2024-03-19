@@ -31,7 +31,10 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // check for 4k granule and at least 36 bits physical address bus */
 
     use crate::println_debug;
+    use crate::system::arm_core::mmu::descriptors::Shareability;
     use crate::system::arm_core::registers::aarch64::general_sys_ctrl;
+    use crate::system::arm_core::registers::aarch64::general_sys_ctrl::id_aa64mmfr0_el1::AsidBitNum;
+    use crate::system::arm_core::registers::aarch64::general_sys_ctrl::tcr_el1::GranuleSize;
     use general_sys_ctrl::sctlr_el1::SctlrEl1;
     use general_sys_ctrl::tcr_el1::TcrEl1;
     use general_sys_ctrl::mair_el1 as memory_attributes;
@@ -234,20 +237,28 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         .write_register();
     println_debug!("So far so good");
 
+    let common_cacheability = general_sys_ctrl::tcr_el1::RegionCacheability::WriteBackReadAllocateWriteAllocate;
+    let common_shareability = Shareability::InnerShareable;
+    let common_granule = GranuleSize::_4KB;
     TcrEl1::zero()
-        .ips().set_value(mm_feats.pa_range().untyped().value()) // IPS= "autodetect" using the reported supported features flag
+        .asid_size().set_value(match mm_feats.asid().value() {
+            Ok(AsidBitNum::_16Bits) => general_sys_ctrl::tcr_el1::AsidSize::_16Bit,
+            Ok(AsidBitNum::_8Bits) => general_sys_ctrl::tcr_el1::AsidSize::_8Bit,
+            Err(_) => panic!("ASID should've been reported correctly by id reg"),
+        })
+        .ips().set_value(mm_feats.pa_range().value().unwrap()) // IPS= "autodetect" using the reported supported features flag
         .tbi1().clear() // no tagging, use top bit for address
-        .tg1().set_value(0b10) // TG1=4k
-        .sh1().set_value(0b11) // SH1= inner shareable
-        .orgn1().set_value(0b01) // outer write back
-        .irgn1().set_value(0b01) // outer write back
-        .epd1().set() // DISABLE upper address half TTBR1
+        .tg1().set_value(common_granule) // TG1=4k
+        .sh1().set_value(common_shareability) // SH1= inner shareable
+        .orgn1().set_value(common_cacheability) // outer write back
+        .irgn1().set_value(common_cacheability) // inner write back
+        .epd1().clear() // ENABLE upper address half TTBR1
         .t1sz().set_value(25) // T1SZ=25, 3 levels (512G)
         .tbi0().clear() // no tagging, use top bit for address
-        .tg0().set_value(0b10) // TG0=4k
-        .sh0().set_value(0b11) // SH0= inner shareable
-        .orgn0().set_value(0b01) // outer write back
-        .irgn0().set_value(0b01) // outer write back
+        .tg0().set_value(common_granule) // TG0=4k
+        .sh0().set_value(common_shareability) // SH0= inner shareable
+        .orgn0().set_value(common_cacheability) // outer write back
+        .irgn0().set_value(common_cacheability) // inner write back
         .epd0().clear() // ENABLE lower address half TTBR0
         .t0sz().set_value(25) // T0SZ=25, 3 levels (512G)
         .write_register();
@@ -277,6 +288,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     let ttbr0_address = table_ptr as u64;
     unsafe {
         asm!("msr ttbr0_el1, {}", in(reg) ttbr0_address);
+        asm!("msr ttbr1_el1, {}", in(reg) ttbr0_address);
     }
     println_debug!("TTBR0 is set {:#x}", ttbr0_address);
     // upper half, kernel space

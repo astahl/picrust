@@ -197,7 +197,8 @@ bit_field!(pub IdAa64Mmfr0El1(u64){
         _48Bits256TB = 0b0101,
         /// _When FEAT_LPA is implemented or FEAT_LPA2 is implemented:_
         /// 52 bits, 4PB.
-        _52Bits4PB = 0b0110
+        _52Bits4PB = 0b0110,
+        Reserved = 0b0111,
     }
 });
 

@@ -2,6 +2,10 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
+use crate::system::arm_core::mmu::descriptors::{Cacheability, Shareability};
+
+use super::id_aa64mmfr0_el1::PhysicalAddressRangeSupport;
+
 impl TcrEl1 {
     pub fn load_register() -> Self {
         let value: u64;
@@ -316,6 +320,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         49 => hwu161,
     
         /// ## HWU160, bit 48
@@ -337,6 +342,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         48 => hwu160,
     
         /// ## HWU159, bit 47
@@ -358,6 +364,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         47 => hwu159,
     
         /// ## HWU062, bit 46
@@ -379,6 +386,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         46 => hwu062,
     
         /// ## HWU061, bit 45
@@ -400,6 +408,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         45 => hwu061,
     
         /// ## HWU060, bit 44
@@ -421,6 +430,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         44 => hwu060,
     
         /// ## HWU059, bit 43
@@ -442,6 +452,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds2")]
         43 => hwu059,
     
         /// ## HPD1, bit 42
@@ -463,6 +474,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds")]
         42 => hpd1,
     
         /// ## HPD0, bit 41
@@ -484,6 +496,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hpds")]
         41 => hpd0,
     
         /// ## HD, bit 40
@@ -503,6 +516,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hafdbs")]
         40 => hd,
     
         /// ## HA, bit 39
@@ -522,6 +536,7 @@ bit_field!(
         /// ### Otherwise:
         /// 
         /// Reserved, RES0.
+        #[cfg(feature = "arm_feat_hafdbs")]
         39 => ha,
     
         /// ## TBI1, bit 38
@@ -589,7 +604,12 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        36 => as_,
+        36 => asid_size: enum AsidSize {
+            /// 8 bit - the upper 8 bits of TTBR0_EL1 and TTBR1_EL1 are ignored by hardware for every purpose except reading back the register, and are treated as if they are all zeros for when used for allocation and matching entries in the TLB.
+            _8Bit,
+            /// 16 bit - the upper 16 bits of TTBR0_EL1 and TTBR1_EL1 are used for allocation and matching in the TLB.
+            _16Bit
+        },
         // 35 => reserved RES0,
     
         /// ## IPS, bits 34:32
@@ -623,7 +643,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        34:32 => ips,
+        34:32 => ips: PhysicalAddressRangeSupport,
         
         /// ## TG1, bits 31:30
         /// 
@@ -644,7 +664,12 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        31:30 => tg1,
+        31:30 => tg1: enum GranuleSize {
+            Reserved = 0b00,
+            _16KB = 0b01,
+            _4KB = 0b10,
+            _64KB = 0b11
+        },
     
         /// ## SH1, bits 29:28
         /// Shareability attribute for memory associated with translation table walks using TTBR1_EL1. 
@@ -660,7 +685,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        29:28 => sh1,
+        29:28 => sh1: Shareability,
     
         /// ## ORGN1, bits 27:26
         /// 
@@ -677,7 +702,12 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        27:26 => orgn1,
+        27:26 => orgn1: enum RegionCacheability {
+            NonCacheable = 0b00,
+            WriteBackReadAllocateWriteAllocate = 0b01,
+            WriteThroughReadAllocateNoWriteAllocate = 0b10,
+            WriteBackReadAllocateNoWriteAllocate = 0b11
+        },
     
         /// ## IRGN1, bits 25:24
         /// 
@@ -694,7 +724,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        25:24 => irgn1,
+        25:24 => irgn1: RegionCacheability,
     
         /// ## EPD1, bit 23
         /// 
@@ -755,7 +785,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        15:14 => tg0,
+        15:14 => tg0: GranuleSize,
     
         /// ## SH1, bits 13:12
         /// Shareability attribute for memory associated with translation table walks using TTBR0_EL1. 
@@ -771,7 +801,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        13:12 => sh0,
+        13:12 => sh0: Shareability,
     
         /// ## ORGN0, bits 11:10
         /// 
@@ -788,7 +818,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        11:10 => orgn0,
+        11:10 => orgn0: RegionCacheability,
     
         /// ## IRGN0, bits 9:8
         /// 
@@ -805,7 +835,7 @@ bit_field!(
         /// 
         /// The reset behavior of this field is:
         /// * On a Warm reset, this field resets to an architecturally UNKNOWN value.
-        9:8 => irgn0,
+        9:8 => irgn0: RegionCacheability,
     
         /// ## EPD0, bit 7
         /// 
