@@ -13,142 +13,142 @@ use super::hal;
 use mystd::collections;
 use mystd::io::Write;
 
-// pub fn run() {
-//     println_log!("{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM));
-//     println_log!("Current Exception Level: {}", system::arm_core::current_exception_level());
+pub fn run() {
+    println_log!("{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM));
+    println_log!("Current Exception Level: {}", system::arm_core::current_exception_level());
    
-//     use core::fmt::Write;
-//     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
+    use core::fmt::Write;
+    let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
 
-//     use hal::framebuffer::color;
-//     let resolution = hal::display::Resolution::preferred().unwrap_or_default();
+    use hal::framebuffer::color;
+    let resolution = hal::display::Resolution::preferred().unwrap_or_default();
 
-//     let fb = hal::framebuffer::Framebuffer::new(
-//         resolution.horizontal as u32,
-//         resolution.vertical as u32,
-//     )
-//     .unwrap();
+    let fb = hal::framebuffer::Framebuffer::new(
+        resolution.horizontal as u32,
+        resolution.vertical as u32,
+    )
+    .unwrap();
 
-//     fb.clear(color::BLACK);
+    fb.clear(color::BLACK);
 
-//     let font: &'static [u64] = unsafe { core::slice::from_raw_parts(include_bytes!("../901447-10.bin").as_ptr().cast(), 256) };
+    let font: &'static [u64] = unsafe { core::slice::from_raw_parts(include_bytes!("../901447-10.bin").as_ptr().cast(), 256) };
 
-//     let text = b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-//     let mapping = |c: u8| -> u8 {
-//         match c {
-//             0 => b' ',
-//             b' '..=b'?' => c,
-//             b'@'..=b'^' => c as u8 - b'@',
-//             b'a'..=b'z' => c as u8 - b'`' | 0x80,
-//             b'{' => b'<',
-//             b'}' => b'>',
-//             b'\n' => b' ', // TODO better handle newlines in the buffer writer
-//             b'_' => 82,
-//             _ => 255,
-//         }
-//     };
-//     fb.clear(color::BLUE);
-//     fb.write_text(text, font, mapping);
+    let text = b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+    let mapping = |c: u8| -> u8 {
+        match c {
+            0 => b' ',
+            b' '..=b'?' => c,
+            b'@'..=b'^' => c as u8 - b'@',
+            b'a'..=b'z' => c as u8 - b'`' | 0x80,
+            b'{' => b'<',
+            b'}' => b'>',
+            b'\n' => b' ', // TODO better handle newlines in the buffer writer
+            b'_' => 82,
+            _ => 255,
+        }
+    };
+    fb.clear(color::BLUE);
+    fb.write_text(text, font, mapping);
 
-//     hal::led::status_blink_twice(500);
-//     fb.clear(color::RED);
+    hal::led::status_blink_twice(500);
+    fb.clear(color::RED);
 
-//     let mut supported_resolutions = [hal::display::Resolution::default(); 128];
-//     let count = hal::display::Resolution::supported(supported_resolutions.as_mut_slice(), 0);
-//     writeln!(
-//         str_buffer,
-//         "Supported {:?}",
-//         supported_resolutions.get(0..count)
-//     )
-//     .unwrap();
-//     writeln!(str_buffer, "Requested Resolution {:?}", resolution).unwrap();
-//     writeln!(
-//         str_buffer,
-//         "Framebuffer: {} {} {}",
-//         fb.width_px, fb.height_px, fb.bits_per_pixel
-//     )
-//     .unwrap();
-//     if let Some(arm_memory) = hal::info::get_arm_memory() {
-//         writeln!(str_buffer, "ARM {}", arm_memory).unwrap();
-//     }
-//     if let Some(vc_memory) = hal::info::get_vc_memory() {
-//         writeln!(str_buffer, "VC {}", vc_memory).unwrap();
-//     }
-//     // if let Some(board_info) = hal::info::get_board_info() {
-//     //     writeln!(str_buffer, "{}", board_info.revision).unwrap();
-//     // }
-//     // if let Some(mac) = hal::info::get_mac_address() {
-//     //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
-//     // }
+    let mut supported_resolutions = [hal::display::Resolution::default(); 128];
+    let count = hal::display::Resolution::supported(supported_resolutions.as_mut_slice(), 0);
+    writeln!(
+        str_buffer,
+        "Supported {:?}",
+        supported_resolutions.get(0..count)
+    )
+    .unwrap();
+    writeln!(str_buffer, "Requested Resolution {:?}", resolution).unwrap();
+    writeln!(
+        str_buffer,
+        "Framebuffer: {} {} {}",
+        fb.width_px, fb.height_px, fb.bits_per_pixel
+    )
+    .unwrap();
+    if let Some(arm_memory) = hal::info::get_arm_memory() {
+        writeln!(str_buffer, "ARM {}", arm_memory).unwrap();
+    }
+    if let Some(vc_memory) = hal::info::get_vc_memory() {
+        writeln!(str_buffer, "VC {}", vc_memory).unwrap();
+    }
+    // if let Some(board_info) = hal::info::get_board_info() {
+    //     writeln!(str_buffer, "{}", board_info.revision).unwrap();
+    // }
+    // if let Some(mac) = hal::info::get_mac_address() {
+    //     writeln!(str_buffer, "MAC {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]).unwrap();
+    // }
 
-//     for edid in hal::display::EdidIterator::new() {
-//         writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
-//         // for byte in edid.bytes() {
-//         //     write!(str_buffer, "{:02X} ", byte).unwrap();
-//         // }
-//     }
-//     writeln!(str_buffer, "Bye!").unwrap();
-//     let text = str_buffer.to_str().unwrap();
-//     fb.clear(color::BLACK);
-//     fb.write_text(text.as_bytes(), font, mapping);
+    for edid in hal::display::EdidIterator::new() {
+        writeln!(str_buffer, "EDID BLOCK {:?}", edid).unwrap();
+        // for byte in edid.bytes() {
+        //     write!(str_buffer, "{:02X} ", byte).unwrap();
+        // }
+    }
+    writeln!(str_buffer, "Bye!").unwrap();
+    let text = str_buffer.to_str().unwrap();
+    fb.clear(color::BLACK);
+    fb.write_text(text.as_bytes(), font, mapping);
 
-//     println_log!("{text}");
-//     // Uart0::put_uint(core as u64);
-//     // Uart0::puts("Hallo\n");
-//     //
+    println_log!("{text}");
+    // Uart0::put_uint(core as u64);
+    // Uart0::puts("Hallo\n");
+    //
 
-//     // fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
-//     // let mut canvas = drawing::PixelCanvas::with_slice(
-//     //     fb.width_px as usize,
-//     //     fb.height_px as usize,
-//     //     fb.pitch_bytes as usize / 4,
-//     //     fb.as_mut_pixels(),
-//     // )
-//     // .unwrap();
-//     // //canvas.clear(color::BLUE);
-//     // canvas
-//     //     .fill_rect(color::BLUE, (298, 298), (300, 300))
-//     //     .unwrap();
-//     // canvas.fill_lines(color::RED, 100..=100).unwrap();
-//     // let pixelscale = (2, 2);
-//     // let cols = canvas.width / (pixelscale.0 * 8);
-//     // let rows = canvas.height / (pixelscale.1 * 8);
-//     // let mut row_buffer = [0_u64; 256];
-//     // let mut v_scroll: usize = 0;
-//     // hal::led::status_set(false);
-//     // loop {
-//     //     let line_iterator = text
-//     //         .split(|b| *b == b'\n')
-//     //         .flat_map(|l| l.chunks(cols))
-//     //         .cycle();
-//     //     canvas.fill_rect(0, (0, 0), (cols * 8, rows * 8)).unwrap();
-//     //     for (row_nr, text_line) in line_iterator.skip(v_scroll as usize).take(rows).enumerate() {
-//     //         let mut pre = 0;
-//     //         let mut len = 0;
-//     //         for (dst, src) in row_buffer.iter_mut().zip(text_line) {
-//     //             let val = font[mapping(*src) as usize];
-//     //             if len == 0 && val == 0 {
-//     //                 pre += 1;
-//     //                 continue;
-//     //             }
-//     //             *dst = val;
-//     //             len += 1;
-//     //         }
-//     //         canvas
-//     //             .blit8x8_line(
-//     //                 &row_buffer[pre..len + pre],
-//     //                 color::WHITE,
-//     //                 color::BLACK,
-//     //                 (pre * 8, row_nr * 8),
-//     //             )
-//     //             .unwrap();
-//     //     }
-//     //     canvas.scale_in_place(pixelscale.0, pixelscale.1);
-//     //     v_scroll += 1;
+    // fb.set_pixel_a8b8g8r8(150, 100, color::WHITE);
+    // let mut canvas = drawing::PixelCanvas::with_slice(
+    //     fb.width_px as usize,
+    //     fb.height_px as usize,
+    //     fb.pitch_bytes as usize / 4,
+    //     fb.as_mut_pixels(),
+    // )
+    // .unwrap();
+    // //canvas.clear(color::BLUE);
+    // canvas
+    //     .fill_rect(color::BLUE, (298, 298), (300, 300))
+    //     .unwrap();
+    // canvas.fill_lines(color::RED, 100..=100).unwrap();
+    // let pixelscale = (2, 2);
+    // let cols = canvas.width / (pixelscale.0 * 8);
+    // let rows = canvas.height / (pixelscale.1 * 8);
+    // let mut row_buffer = [0_u64; 256];
+    // let mut v_scroll: usize = 0;
+    // hal::led::status_set(false);
+    // loop {
+    //     let line_iterator = text
+    //         .split(|b| *b == b'\n')
+    //         .flat_map(|l| l.chunks(cols))
+    //         .cycle();
+    //     canvas.fill_rect(0, (0, 0), (cols * 8, rows * 8)).unwrap();
+    //     for (row_nr, text_line) in line_iterator.skip(v_scroll as usize).take(rows).enumerate() {
+    //         let mut pre = 0;
+    //         let mut len = 0;
+    //         for (dst, src) in row_buffer.iter_mut().zip(text_line) {
+    //             let val = font[mapping(*src) as usize];
+    //             if len == 0 && val == 0 {
+    //                 pre += 1;
+    //                 continue;
+    //             }
+    //             *dst = val;
+    //             len += 1;
+    //         }
+    //         canvas
+    //             .blit8x8_line(
+    //                 &row_buffer[pre..len + pre],
+    //                 color::WHITE,
+    //                 color::BLACK,
+    //                 (pre * 8, row_nr * 8),
+    //             )
+    //             .unwrap();
+    //     }
+    //     canvas.scale_in_place(pixelscale.0, pixelscale.1);
+    //     v_scroll += 1;
 
-//     //     system::wait_msec(100);
-//     // }
-// }
+    //     system::wait_msec(100);
+    // }
+}
 
 pub fn test_dma() {
     use super::peripherals::dma;
