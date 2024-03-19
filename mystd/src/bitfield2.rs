@@ -320,7 +320,7 @@ macro_rules! bit_field_type_definition {
         }
     ) => {
         $(#[$meta])*
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, PartialEq, Clone, Copy)]
         $v enum $name { 
             $(#[$value_false_meta])* 
             $value_false_name,

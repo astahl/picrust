@@ -216,30 +216,25 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     //     asm!("msr mair_el1, {}", in(reg) r);
     // }
 
-    let mut memory_attributes_array = memory_attributes::MairEl1::zero();
-
+    
     // index 0: Inner and Outer Normal Memory WriteBack Non-transient RW-Allocate (0b1111_1111)
     let write_back_non_transient_allocate = memory_attributes::NormalCacheType {
         write_policy: memory_attributes::CacheWritePolicy::WriteBack,
-        transistence: memory_attributes::CacheTransistence::NonTransient,
+        transience: memory_attributes::CacheTransience::NonTransient,
         read_allocate_policy: memory_attributes::AllocatePolicy::Allocate,
         write_allocate_policy: memory_attributes::AllocatePolicy::Allocate
     };
-    let memory_type = memory_attributes::NormalMemoryType { caching: Some(write_back_non_transient_allocate) };
-    memory_attributes_array.set_attr_n(MEMORY_ATTR_IDX_NORMAL as usize, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
-
-    // index 1: Device nGnRE
-    let memory_type = memory_attributes::DeviceMemoryType::NGnRE;
-    memory_attributes_array.set_attr_n(MEMORY_ATTR_IDX_DEVICE as usize, memory_attributes::MemoryAttributeDescriptor::Device { memory_type });
-
-    // index 2: Inner and Outer Normal non cacheable
-    let memory_type = memory_attributes::NormalMemoryType { caching: None };
-    memory_attributes_array.set_attr_n(MEMORY_ATTR_IDX_NON_CACHEABLE as usize, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
-
-    memory_attributes_array.write_register();
+    let normal_memory_type = memory_attributes::NormalMemoryType { caching: Some(write_back_non_transient_allocate) };
+    let device_memory_type = memory_attributes::DeviceMemoryType::NGnRE;
+    let uncached_memory_type = memory_attributes::NormalMemoryType { caching: None };
+    memory_attributes::MairEl1::zero()
+        .set(MEMORY_ATTR_IDX_NORMAL, memory_attributes::MemoryAttributeDescriptor::normal(normal_memory_type, normal_memory_type))
+        .set(MEMORY_ATTR_IDX_DEVICE, memory_attributes::MemoryAttributeDescriptor::device(device_memory_type))
+        .set(MEMORY_ATTR_IDX_NON_CACHEABLE, memory_attributes::MemoryAttributeDescriptor::normal(uncached_memory_type, uncached_memory_type))
+        .write_register();
     println_debug!("So far so good");
 
-    let translate_control = TcrEl1::zero()
+    TcrEl1::zero()
         .ips().set_value(mm_feats.pa_range().untyped().value()) // IPS= "autodetect" using the reported supported features flag
         .tbi1().clear() // no tagging, use top bit for address
         .tg1().set_value(0b10) // TG1=4k
@@ -255,9 +250,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         .irgn0().set_value(0b01) // outer write back
         .epd0().clear() // ENABLE lower address half TTBR0
         .t0sz().set_value(25) // T0SZ=25, 3 levels (512G)
-        ;
-
-    translate_control.write_register();
+        .write_register();
     unsafe {
         asm!("isb");
     }
@@ -279,7 +272,6 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // unsafe {
     //     asm!("msr tcr_el1, {}; isb", in(reg)r);
     // }
-    println_debug!("TCR is set {}", translate_control);
     // tell the MMU where our translation tables are. TTBR_ENABLE bit not documented, but required
     // lower half, user space
     let ttbr0_address = table_ptr as u64;
