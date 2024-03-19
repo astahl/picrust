@@ -480,8 +480,7 @@ impl TranslationTable4KB {
         // init Level 0 (might not be necessary, depending on T0SZ)
         // map first 512 GB to the first entry in the next table 
         self.level0[0] = TableDescriptor::default()
-            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING)
-            .ap();
+            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
         // // reject addresses over 512 GB
         self.level0[1..].fill(TableDescriptor::invalid());
         
