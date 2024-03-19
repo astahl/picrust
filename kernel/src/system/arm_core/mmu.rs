@@ -477,12 +477,10 @@ impl TranslationTable4KB {
         // LEVEL 0 
         // init Level 0 (might not be necessary, depending on T0SZ)
         // map first 512 GB to the first entry in the next table 
-        // self.level0[0] = TableDescriptor::default()
-        //     .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
+        self.level0[0] = TableDescriptor::default()
+            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
         // // reject addresses over 512 GB
-        // self.level0[0..].fill(TableDescriptor::invalid());
-        self.level0[0..].fill(TableDescriptor::default()
-        .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING));
+        self.level0[1..].fill(TableDescriptor::invalid());
         
         // LEVEL 1
         // Map first 1 GB to the next table
@@ -493,10 +491,10 @@ impl TranslationTable4KB {
         for i in 0..512 {
             let output_address = i * 1024 * 1024 * 1024;
             self.level1[i].block = BlockDescriptor::default()
-                .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
+                .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level1)
                 .af().set()
                 //.contiguous().set()
-                .sh().set_value(Shareability::InnerShareable)
+                .sh().set_value(Shareability::OuterShareable)
                 .stage_1_mem_attr_indx().set_value(NORMAL_MEMORY_ATTR_IDX);
         }
         return;
