@@ -2,6 +2,7 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
+#[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
 impl CpuECtlREl1 {
     pub fn load_register() -> Self {
         let value: u64;
@@ -17,7 +18,7 @@ impl CpuECtlREl1 {
 /// CPU Extended Control Register, EL1
 /// Provides additional IMPLEMENTATION DEFINED configuration and control options for the processor.
 /// 
-#[cfg(feature = "cortex_a72")]
+#[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
 bit_field!(pub CpuECtlREl1 (u64) {
 
     /// # Disable table walk descriptor access prefetch

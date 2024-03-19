@@ -8,7 +8,7 @@ impl MairEl1 {
     }
     
     pub fn write_register(self) {
-        let val = u64::from_le_bytes(self.0);
+        let val: u64 = self.into();
         unsafe { asm!("msr mair_el1, {}", in(reg) val) };
     }
 }

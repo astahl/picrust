@@ -16,6 +16,27 @@ bit_field!(pub TableDescriptor(u64) {
     /// * For stage 2 translations, this bit is RES0.
     /// 
     /// For stage 1 translations in the EL3 translation regime, the removal of NSTable in Root state is a change from the behavior of EL3 in Secure state.
+    /// 
+    /// ## Hierarchical control of Secure or Non-secure memory accesses
+    /// 
+    /// For a Secure translation regime, when a Table descriptor is accessed from a stage 1 translation table in Secure IPA or PA space, the NSTable field determines all of the following:
+    /// * If NSTable is 0, the next-level translation table address in the Table descriptor is in Secure IPA or PA space.
+    /// * If NSTable is 1, the next-level translation table address in the Table descriptor is in Non-secure IPA or PA space.
+    /// 
+    /// If the next-level translation table address in the Table descriptor is in Non-secure IPA or PA space, then the address specified by a descriptor in the next lookup-level translation table is in Non-secure IPA or PA space.
+    /// 
+    /// If stage 2 translation is enabled, the VSTCR_EL2.SA, VTCR_EL2.NSA, VSTCR_EL2.SW, and VTCR_EL2.NSW fields can map an IPA space to a PA space not matching the Security of the IPA space.
+    /// 
+    /// If all of the following apply, then a stage 1 translation is treated as non-global, meaning the Effective value of nG is 1, regardless of the actual value of the Block descriptor or Page descriptor nG bit:
+    /// * The stage 1 translation supports two privilege levels.
+    /// * The PE is in Secure state.
+    /// * NSTable is 1 at any level of the translation table walk.
+    /// 
+    /// For more information, see Global and process-specific translation table entries on page D8-5930.
+    /// 
+    /// The descriptor NSTable field affects all subsequent lookup levels and the translation IPA or PA space. When an NSTable field is changed, software is required to use a break-before-make sequence, including TLB maintenance for all lookup levels for the VA range translated by the descriptor.
+    /// 
+    /// For more information, see TLB maintenance on page D8-5933 and Using break-before-make when updating translation table entries on page D8-5934.
     63 => ns,
 
     /// # APTable \[62:61]
@@ -27,12 +48,41 @@ bit_field!(pub TableDescriptor(u64) {
     /// * For stage 1 translations, the __APTable__\[1:0] field which determines the access permissions limit for subsequent lookup levels.
     /// * For stage 2 translations, these bits are RES0.
     /// 
-    /// For more information, see Hierarchical control of data access permissions on page D8-5869.
+    /// ## Hierarchical control of data access permissions
+    /// 
+    /// Translation table entries at a given lookup level can limit data access permissions at subsequent lookup levels.
+    /// 
+    /// For a stage 1 translation, the Table descriptor APTable\[1:0] field limits the data access permission of subsequent stage 1 translation lookup levels, regardless of the permissions in subsequent lookup levels, as shown in the following table:
+    /// 
+    /// APTable\[1:0] Effect at subsequent lookup levels
+    /// 
+    /// * 00 No effect on permissions.
+    /// * 01 Unprivileged access not permitted.
+    /// * 10 Write access not permitted.
+    /// * 11 Write access not permitted.
+    ///     Unprivileged read access not permitted.
+    /// 
+    /// For a Permission fault, the level of the Block descriptor or Page descriptor is reported regardless of whether the lack of permission was caused by configuration of the APTable or AP fields.
+    /// 
+    /// For translation regimes that support one Exception level, APTable\[0] is RES0.
+    /// 
+    /// The APTable\[1:0] settings are combined with the descriptor access permissions in subsequent lookup levels. They do not change the values entered in those descriptors, nor restrict what values can be entered.
+    /// 
+    /// For the translation regime controlled by a TCR_ELx, one or more of the following can be used to disable the Table descriptor APTable\[1:0] field so that it is IGNORED by the PE and the behavior is as if the value is 0:
+    /// * If the Effective value of TCR_ELx.HPD{0} is 1, hierarchical data access permission control is disabled in the translation tables pointed to by TTBR0_ELx.
+    /// * If the Effective value of TCR_ELx.HPD1 is 1, hierarchical data access permission control is disabled in the translation tables pointed to by TTBR1_ELx.
+    /// 
+    /// The descriptor APTable field affects all subsequent lookup levels. When an APTable field is changed, software is required to use a break-before-make sequence, including TLB maintenance for all lookup levels for the VA range translated by the descriptor.
     /// 
     /// For EL1&0 stage 1 translations, if the Effective value of HCR_EL2.{NV, NV1} is {1, 1}, then APTable\[0] is treated as 0 regardless of the actual value.
     /// 
     /// For more information, see Additional behavior when HCR_EL2.NV is 1 and HCR_EL2.NV1 is 1 on page D8-5909.
-    62:61 => ap,
+    62:61 => stage1_ap: enum APTable {
+        NoEffectOnPermissions = 0b00,
+        UnpriviledgedAccessNotPermitted = 0b01,
+        WriteAccessNotPermitted = 0b10,
+        WriteAndUnpriviligedReadAccessNotPermitted = 0b11,
+    },
 
     /// # XNTable / UXNTable [60]
     /// 
@@ -45,8 +95,28 @@ bit_field!(pub TableDescriptor(u64) {
     /// * For EL1&0 stage 1 translations, if the Effective value of HCR_EL2.{NV, NV1} is {1, 1}, then the PXNTable field. For more information, see Additional behavior when HCR_EL2.NV is 1 and HCR_EL2.NV1 is 1 on page D8-5909.
     /// * For stage 2 translations, this bit is RES0.
     /// 
-    /// For more information, see Hierarchical control of instruction execution permissions on page D8-5873.
-    60 => xn_uxn,
+    /// ## Hierarchical control of instruction execution permissions
+    /// 
+    /// Stage 1 translation table entries at a given lookup level can limit instruction execution permissions at subsequent lookup levels.
+    /// 
+    /// ### XN 
+    /// 
+    /// For a stage 1 translation, the value of the XNTable Table descriptor field has one of the following effects:
+    /// * If the Effective value of the XNTable field is 0, then the field has no effect.
+    /// * If the Effective value of the XNTable field is 1, then all of the following apply:
+    ///     - The XNTable field is treated as 1 in all Table descriptors in subsequent lookup levels, regardless of the actual value of XNTable.
+    ///     - The XN field in Block descriptors and Page descriptors is treated as 1 in subsequent lookup levels, regardless of the actual value of XN.
+    ///     - The value and interpretation of the XNTable and XN fields in all subsequent lookup levels are otherwise unaffected.
+    /// 
+    /// ### UXN
+    /// 
+    /// For a stage 1 translation, the value of the UXNTable Table descriptor field has one of the following effects:
+    /// * If the Effective value of the UXNTable field is 0, then the field has no effect.
+    /// * If the Effective value of the UXNTable field is 1, then all of the following apply:
+    ///     - The UXNTable field is treated as 1 in all Table descriptors in subsequent lookup levels, regardless of the actual value of UXNTable.
+    ///     - The UXN field in Block descriptors and Page descriptors is treated as 1 in subsequent lookup levels, regardless of the actual value of UXN.
+    ///     - The value and interpretation of the UXNTable and UXN fields in all subsequent lookup levels are otherwise unaffected.
+    60 => stage1_xn_uxn,
 
     /// # PXNTable\[59]
     /// 
@@ -59,8 +129,13 @@ bit_field!(pub TableDescriptor(u64) {
     /// * For EL1&0 stage 1 translations, if the Effective value of HCR_EL2.{NV, NV1} is {1, 1}, then RES0. For more information, see Additional behavior when HCR_EL2.NV is 1 and HCR_EL2.NV1 is 1 on page D8-5909.
     /// * For stage 2 translations, this bit is RES0.
     /// 
-    /// For more information, see Hierarchical control of instruction execution permissions on page D8-5873.
-    59 => pxn,
+    /// For a stage 1 translation, the value of the PXNTable Table descriptor field has one of the following effects:
+    /// * If the Effective value of the PXNTable field is 0, then the field has no effect.
+    /// * If the Effective value of the PXNTable field is 1, then all of the following apply:
+    ///     - The PXNTable field is treated as 1 in all Table descriptors in subsequent lookup levels, regardless of the actual value of PXNTable.
+    ///     - The PXN field in Block descriptors and Page descriptors is treated as 1 in subsequent lookup levels, regardless of the actual value of PXN.
+    ///     - The value and interpretation of the PXNTable and PXN fields all subsequent lookup levels are otherwise unaffected.
+    59 => stage1_pxn,
 
     // 58:51 => ignore,
     // 50 => RES0,
@@ -100,7 +175,7 @@ pub enum AddressingMode {
     Gran4KBAddr48bit,
     #[cfg(feature = "FEAT_LPA2")]
     Gran4KBAddr52bit,
-    #[cfg(not(feature = "cortex_a72"))]
+    #[cfg(not(any(feature = "cortex_a72", feature = "cortex_a53")))]
     Gran16KBAddr48bit,
     #[cfg(feature = "FEAT_LPA2")]
     Gran16KBAddr52bit,

@@ -22,8 +22,9 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 }
 
 
-const NORMAL_MEMORY_ATTR_IDX: u64 = 0;
-const DEVICE_MEMORY_ATTR_IDX: u64 = 1;
+const MEMORY_ATTR_IDX_NORMAL: u64 = 0;
+const MEMORY_ATTR_IDX_DEVICE: u64 = 1;
+const MEMORY_ATTR_IDX_NON_CACHEABLE: u64 = 2;
 
 #[cfg(feature = "mmu")]
 pub fn mmu_init() -> Result<(), MMUInitError> {
@@ -225,15 +226,15 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         write_allocate_policy: memory_attributes::AllocatePolicy::Allocate
     };
     let memory_type = memory_attributes::NormalMemoryType { caching: Some(write_back_non_transient_allocate) };
-    memory_attributes_array.set_attr_n(NORMAL_MEMORY_ATTR_IDX as usize, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
+    memory_attributes_array.set_attr_n(MEMORY_ATTR_IDX_NORMAL as usize, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
 
     // index 1: Device nGnRE
     let memory_type = memory_attributes::DeviceMemoryType::NGnRE;
-    memory_attributes_array.set_attr_n(DEVICE_MEMORY_ATTR_IDX as usize, memory_attributes::MemoryAttributeDescriptor::Device { memory_type });
+    memory_attributes_array.set_attr_n(MEMORY_ATTR_IDX_DEVICE as usize, memory_attributes::MemoryAttributeDescriptor::Device { memory_type });
 
     // index 2: Inner and Outer Normal non cacheable
-    // let memory_type = memory_attributes::NormalMemoryType { caching: None };
-    // memory_attributes_array.set_attr_n(2, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
+    let memory_type = memory_attributes::NormalMemoryType { caching: None };
+    memory_attributes_array.set_attr_n(MEMORY_ATTR_IDX_NON_CACHEABLE as usize, memory_attributes::MemoryAttributeDescriptor::Normal { outer: memory_type , inner: memory_type });
 
     memory_attributes_array.write_register();
     println_debug!("So far so good");
@@ -337,6 +338,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     //        (1 << 1)); // clear A, no aligment check
     // r |= 1 << 0; // set M, enable MMU
     println_debug!("And now SCTLR is set {}", sctlr);
+    println_debug!("We done?!");
     Ok(())
 }
 
@@ -478,25 +480,41 @@ impl TranslationTable4KB {
         // init Level 0 (might not be necessary, depending on T0SZ)
         // map first 512 GB to the first entry in the next table 
         self.level0[0] = TableDescriptor::default()
-            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
+            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING)
+            .ap();
         // // reject addresses over 512 GB
         self.level0[1..].fill(TableDescriptor::invalid());
         
         // LEVEL 1
         // Map first 1 GB to the next table
-        // self.level1[0].table = TableDescriptor::default()
-        //     .with_next_level_table_at(self.level2.as_ptr() as u64, ADDRESSING);
+        self.level1[0].table = TableDescriptor::default()
+            .with_next_level_table_at(self.level2.as_ptr() as u64, ADDRESSING);
         // // reject addresses over 1 GB
-        // self.level1[1..].fill(BlockOrTableDescriptor::invalid());
+        self.level1[1..].fill(BlockOrTableDescriptor::invalid());
+        
         for i in 0..512 {
             let output_address = i * 1024 * 1024 * 1024;
             self.level1[i].block = BlockDescriptor::default()
                 .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level1)
                 .af().set()
+                //.ap_s2ap().set_value(1)
+                //.dbm().set()
+                //.stage_1_ns_secure().set()
                 //.contiguous().set()
                 .sh().set_value(Shareability::OuterShareable)
-                .stage_1_mem_attr_indx().set_value(NORMAL_MEMORY_ATTR_IDX);
+                .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NON_CACHEABLE);
         }
+        // for i in 0..512 {
+        //     let output_address = i * 1024 * 1024 * 1024;
+        //     self.level1[i].block = BlockDescriptor::default()
+        //         .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level1)
+        //         .af().set()
+        //         //.dbm().set()
+        //         //.stage_1_ns_secure().set()
+        //         //.contiguous().set()
+        //         .sh().set_value(Shareability::OuterShareable)
+        //         .stage_1_mem_attr_indx().set_value(DEVICE_MEMORY_ATTR_IDX);
+        // }
         return;
 
         // LEVEL 2 First 1 GB
@@ -519,7 +537,7 @@ impl TranslationTable4KB {
                 .af().set()
                 //.contiguous().set()
                 .sh().set_value(Shareability::InnerShareable)
-                .stage_1_mem_attr_indx().set_value(NORMAL_MEMORY_ATTR_IDX);
+                .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NORMAL);
         }
         for i in PERIPHERAL_BLOCKS_BEGIN..PERIPHERAL_BLOCKS_END {
             let output_address = i * BLOCK_SIZE;
@@ -528,7 +546,7 @@ impl TranslationTable4KB {
                 .af().set()
                 //.contiguous().set()
                 .sh().set_value(Shareability::OuterShareable)
-                .stage_1_mem_attr_indx().set_value(DEVICE_MEMORY_ATTR_IDX);
+                .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_DEVICE);
         }
 
         // LEVEL 3 First 2 MB
