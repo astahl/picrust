@@ -376,7 +376,7 @@ impl core::fmt::Debug for MemoryBlock {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "[{:#x} - {:#x}]", self.0 as usize, self.1 as usize)?;
         if f.alternate() {
-            write!(f, "({})", mystd::format::ByteValue(self.byte_size()))?;
+            write!(f, "({})", mystd::byte_value::ByteValue(self.byte_size() as u64))?;
         }
         Ok(())
     }

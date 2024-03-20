@@ -10,6 +10,7 @@ pub mod format;
 pub mod io;
 pub mod mutex;
 pub mod parse;
+pub mod byte_value;
 
 #[cfg(test)]
 mod tests {

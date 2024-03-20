@@ -2,6 +2,8 @@ pub mod descriptors;
 
 use core::arch::asm;
 
+use mystd::byte_value::ByteValue;
+
 use crate::system::arm_core::registers::aarch64::general_sys_ctrl::id_aa64mmfr0_el1::Granule4KBSupport;
 use crate::system::{arm_core::mmu::descriptors::AddressingMode, hal::info::MemoryMap};
 use crate::system::peripherals::BCM_HOST;
@@ -50,9 +52,9 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     }
 
     println_debug!("Checked support, everything should work! going ahead...");
-    let table_ptr = ((32 * 1024 * 1024) as *mut TranslationTable4KB);
-    unsafe {
-        table_ptr.as_mut().unwrap_unchecked().init_lower_region();
+    let table = unsafe {
+        let table_ptr = ((32 * 1024 * 1024) as *mut TranslationTable4KB);
+        TranslationTable4KB::init(table_ptr)
         // for ia in 0..(1024 * 1024) {
         //     let ia = ia * 1024;
         //     let oa = (*table_ptr).simulate_walk(ia).expect("Table Walk should complete");
@@ -60,9 +62,9 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         //     assert_eq!(ia, oa, "WALK FAILED");
         // }
         // panic!("hold it");
-    }
+    };
 
-    println_debug!("Created table at {:p}", table_ptr);
+    println_debug!("Created table at {:#x} {:#x}", table.base_address_rg0(), table.base_address_rg1());
 
     // const PAGE_ENTRY_COUNT: usize = PAGESIZE / core::mem::size_of::<usize>();
     // // granularity
@@ -240,6 +242,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     let common_cacheability = general_sys_ctrl::tcr_el1::RegionCacheability::WriteBackReadAllocateWriteAllocate;
     let common_shareability = Shareability::InnerShareable;
     let common_granule = GranuleSize::_4KB;
+    let common_tnsz = 24;
     TcrEl1::zero()
         .asid_size().set_value(match mm_feats.asid().value() {
             Ok(AsidBitNum::_16Bits) => general_sys_ctrl::tcr_el1::AsidSize::_16Bit,
@@ -253,14 +256,14 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         .orgn1().set_value(common_cacheability) // outer write back
         .irgn1().set_value(common_cacheability) // inner write back
         .epd1().clear() // ENABLE upper address half TTBR1
-        .t1sz().set_value(25) // T1SZ=25, 3 levels (512G)
+        .t1sz().set_value(common_tnsz) // T1SZ=25, 3 levels (512G)
         .tbi0().clear() // no tagging, use top bit for address
         .tg0().set_value(common_granule) // TG0=4k
         .sh0().set_value(common_shareability) // SH0= inner shareable
         .orgn0().set_value(common_cacheability) // outer write back
         .irgn0().set_value(common_cacheability) // inner write back
         .epd0().clear() // ENABLE lower address half TTBR0
-        .t0sz().set_value(25) // T0SZ=25, 3 levels (512G)
+        .t0sz().set_value(common_tnsz) // T0SZ=25, 3 levels (512G)
         .write_register();
     unsafe {
         asm!("isb");
@@ -285,12 +288,11 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // }
     // tell the MMU where our translation tables are. TTBR_ENABLE bit not documented, but required
     // lower half, user space
-    let ttbr0_address = table_ptr as u64;
     unsafe {
-        asm!("msr ttbr0_el1, {}", in(reg) ttbr0_address);
-        asm!("msr ttbr1_el1, {}", in(reg) ttbr0_address);
+        asm!("msr ttbr0_el1, {}", in(reg) table.base_address_rg0());
+        asm!("msr ttbr1_el1, {}", in(reg) table.base_address_rg1());
     }
-    println_debug!("TTBR0 is set {:#x}", ttbr0_address);
+    //println_debug!("TTBR0 is set {:#x}", ttbr0_address);
     // upper half, kernel space
     // let ttbr1_address = page_table_ptr as usize + PAGESIZE | TTBR_ENABLE;
     // unsafe {
@@ -311,16 +313,16 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         .ee().clear()   // little endian translation tables
         .e0e().clear()  // little endian translation tables
         .wxn().clear()
-        .i().clear()    // no i-cache
-    //    .i().set()
-        .sa0().clear()  // no stack pointer alignment check at EL0
-    //    .sa0().set()
-        .sa().clear()   // no stack pointer alignment check at EL1
-    //    .sa().set()
-        .c().clear()    // no d-cache
-    //    .c().set()
-        .a().clear()    // no data alignment check
-    //    .a().set()
+    //    .i().clear()    // no i-cache
+        .i().set()
+    //    .sa0().clear()  // no stack pointer alignment check at EL0
+        .sa0().set()
+    //    .sa().clear()   // no stack pointer alignment check at EL1
+        .sa().set()
+    //    .c().clear()    // no d-cache
+        .c().set()
+    //    .a().clear()    // no data alignment check
+        .a().set()
         .m().set()      // enable MMU
         ;
 
@@ -351,6 +353,22 @@ union BlockOrTableDescriptor {
     _tag: u64,
     block: BlockDescriptor,
     table: TableDescriptor,
+}
+
+impl From<TableDescriptor> for BlockOrTableDescriptor {
+    fn from(value: TableDescriptor) -> Self {
+        Self {
+            table: value
+        }
+    }
+}
+
+impl From<BlockDescriptor> for BlockOrTableDescriptor {
+    fn from(value: BlockDescriptor) -> Self {
+        Self {
+            block: value
+        }
+    }
 }
 
 
@@ -418,8 +436,9 @@ struct TranslationTable4KB {
     ///     - The Size of memory region addressed by Block descriptor is 512 GByte.
     ///     - The Bit range that is direct mapped is IA\[38:0] to OA\[38:0].
     ///     - The Block descriptor is selected by IA\[51:39].
-    level0: [TableDescriptor;512],
-    
+    range_0_level_0: [TableDescriptor;512],
+    range_1_level_0: [TableDescriptor;512],
+
     /// # Level 1
     /// 
     /// Table descriptors and Block descriptors (1 GB Blocks).
@@ -433,7 +452,8 @@ struct TranslationTable4KB {
     /// * The Block descriptor is selected by IA bit range:
     ///     - If the Effective value of TCR_ELx.DS is 0, then IA\[47:30].
     ///     - If the Effective value of TCR_ELx.DS is 1, then IA\[51:30].
-    level1: [BlockOrTableDescriptor;512],
+    range_0_level_1: [BlockOrTableDescriptor;512],
+    range_1_level_1: [BlockOrTableDescriptor;512],
     
     /// # Level 2
     /// 
@@ -448,7 +468,8 @@ struct TranslationTable4KB {
     /// * The Block descriptor is selected by IA bit range:
     ///     - If the Effective value of TCR_ELx.DS is 0, then IA\[47:21].
     ///     - If the Effective value of TCR_ELx.DS is 1, then IA\[51:21].
-    level2: [BlockOrTableDescriptor;512],
+    range_0_level_2: [BlockOrTableDescriptor;512],
+    range_1_level_2: [BlockOrTableDescriptor;512],
     
     /// # Level 3
     /// 
@@ -465,163 +486,278 @@ struct TranslationTable4KB {
     ///     - If the Effective value of TCR_ELx.DS is 1, then OA\[51:12].
     /// 
     /// IA\[11:0] is mapped directly to OA[\11:0].
-    level3_0: [PageDescriptor;512],
+    range_0_level_3_0: [PageDescriptor;512],
+    range_1_level_3_0: [PageDescriptor;512],
 }
 
 impl TranslationTable4KB {
-    const PAGE_SIZE: usize = 0x1000;
-    const L2_BLOCK_SIZE: usize = 0x200000;
+    const ADDRESSING: AddressingMode = AddressingMode::Gran4KBAddr48bit;
+    const L0_BLOCK_SIZE: u64 = ByteValue::from_gibi(512).as_bytes();
+    const L1_BLOCK_SIZE: u64 = ByteValue::from_gibi(1).as_bytes();
+    const L2_BLOCK_SIZE: u64 = ByteValue::from_mibi(2).as_bytes();
+    const PAGE_SIZE: u64 = ByteValue::from_kibi(4).as_bytes();
+
+    const PERIPHERAL_BLOCKS_BEGIN: u64 = BCM_HOST.peripheral_address as u64 / Self::L2_BLOCK_SIZE;
+    const PERIPHERAL_BLOCKS_END: u64 = ((BCM_HOST.peripheral_address + BCM_HOST.peripheral_size ) as u64 + (Self::L2_BLOCK_SIZE - 1)) / Self::L2_BLOCK_SIZE;
+        
+    
+
+    pub fn base_address_rg0(&self) -> u64 {
+        self.range_0_level_0.as_ptr() as u64
+    }
+
+
+    pub fn base_address_rg1(&self) -> u64 {
+        self.range_1_level_0.as_ptr() as u64
+    }
 
     /// Initialize a table to use with TTBR0 mapping virtual address range [0x0 ... 0x0000_FFFF_FFFF_FFFF] (T0SZ = 16).
     /// 
     /// Sets pages in the stack range to no-execute.
     /// 
     /// Sets blocks in Peripheral Range to device memory.
-    pub fn init_lower_region(&mut self) {
-        use descriptors::*;
-        const ADDRESSING: AddressingMode = AddressingMode::Gran4KBAddr48bit;
-        // LEVEL 0 
-        // init Level 0 (might not be necessary, depending on T0SZ)
-        // map first 512 GB to the first entry in the next table 
-        self.level0[0] = TableDescriptor::default()
-            .with_next_level_table_at(self.level1.as_ptr() as u64, ADDRESSING);
-        // // reject addresses over 512 GB
-        self.level0[1..].fill(TableDescriptor::invalid());
+    pub unsafe fn init<'a>(ptr: *mut TranslationTable4KB) -> &'a TranslationTable4KB {
+        (*ptr).initialize_level_0();
+        (*ptr).initialize_level_1();
+        (*ptr).initialize_level_2();
+        (*ptr).initialize_level_3();
+
+        ptr.as_ref().expect("Surely you wouldn't pass in an unaligned or null pointer...")
+
         
-        // LEVEL 1
-        // Map first 1 GB to the next table
-        self.level1[0].table = TableDescriptor::default()
-            .with_next_level_table_at(self.level2.as_ptr() as u64, ADDRESSING);
-        // // reject addresses over 1 GB
-        self.level1[1..].fill(BlockOrTableDescriptor::invalid());
         
-        for i in 0..512 {
-            let output_address = i * 1024 * 1024 * 1024;
-            self.level1[i].block = BlockDescriptor::default()
-                .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level1)
-                .af().set()
-                //.ap_s2ap().set_value(1)
-                //.dbm().set()
-                //.stage_1_ns_secure().set()
-                //.contiguous().set()
-                .sh().set_value(Shareability::OuterShareable)
-                .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NON_CACHEABLE);
-        }
+        // // LEVEL 1
+        // // Map first 1 GB to the next table
+        // self.level1[0].table = TableDescriptor::default()
+        //     .with_next_level_table_at(self.level2.as_ptr() as u64, ADDRESSING);
+        // // // reject addresses over 1 GB
+        // self.level1[1..].fill(BlockOrTableDescriptor::invalid());
+        
         // for i in 0..512 {
         //     let output_address = i * 1024 * 1024 * 1024;
         //     self.level1[i].block = BlockDescriptor::default()
         //         .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level1)
         //         .af().set()
+        //         //.ap_s2ap().set_value(1)
         //         //.dbm().set()
         //         //.stage_1_ns_secure().set()
         //         //.contiguous().set()
         //         .sh().set_value(Shareability::OuterShareable)
-        //         .stage_1_mem_attr_indx().set_value(DEVICE_MEMORY_ATTR_IDX);
+        //         .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NON_CACHEABLE);
         // }
-        return;
+        // // for i in 0..512 {
+        // //     let output_address = i * 1024 * 1024 * 1024;
+        // //     self.level1[i].block = BlockDescriptor::default()
+        // //         .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level1)
+        // //         .af().set()
+        // //         //.dbm().set()
+        // //         //.stage_1_ns_secure().set()
+        // //         //.contiguous().set()
+        // //         .sh().set_value(Shareability::OuterShareable)
+        // //         .stage_1_mem_attr_indx().set_value(DEVICE_MEMORY_ATTR_IDX);
+        // // }
+        // return;
 
-        // LEVEL 2 First 1 GB
-        // Here we map each block of 2MB of IA\[29:12] directly to each OA via blocks
-        // Map first 2 MB to the next table, so we can set no execute for the stack
-        self.level2[0].table = TableDescriptor::default()
-            .with_next_level_table_at(self.level3_0.as_ptr() as u64, ADDRESSING);
-        // Map the rest of 2 MB Blocks to output addresses
-        const BLOCK_SIZE: usize = TranslationTable4KB::L2_BLOCK_SIZE;
-        const PERIPHERAL_BLOCKS_BEGIN: usize = BCM_HOST.peripheral_address / BLOCK_SIZE;
-        const PERIPHERAL_BLOCKS_END: usize = (BCM_HOST.peripheral_address + BCM_HOST.peripheral_size + (BLOCK_SIZE - 1)) / BLOCK_SIZE;
+        // // LEVEL 2 First 1 GB
+        // // Here we map each block of 2MB of IA\[29:12] directly to each OA via blocks
+        // // Map first 2 MB to the next table, so we can set no execute for the stack
+        // self.level2[0].table = TableDescriptor::default()
+        //     .with_next_level_table_at(self.level3_0.as_ptr() as u64, ADDRESSING);
+        // // Map the rest of 2 MB Blocks to output addresses
+        // const BLOCK_SIZE: usize = TranslationTable4KB::L2_BLOCK_SIZE;
+        // const PERIPHERAL_BLOCKS_BEGIN: usize = BCM_HOST.peripheral_address / BLOCK_SIZE;
+        // const PERIPHERAL_BLOCKS_END: usize = (BCM_HOST.peripheral_address + BCM_HOST.peripheral_size + (BLOCK_SIZE - 1)) / BLOCK_SIZE;
         
-        assert!(PERIPHERAL_BLOCKS_BEGIN < 512, "Not yet implemented peripheral handling beyond 1 GB");
-        assert!(PERIPHERAL_BLOCKS_END <= 512, "Not yet implemented peripheral handling beyonf 1 GB");
+        // assert!(PERIPHERAL_BLOCKS_BEGIN < 512, "Not yet implemented peripheral handling beyond 1 GB");
+        // assert!(PERIPHERAL_BLOCKS_END <= 512, "Not yet implemented peripheral handling beyonf 1 GB");
 
-        for i in 1..PERIPHERAL_BLOCKS_BEGIN {
-            let output_address = i * BLOCK_SIZE;
-            self.level2[i].block = BlockDescriptor::default()
-                .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
+        // for i in 1..PERIPHERAL_BLOCKS_BEGIN {
+        //     let output_address = i * BLOCK_SIZE;
+        //     self.level2[i].block = BlockDescriptor::default()
+        //         .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
+        //         .af().set()
+        //         //.contiguous().set()
+        //         .sh().set_value(Shareability::InnerShareable)
+        //         .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NORMAL);
+        // }
+        // for i in PERIPHERAL_BLOCKS_BEGIN..PERIPHERAL_BLOCKS_END {
+        //     let output_address = i * BLOCK_SIZE;
+        //     self.level2[i].block = BlockDescriptor::default()
+        //         .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
+        //         .af().set()
+        //         //.contiguous().set()
+        //         .sh().set_value(Shareability::OuterShareable)
+        //         .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_DEVICE);
+        // }
+
+        // // LEVEL 3 First 2 MB
+        // // Here we map each page of 4KB of IA\[20:12] directly to each OA \[20:12]
+        // let main_stack_range = MemoryMap::main_stack();
+        // let stack_pages_begin = main_stack_range.bottom() as usize / Self::PAGE_SIZE;
+        // let stack_pages_end = main_stack_range.top() as usize / Self::PAGE_SIZE;
+
+        // for i in 0..512 {
+        //     let output_address = i * Self::PAGE_SIZE;
+        //     self.level3_0[i] = PageDescriptor::default()
+        //         .with_output_address(output_address as u64, ADDRESSING)
+        //         .sh().set_value(Shareability::OuterShareable)
+        //         .af().set()
+        //         //.contiguous().set();
+        // }
+
+        // for i in stack_pages_begin..stack_pages_end {
+        //     self.level3_0[i] = self.level3_0[i].xn_uxn_pxn().set_value(0b10);
+        // }
+    }
+
+    // LEVEL 0 
+    fn initialize_level_0(&mut self) {
+        // init Level 0 (might not be necessary, depending on T0SZ)
+        // map each 512 GB to the first entry in the next table 
+        let next_table_range0 = TableDescriptor::default()
+            .with_next_level_table_at(self.range_0_level_1.as_ptr() as u64, Self::ADDRESSING);
+        // // reject addresses over 512 GB
+        self.range_0_level_0.fill(next_table_range0);
+
+        let next_table_range1 = TableDescriptor::default()
+            .with_next_level_table_at(self.range_1_level_1.as_ptr() as u64, Self::ADDRESSING);
+        // // reject addresses over 512 GB
+        self.range_1_level_0.fill(next_table_range1);
+    }
+
+    fn initialize_level_1(&mut self) {
+        let next_table_range0 = TableDescriptor::default()
+            .with_next_level_table_at(self.range_0_level_2.as_ptr() as u64, Self::ADDRESSING);
+        self.range_0_level_1.fill(next_table_range0.into());
+
+        let next_table_range1 = TableDescriptor::default()
+            .with_next_level_table_at(self.range_1_level_2.as_ptr() as u64, Self::ADDRESSING);
+        self.range_1_level_1.fill(next_table_range1.into());
+    }
+
+    fn initialize_level_2(&mut self) {
+        assert!(Self::PERIPHERAL_BLOCKS_BEGIN < 512, "Not yet implemented peripheral handling beyond 1 GB");
+        assert!(Self::PERIPHERAL_BLOCKS_END <= 512, "Not yet implemented peripheral handling beyonf 1 GB");
+
+
+        self.range_0_level_2[0] = TableDescriptor::default()
+            .with_next_level_table_at(self.range_0_level_3_0.as_ptr() as u64, Self::ADDRESSING).into();
+        self.range_1_level_2[0] = TableDescriptor::default()
+            .with_next_level_table_at(self.range_1_level_3_0.as_ptr() as u64, Self::ADDRESSING).into();
+
+        for i in 1..Self::PERIPHERAL_BLOCKS_BEGIN {
+            let output_address = i * Self::L2_BLOCK_SIZE;
+            let normal_block = BlockDescriptor::default()
+                .with_output_address(output_address as u64, Self::ADDRESSING, descriptors::BlockLevel::Level2)
                 .af().set()
-                //.contiguous().set()
-                .sh().set_value(Shareability::InnerShareable)
+                .contiguous().set()
+                .sh().set_value(descriptors::Shareability::InnerShareable)
                 .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NORMAL);
+            self.range_0_level_2[i as usize].block = normal_block;
+            self.range_1_level_2[i as usize].block = normal_block;
         }
-        for i in PERIPHERAL_BLOCKS_BEGIN..PERIPHERAL_BLOCKS_END {
-            let output_address = i * BLOCK_SIZE;
-            self.level2[i].block = BlockDescriptor::default()
-                .with_output_address(output_address as u64, ADDRESSING, BlockLevel::Level2)
+        for i in Self::PERIPHERAL_BLOCKS_BEGIN..Self::PERIPHERAL_BLOCKS_END {
+            let output_address = i * Self::L2_BLOCK_SIZE;
+            let device_block = BlockDescriptor::default()
+                .with_output_address(output_address as u64, Self::ADDRESSING, descriptors::BlockLevel::Level2)
                 .af().set()
-                //.contiguous().set()
-                .sh().set_value(Shareability::OuterShareable)
+                .contiguous().set()
+                .sh().set_value(descriptors::Shareability::OuterShareable)
                 .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_DEVICE);
+            self.range_0_level_2[i as usize].block = device_block;
+            self.range_1_level_2[i as usize].block = device_block;
         }
+        for i in Self::PERIPHERAL_BLOCKS_END..512 {
+            let output_address = i * Self::L2_BLOCK_SIZE;
+            let normal_block = BlockDescriptor::default()
+                .with_output_address(output_address as u64, Self::ADDRESSING, descriptors::BlockLevel::Level2)
+                .af().set()
+                .contiguous().set()
+                .sh().set_value(descriptors::Shareability::InnerShareable)
+                .stage_1_mem_attr_indx().set_value(MEMORY_ATTR_IDX_NORMAL);
+            self.range_0_level_2[i as usize].block = normal_block;
+            self.range_1_level_2[i as usize].block = normal_block;
+        }
+    }
 
+    fn initialize_level_3(&mut self) {
         // LEVEL 3 First 2 MB
         // Here we map each page of 4KB of IA\[20:12] directly to each OA \[20:12]
         let main_stack_range = MemoryMap::main_stack();
-        let stack_pages_begin = main_stack_range.bottom() as usize / Self::PAGE_SIZE;
-        let stack_pages_end = main_stack_range.top() as usize / Self::PAGE_SIZE;
+        let stack_pages_begin = main_stack_range.bottom() as u64 / Self::PAGE_SIZE;
+        let stack_pages_end = main_stack_range.top() as u64 / Self::PAGE_SIZE;
 
         for i in 0..512 {
             let output_address = i * Self::PAGE_SIZE;
-            self.level3_0[i] = PageDescriptor::default()
-                .with_output_address(output_address as u64, ADDRESSING)
-                .sh().set_value(Shareability::OuterShareable)
+            let normal_page =  PageDescriptor::default()
+                .with_output_address(output_address as u64, Self::ADDRESSING)
+                .sh().set_value(descriptors::Shareability::OuterShareable)
                 .af().set()
-                //.contiguous().set();
+                .contiguous().set();
+
+                self.range_0_level_3_0[i as usize] = normal_page;
+                self.range_1_level_3_0[i as usize] = normal_page;
         }
 
         for i in stack_pages_begin..stack_pages_end {
-            self.level3_0[i] = self.level3_0[i].xn_uxn_pxn().set_value(0b10);
+            // change the stack pages to execute never
+            self.range_0_level_3_0[i as usize] = self.range_0_level_3_0[i as usize]
+                .xn_uxn_pxn().set_value(0b10);
+            self.range_1_level_3_0[i as usize] = self.range_1_level_3_0[i as usize]
+                .xn_uxn_pxn().set_value(0b10);
         }
     }
 
-    pub fn simulate_walk(&self, input_address: u64) -> Result<u64, u8> {
-        const MASK_8: u64 = 0xff;
-        const MASK_9: u64 = 0x1ff;
-        const MODE: AddressingMode = AddressingMode::Gran4KBAddr48bit;
-        const LEVEL_0_OA_MASK: u64 = (1 << 39) - 1;
-        const LEVEL_1_OA_MASK: u64 = (1 << 30) - 1;
-        const LEVEL_2_OA_MASK: u64 = (1 << 21) - 1;
-        const LEVEL_3_OA_MASK: u64 = (1 << 12) - 1;
-        let level0idx = (input_address >> 39) & MASK_8;
-        let level1idx = (input_address >> 30) & MASK_9;
-        let level2idx = (input_address >> 21) & MASK_9;
-        let level3idx = (input_address >> 12) & MASK_9;
+    // pub fn simulate_walk(&self, input_address: u64) -> Result<u64, u8> {
+    //     const MASK_8: u64 = 0xff;
+    //     const MASK_9: u64 = 0x1ff;
+    //     const MODE: AddressingMode = AddressingMode::Gran4KBAddr48bit;
+    //     const LEVEL_0_OA_MASK: u64 = (1 << 39) - 1;
+    //     const LEVEL_1_OA_MASK: u64 = (1 << 30) - 1;
+    //     const LEVEL_2_OA_MASK: u64 = (1 << 21) - 1;
+    //     const LEVEL_3_OA_MASK: u64 = (1 << 12) - 1;
+    //     let level0idx = (input_address >> 39) & MASK_8;
+    //     let level1idx = (input_address >> 30) & MASK_9;
+    //     let level2idx = (input_address >> 21) & MASK_9;
+    //     let level3idx = (input_address >> 12) & MASK_9;
 
-        let table_entry = self.level0[level0idx as usize];
-        let next_table_address = match table_entry.format().value().expect("all values are handled") {
-            descriptors::TableOrBlockDescriptorFormat::Invalid00 => return Err(0),
-            descriptors::TableOrBlockDescriptorFormat::Invalid10 => return Err(0),
-            descriptors::TableOrBlockDescriptorFormat::Block => return Err(0),
-            descriptors::TableOrBlockDescriptorFormat::Table => table_entry.next_level_table_address(MODE),
-        };
+    //     let table_entry = self.level0[level0idx as usize];
+    //     let next_table_address = match table_entry.format().value().expect("all values are handled") {
+    //         descriptors::TableOrBlockDescriptorFormat::Invalid00 => return Err(0),
+    //         descriptors::TableOrBlockDescriptorFormat::Invalid10 => return Err(0),
+    //         descriptors::TableOrBlockDescriptorFormat::Block => return Err(0),
+    //         descriptors::TableOrBlockDescriptorFormat::Table => table_entry.next_level_table_address(MODE),
+    //     };
 
-        assert_eq!(next_table_address, self.level1.as_ptr() as u64);
+    //     assert_eq!(next_table_address, self.level1.as_ptr() as u64);
 
-        let table_entry = self.level1[level1idx as usize];
-        if table_entry.is_invalid() {
-            return Err(1);
-        } else if let Some(block) = table_entry.block_descriptor() {
-            return Ok(input_address & LEVEL_1_OA_MASK | block.output_address(MODE, descriptors::BlockLevel::Level1));
-        }
+    //     let table_entry = self.level1[level1idx as usize];
+    //     if table_entry.is_invalid() {
+    //         return Err(1);
+    //     } else if let Some(block) = table_entry.block_descriptor() {
+    //         return Ok(input_address & LEVEL_1_OA_MASK | block.output_address(MODE, descriptors::BlockLevel::Level1));
+    //     }
 
-        let next_table_address = table_entry.table_descriptor().expect("this should be a table descriptor now").next_level_table_address(MODE);
-        assert_eq!(next_table_address, self.level2.as_ptr() as u64);
+    //     let next_table_address = table_entry.table_descriptor().expect("this should be a table descriptor now").next_level_table_address(MODE);
+    //     assert_eq!(next_table_address, self.level2.as_ptr() as u64);
 
-        let table_entry = self.level2[level2idx as usize];
-        if table_entry.is_invalid() {
-            return Err(2);
-        } else if let Some(block) = table_entry.block_descriptor() {
-            return Ok(input_address & LEVEL_2_OA_MASK | block.output_address(MODE, descriptors::BlockLevel::Level2));
-        }
+    //     let table_entry = self.level2[level2idx as usize];
+    //     if table_entry.is_invalid() {
+    //         return Err(2);
+    //     } else if let Some(block) = table_entry.block_descriptor() {
+    //         return Ok(input_address & LEVEL_2_OA_MASK | block.output_address(MODE, descriptors::BlockLevel::Level2));
+    //     }
 
-        let next_table_address = table_entry.table_descriptor().expect("this should be a table descriptor now").next_level_table_address(MODE);
-        assert_eq!(next_table_address, self.level3_0.as_ptr() as u64);
+    //     let next_table_address = table_entry.table_descriptor().expect("this should be a table descriptor now").next_level_table_address(MODE);
+    //     assert_eq!(next_table_address, self.level3_0.as_ptr() as u64);
 
-        let page = self.level3_0[level3idx as usize];
-        match page.format().value().expect("all values are handled") {
-            descriptors::PageDescriptorFormat::Page => {
-                return Ok(input_address & LEVEL_3_OA_MASK | page.output_address(MODE));
-            },
-            _ => Err(3)
-        }
+    //     let page = self.level3_0[level3idx as usize];
+    //     match page.format().value().expect("all values are handled") {
+    //         descriptors::PageDescriptorFormat::Page => {
+    //             return Ok(input_address & LEVEL_3_OA_MASK | page.output_address(MODE));
+    //         },
+    //         _ => Err(3)
+    //     }
 
-    }
+    // }
 }

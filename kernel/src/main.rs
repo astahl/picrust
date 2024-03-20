@@ -28,10 +28,10 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     system::initialize();
-    // tests::run();
-    // tests::test_dma();
-    // tests::test_usb().expect("USB test should pass");
-    // writeln!(system::std_out(), "Done.").expect("System out should work");
+    tests::run();
+    tests::test_dma();
+    tests::test_usb().expect("USB test should pass");
+    writeln!(system::std_out(), "Done.").expect("System out should work");
     panic!("Let's go monitor!");
     // loop {
     // }
