@@ -31,7 +31,7 @@ pub extern "C" fn main() -> ! {
     tests::run();
     tests::test_dma();
     tests::test_usb().expect("USB test should pass");
-    writeln!(system::std_out(), "Done.").expect("System out should work");
+    println_debug!("Done.");
     panic!("Let's go monitor!");
     // loop {
     // }
