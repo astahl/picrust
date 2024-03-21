@@ -18,9 +18,27 @@ pub extern "C" fn exc_handler(
     writeln!(&mut uart, "Exception Handler!").unwrap_or_default();
     writeln!(&mut uart, "Exception Type: {:?}", exception_type).unwrap_or_default();
     writeln!(&mut uart, "{:#?}", syndrome).unwrap_or_default();
-    writeln!(&mut uart, "ELR:  {:0width$x}", elr, width=core::mem::size_of::<usize>() * 2).unwrap_or_default();
-    writeln!(&mut uart, "SPSR: {:0width$x}", spsr, width=core::mem::size_of::<usize>() * 2).unwrap_or_default();
-    writeln!(&mut uart, "FAR:  {:0width$x}", far, width=core::mem::size_of::<usize>() * 2).unwrap_or_default();
+    writeln!(
+        &mut uart,
+        "ELR:  {:0width$x}",
+        elr,
+        width = core::mem::size_of::<usize>() * 2
+    )
+    .unwrap_or_default();
+    writeln!(
+        &mut uart,
+        "SPSR: {:0width$x}",
+        spsr,
+        width = core::mem::size_of::<usize>() * 2
+    )
+    .unwrap_or_default();
+    writeln!(
+        &mut uart,
+        "FAR:  {:0width$x}",
+        far,
+        width = core::mem::size_of::<usize>() * 2
+    )
+    .unwrap_or_default();
 
     // Uart0::putc(b'\n');
     // Uart0::put_memory(elr as *const u8, 16);
@@ -106,7 +124,6 @@ pub enum ExceptionClass {
     Reserved0x3f,
 }
 
-
 #[derive(Debug)]
 pub enum InstructionLength {
     Trapped16bitInstruction,
@@ -122,7 +139,10 @@ impl Debug for ExceptionSyndrome {
             .field("Bits", &format_args!("{:#?}", self.0))
             .field("Exception Class", &self.exception_class())
             .field("Instruction Length", &self.instruction_length())
-            .field("Instruction Specific Syndrome", &self.instruction_specific_syndrome())
+            .field(
+                "Instruction Specific Syndrome",
+                &self.instruction_specific_syndrome(),
+            )
             .finish()
     }
 }

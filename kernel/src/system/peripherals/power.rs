@@ -26,24 +26,26 @@ mod tags {
 
 impl PowerDevice {
     pub fn state(&self) -> Option<PowerState> {
-        let (_, state): (PowerDevice, PowerState) = mailbox::simple_single_call(tags::PWR_GET_STATE, *self as u32).ok()?;
+        let (_, state): (PowerDevice, PowerState) =
+            mailbox::simple_single_call(tags::PWR_GET_STATE, *self as u32).ok()?;
         Some(state)
     }
 
     pub fn set_state(&self, state: PowerState) -> Option<PowerState> {
-        let (_, state): (PowerDevice, PowerState) = mailbox::simple_single_call(tags::PWR_SET_STATE, (*self as u32, state)).ok()?;
+        let (_, state): (PowerDevice, PowerState) =
+            mailbox::simple_single_call(tags::PWR_SET_STATE, (*self as u32, state)).ok()?;
         Some(state)
     }
 
     pub fn timing_ms(&self) -> Option<u32> {
-        let (_, state): (PowerDevice, u32) = mailbox::simple_single_call(tags::PWR_GET_TIMING, *self as u32).ok()?;
+        let (_, state): (PowerDevice, u32) =
+            mailbox::simple_single_call(tags::PWR_GET_TIMING, *self as u32).ok()?;
         Some(state)
     }
 }
 
-
 #[derive(Clone, Copy)]
-pub struct PowerState (BitField<u32>);
+pub struct PowerState(BitField<u32>);
 
 impl PowerState {
     pub fn is_on(self) -> bool {

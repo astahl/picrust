@@ -2,13 +2,11 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
-
 pub fn read() -> IdAa64Mmfr0El1 {
     let value: u64;
     unsafe { asm!("mrs {0}, id_aa64mmfr0_el1", out(reg) value) };
     value.into()
 }
-
 
 bit_field!(pub IdAa64Mmfr0El1(u64){
     /// # ECV
@@ -100,47 +98,47 @@ bit_field!(pub IdAa64Mmfr0El1(u64){
     },
 
     /// # TGran4
-    /// Indicates support for 4KB memory translation granule size. 
-    31:28 => t_gran4: 
+    /// Indicates support for 4KB memory translation granule size.
+    31:28 => t_gran4:
     /// Value of the ID_AA64MMFR0_EL1.TGran4 field
     enum Granule4KBSupport {
         /// 4KB granule supported.
-        Supported = 0b0000, 
+        Supported = 0b0000,
         /// _When FEAT_LPA2 is implemented:_
         /// 4KB granule supports 52-bit input addresses and can describe 52-bit output addresses.
         Supports52Bit = 0b0001,
         /// 4KB granule not supported.
-        NotSupported = 0b1111 
+        NotSupported = 0b1111
     },
 
     /// # TGran64
-    /// Indicates support for 64KB memory translation granule size. 
-    27:24 => t_gran64: 
+    /// Indicates support for 64KB memory translation granule size.
+    27:24 => t_gran64:
     /// Value of the ID_AA64MMFR0_EL1.TGran64 field
     enum Granule64KBSupport {
         /// 64KB granule supported.
-        Supported = 0b0000, 
+        Supported = 0b0000,
         /// 64KB granule not supported.
-        NotSupported = 0b1111 
+        NotSupported = 0b1111
     },
 
     /// # TGran16
-    /// Indicates support for 16KB memory translation granule size. 
-    23:20 => t_gran16: 
+    /// Indicates support for 16KB memory translation granule size.
+    23:20 => t_gran16:
     /// Value of the ID_AA64MMFR0_EL1.TGran16 field
     enum Granule16KBSupport {
         /// 16KB granule supported.
-        Supported = 0b0000, 
+        Supported = 0b0000,
         /// _When FEAT_LPA2 is implemented:_
         /// 16KB granule supports 52-bit input addresses and can describe 52-bit output addresses.
         Supports52Bit = 0b0001,
         /// 16KB granule not supported.
-        NotSupported = 0b1111 
+        NotSupported = 0b1111
     },
 
     /// # BigEndEL0
     /// Indicates support for mixed-endian at EL0 only.
-    /// 
+    ///
     /// This field is invalid and is RES0 if ID_AA64MMFR0_EL1.BigEnd is not 0b0000.
     19:16 => big_end_el0: enum MixedEndianAtEl0Support {
         /// No mixed-endian support at EL0. The SCTLR_EL1.E0E bit has a fixed value.
@@ -152,7 +150,7 @@ bit_field!(pub IdAa64Mmfr0El1(u64){
     /// # SNSMem
     /// Indicates support for a distinction between Secure and Non-secure Memory.
     /// > ### Note
-    /// > If EL3 is implemented, the value 0b0000 is not permitted. 
+    /// > If EL3 is implemented, the value 0b0000 is not permitted.
     15:12 => s_ns_mem: enum MemorySecurityDistinctionSupport {
         /// Does not support a distinction between Secure and Non-secure Memory.
         NotSupported = 0b0000,
@@ -180,7 +178,7 @@ bit_field!(pub IdAa64Mmfr0El1(u64){
 
     /// # PARange
     /// Physical Address range supported
-    3:0 => pa_range: 
+    3:0 => pa_range:
     #[derive(PartialOrd)]
     enum PhysicalAddressRangeSupport {
         /// 32 bits, 4GB.
@@ -201,5 +199,3 @@ bit_field!(pub IdAa64Mmfr0El1(u64){
         Reserved = 0b0111,
     }
 });
-
-

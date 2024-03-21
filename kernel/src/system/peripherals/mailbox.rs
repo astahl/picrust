@@ -6,7 +6,6 @@ use crate::peripherals::mmio::MMIO;
 
 use super::mmio::DynamicMmioField;
 
-
 pub const MBOX_BASE: usize = 0xB880;
 
 #[repr(align(16), C)]

@@ -1,11 +1,7 @@
-
-
-
 pub const USB_BASE: usize = 0x980000;
 pub const USB_CORE_BASE: usize = USB_BASE;
 pub const USB_HOST_BASE: usize = USB_BASE + 0x400;
 pub const USB_POWER_BASE: usize = USB_BASE + 0xe00;
-
 
 use super::mmio::TypedMMIO;
 use mystd::bit_field;
@@ -21,7 +17,6 @@ type DwhciCoreHwCfg1Reg = TypedMMIO<DwHciCoreHwCfg1, USB_CORE_BASE, 0x044>;
 type DwhciCoreHwCfg2Reg = TypedMMIO<DwHciCoreHwCfg2, USB_CORE_BASE, 0x048>;
 type DwhciCoreHwCfg3Reg = TypedMMIO<DwHciCoreHwCfg3, USB_CORE_BASE, 0x04c>;
 type DwhciCoreHwCfg4Reg = TypedMMIO<DwHciCoreHwCfg4, USB_CORE_BASE, 0x050>;
-
 
 #[derive(Clone, Copy)]
 pub struct DwHciCore {}
@@ -55,7 +50,12 @@ impl DwHciCore {
         DwhciCoreResetReg::write(reset)
     }
 
-    pub fn hw_config() -> (DwHciCoreHwCfg1, DwHciCoreHwCfg2, DwHciCoreHwCfg3, DwHciCoreHwCfg4) {
+    pub fn hw_config() -> (
+        DwHciCoreHwCfg1,
+        DwHciCoreHwCfg2,
+        DwHciCoreHwCfg3,
+        DwHciCoreHwCfg4,
+    ) {
         (
             DwhciCoreHwCfg1Reg::read(),
             DwhciCoreHwCfg2Reg::read(),
@@ -63,7 +63,7 @@ impl DwHciCore {
             DwhciCoreHwCfg4Reg::read(),
         )
     }
-    
+
     pub fn interrupt_state() -> DwHciCoreInterrupts {
         DwhciCoreIntStatReg::read()
     }
@@ -80,7 +80,6 @@ bit_field!(pub DwHciCoreAhbCfg(u32){
     5 => enable_dma
 });
 
-
 bit_field!(pub DwHciCoreUsbCfg(u32){
     3 => phyif,
     4 => ulpi_utmi_sel,
@@ -92,7 +91,6 @@ bit_field!(pub DwHciCoreUsbCfg(u32){
     22 => term_sel_dl_pulse
 });
 
-
 bit_field!(pub DwHciCoreReset(u32){
     0 => soft_reset,
     4 => rx_fifo_flush,
@@ -100,7 +98,6 @@ bit_field!(pub DwHciCoreReset(u32){
     6:10 => tx_fifo_num,
     31 => ahb_idle
 });
-
 
 bit_field!(pub DwHciCoreHwCfg1(u32){});
 bit_field!(pub DwHciCoreHwCfg2(u32){
@@ -131,7 +128,6 @@ impl DwHciCoreHwCfg2 {
         self.num_host_channels().value() + 1
     }
 }
-
 
 bit_field!(pub DwHciCoreInterrupts(u32){
     1 => mode_mismatch,

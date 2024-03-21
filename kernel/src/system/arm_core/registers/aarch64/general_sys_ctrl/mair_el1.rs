@@ -8,7 +8,7 @@ impl MairEl1 {
         unsafe { asm!("mrs {0}, mair_el1", out(reg) value) };
         value.into()
     }
-    
+
     pub fn write_register(self) {
         let val: u64 = self.into();
         unsafe { asm!("msr mair_el1, {}", in(reg) val) };
@@ -38,11 +38,10 @@ impl MairEl1 {
             5 => self.attr_5().set_value(attr.into()),
             6 => self.attr_6().set_value(attr.into()),
             7 => self.attr_7().set_value(attr.into()),
-            _ => panic!("MairEl1: Attribute Index > 7")
+            _ => panic!("MairEl1: Attribute Index > 7"),
         }
     }
 }
-
 
 bit_field!(pub MemoryAttributes(u64) {
     7:4 => outer: NormalMemoryAttributes,
@@ -58,7 +57,6 @@ bit_field!(pub MemoryAttributes(u64) {
     0 => device_xs
 });
 
-
 bit_field!(pub NormalMemoryAttributes(u64) {
     3 => cache_transience: enum CacheTransience {
         Transient,
@@ -70,19 +68,19 @@ bit_field!(pub NormalMemoryAttributes(u64) {
     },
     1 => read_allocate: enum AllocatePolicy {
         NoAllocate,
-        Allocate    
+        Allocate
     },
     0 => write_allocate: AllocatePolicy,
 });
 
 #[derive(Clone, Copy)]
 pub enum MemoryAttributeDescriptor {
-    Device{
+    Device {
         memory_type: DeviceMemoryType,
         #[cfg(feature = "FEAT_XS")]
-        xs_zero: bool
+        xs_zero: bool,
     },
-    Normal{
+    Normal {
         outer: NormalMemoryType,
         inner: NormalMemoryType,
         #[cfg(feature = "FEAT_XS")]
@@ -90,55 +88,62 @@ pub enum MemoryAttributeDescriptor {
         #[cfg(feature = "FEAT_MTE2")]
         tagged: bool,
     },
-    Unpredictable
+    Unpredictable,
 }
 
 impl MemoryAttributeDescriptor {
     pub fn device(memory_type: DeviceMemoryType) -> Self {
-        Self::Device { 
+        Self::Device {
             memory_type,
             #[cfg(feature = "FEAT_XS")]
-            xs_zero: false
+            xs_zero: false,
         }
     }
 
     #[cfg(feature = "FEAT_XS")]
     pub fn device_xs(memory_type: DeviceMemoryType) -> Self {
-        Self::Device { 
+        Self::Device {
             memory_type,
-            xs_zero: true
+            xs_zero: true,
         }
     }
 
     pub fn normal(outer: NormalMemoryType, inner: NormalMemoryType) -> Self {
-        Self::Normal { 
-            outer, 
-            inner, 
+        Self::Normal {
+            outer,
+            inner,
             #[cfg(feature = "FEAT_MTE2")]
-            tagged: false 
+            tagged: false,
         }
     }
 }
 
 impl From<MemoryAttributes> for MemoryAttributeDescriptor {
     fn from(value: MemoryAttributes) -> Self {
-        let outer = value.outer().value().map(NormalMemoryType::try_from).unwrap();
-        let inner = value.inner().value().map(NormalMemoryType::try_from).unwrap();
+        let outer = value
+            .outer()
+            .value()
+            .map(NormalMemoryType::try_from)
+            .unwrap();
+        let inner = value
+            .inner()
+            .value()
+            .map(NormalMemoryType::try_from)
+            .unwrap();
         match (inner, outer) {
             (Err(_), _) => {
-            // either device or unpredictable
-            let device_memory_type = value.device().value().unwrap();
-            match value.flags().value() {
-                0b00 => MemoryAttributeDescriptor::device(device_memory_type),
-                #[cfg(feature = "FEAT_XS")]
-                0b01 => MemoryAttributeDescriptor::device_xs(device_memory_type),
-                _ => MemoryAttributeDescriptor::Unpredictable
+                // either device or unpredictable
+                let device_memory_type = value.device().value().unwrap();
+                match value.flags().value() {
+                    0b00 => MemoryAttributeDescriptor::device(device_memory_type),
+                    #[cfg(feature = "FEAT_XS")]
+                    0b01 => MemoryAttributeDescriptor::device_xs(device_memory_type),
+                    _ => MemoryAttributeDescriptor::Unpredictable,
+                }
             }
-        },
-        (_, Err(_)) => MemoryAttributeDescriptor::Unpredictable,
-        (Ok(inner), Ok(outer)) => MemoryAttributeDescriptor::normal(outer, inner)
+            (_, Err(_)) => MemoryAttributeDescriptor::Unpredictable,
+            (Ok(inner), Ok(outer)) => MemoryAttributeDescriptor::normal(outer, inner),
         }
-
     }
 }
 
@@ -146,23 +151,36 @@ impl Into<MemoryAttributes> for MemoryAttributeDescriptor {
     fn into(self) -> MemoryAttributes {
         let mut result = MemoryAttributes::zero();
         match self {
-            MemoryAttributeDescriptor::Device { memory_type, #[cfg(feature = "FEAT_XS")] xs_zero } => {
+            MemoryAttributeDescriptor::Device {
+                memory_type,
+                #[cfg(feature = "FEAT_XS")]
+                xs_zero,
+            } => {
                 let result = result.device().set_value(memory_type);
                 #[cfg(feature = "FEAT_XS")]
                 {
                     result.device_xs().set_value(xs_zero);
                 }
                 result
-            },
-            MemoryAttributeDescriptor::Normal { outer, inner, #[cfg(feature = "FEAT_XS")] xs_zero, #[cfg(feature = "FEAT_MTE2")] tagged } => {
-                result.inner().set_value(inner.into())
-                    .outer().set_value(outer.into())
-            },
-            MemoryAttributeDescriptor::Unpredictable => panic!("can't map an undefined / unpredictable value to MemoryAttributes"),
+            }
+            MemoryAttributeDescriptor::Normal {
+                outer,
+                inner,
+                #[cfg(feature = "FEAT_XS")]
+                xs_zero,
+                #[cfg(feature = "FEAT_MTE2")]
+                tagged,
+            } => result
+                .inner()
+                .set_value(inner.into())
+                .outer()
+                .set_value(outer.into()),
+            MemoryAttributeDescriptor::Unpredictable => {
+                panic!("can't map an undefined / unpredictable value to MemoryAttributes")
+            }
         }
     }
 }
-
 
 #[derive(Clone, Copy)]
 pub struct NormalCacheType {
@@ -174,30 +192,34 @@ pub struct NormalCacheType {
 
 #[derive(Clone, Copy)]
 pub struct NormalMemoryType {
-    pub caching: Option<NormalCacheType>
+    pub caching: Option<NormalCacheType>,
 }
-
 
 impl Into<NormalMemoryAttributes> for NormalMemoryType {
     fn into(self) -> NormalMemoryAttributes {
         match self.caching {
-            Some(NormalCacheType { write_policy, transience, read_allocate_policy, write_allocate_policy }) => 
-                NormalMemoryAttributes::zero()
-                    .write_policy().set_value(write_policy)
-                    .cache_transience().set_value(transience)
-                    .read_allocate().set_value(read_allocate_policy)
-                    .write_allocate().set_value(write_allocate_policy)
-            ,
+            Some(NormalCacheType {
+                write_policy,
+                transience,
+                read_allocate_policy,
+                write_allocate_policy,
+            }) => NormalMemoryAttributes::zero()
+                .write_policy()
+                .set_value(write_policy)
+                .cache_transience()
+                .set_value(transience)
+                .read_allocate()
+                .set_value(read_allocate_policy)
+                .write_allocate()
+                .set_value(write_allocate_policy),
             None => 0b0100.into(),
         }
     }
 }
 
-
 impl TryFrom<NormalMemoryAttributes> for NormalMemoryType {
-    
     type Error = ();
-    
+
     fn try_from(value: NormalMemoryAttributes) -> Result<Self, Self::Error> {
         match value.to_underlying() {
             0 => Err(()),
@@ -207,19 +229,15 @@ impl TryFrom<NormalMemoryAttributes> for NormalMemoryType {
                 let transience = value.cache_transience().value();
                 let read_allocate_policy = value.read_allocate().value();
                 let write_allocate_policy = value.write_allocate().value();
-                Ok(Self{ caching: Some(NormalCacheType { 
-                    write_policy,
-                    transience,
-                    read_allocate_policy,
-                    write_allocate_policy 
-                })})
+                Ok(Self {
+                    caching: Some(NormalCacheType {
+                        write_policy,
+                        transience,
+                        read_allocate_policy,
+                        write_allocate_policy,
+                    }),
+                })
             }
-        
         }
     }
 }
-
-
-
-
-

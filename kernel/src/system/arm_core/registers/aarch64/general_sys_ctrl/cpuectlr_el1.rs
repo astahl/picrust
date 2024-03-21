@@ -9,7 +9,7 @@ impl CpuECtlREl1 {
         unsafe { asm!("mrs {0}, cpuectlr_el1", out(reg) value) };
         value.into()
     }
-    
+
     pub fn write_register(self) {
         unsafe { asm!("msr cpuectlr_el1, {}", in(reg) self.0) };
     }
@@ -17,20 +17,20 @@ impl CpuECtlREl1 {
 
 /// CPU Extended Control Register, EL1
 /// Provides additional IMPLEMENTATION DEFINED configuration and control options for the processor.
-/// 
+///
 #[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
 bit_field!(pub CpuECtlREl1 (u64) {
 
     /// # Disable table walk descriptor access prefetch
-    /// * 0 
+    /// * 0
     ///     - Enables table walk descriptor access prefetch. This is the reset value.
-    /// * 1 
+    /// * 1
     ///     - Disables table walk descriptor access prefetch.
     38 => disable_table_walk_descriptor_access_prefetch: enum TableWalkDescriptorAccessPrefetch {
         Enable,
         Disable
     } = TableWalkDescriptorAccessPrefetch::Enable,
-    
+
     /// Indicates the L2 instruction fetch prefetch distance. It is the number of requests by which the prefetcher is ahead of the demand request stream. It also specifies the maximum number of prefetch requests generated on a demand miss.
     36:35 => l2_instruction_fetch_prefetch_distance: enum IFetchDistance {
         /// 0 requests, disables instruction prefetch.
@@ -50,11 +50,11 @@ bit_field!(pub CpuECtlREl1 (u64) {
     } = DFetchDistance::_22Requests,
 
     /// Enables the processor to receive instruction cache and TLB maintenance operations broadcast from other processors in the cluster.
-    /// 
+    ///
     /// __You must set this bit before enabling the caches and MMU, or performing any cache and TLB maintenance operations.__
-    /// 
+    ///
     /// You must clear this bit during a processor power down sequence. See 2.4 Power management on page 2-42.
-    /// 
+    ///
     /// > ### Notes:
     /// > * Any processor instruction cache and TLB maintenance operations can execute the request, regardless of the value of the SMPEN bit.
     /// > * This bit has no impact on data cache maintenance operations.
@@ -64,7 +64,7 @@ bit_field!(pub CpuECtlREl1 (u64) {
         Enable
     } = SMPEN::Disable,
 
-    /// Processor dynamic retention control. 
+    /// Processor dynamic retention control.
     2:0 => processor_dynamic_retention_control: enum DynamicRetentionDelay {
         /// Processor dynamic retention disabled. This is the reset value.
         Disable = 0b000,

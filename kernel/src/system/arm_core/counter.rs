@@ -1,6 +1,5 @@
 use core::time::Duration;
 
-
 pub fn wait(duration: Duration) {
     let mut frequency: usize;
     let mut current_counter: usize;

@@ -2,11 +2,10 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
-
 /// # MPIDR_EL1, Multiprocessor Affinity Register
-/// 
+///
 /// In a multiprocessor system, provides an additional PE identification mechanism for scheduling purposes.
-/// 
+///
 /// AArch64 System register MPIDR_EL1 bits \[31:0] are architecturally mapped to AArch32 System register MPIDR\[31:0].
 /// In a uniprocessor system, Arm recommends that each Aff<n> field of this register returns a value of 0.
 pub fn read() -> MpidrEl1 {
@@ -15,11 +14,10 @@ pub fn read() -> MpidrEl1 {
     value.into()
 }
 
-
 bit_field!(pub MpidrEl1(usize){
     // 63:40 => RES0,
     /// Affinity level 3. See the description of Aff0 for more information. Aff3 is not supported in AArch32 state.
-    /// 
+    ///
     /// Not supported on Cortex-A72, where it is RES0
     // #[cfg(not(feature = "cortex_a72"))]
     39:32 => aff_3: u8,
@@ -43,10 +41,10 @@ bit_field!(pub MpidrEl1(usize){
     23:16 => aff_2: u8,
     /// Affinity level 1. See the description of Aff0 for more information.
     15:8 => aff_1: u8,
-    /// Affinity level 0. 
-    /// 
+    /// Affinity level 0.
+    ///
     /// This is the affinity level that is most significant for determining PE behavior. Higher affinity levels are increasingly less significant in determining PE behavior. The assigned value of the MPIDR.{Aff2, Aff1, Aff0} or MPIDR_EL1.{Aff3, Aff2, Aff1, Aff0} set of fields of each PE must be unique within the system as a whole.
-    /// 
+    ///
     /// Not supported on Cortex-A72, where it is RES0
     //#[cfg(not(feature = "cortex_a72"))]
     7:0 => aff_0: u8,

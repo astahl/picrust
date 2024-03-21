@@ -8,15 +8,18 @@ use crate::system::peripherals::uart::UART_0;
 use crate::system::peripherals::usb::DwHciCoreAhbCfg;
 use crate::system::peripherals::usb::DwHciCoreInterrupts;
 
-use super::system;
 use super::hal;
+use super::system;
 use mystd::collections;
 use mystd::io::Write;
 
 pub fn run() {
     println_log!("{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM));
-    println_log!("Current Exception Level: {}", system::arm_core::current_exception_level());
-   
+    println_log!(
+        "Current Exception Level: {}",
+        system::arm_core::current_exception_level()
+    );
+
     use core::fmt::Write;
     let mut str_buffer = collections::ring::RingArray::<u8, 1024>::new();
 
@@ -31,7 +34,9 @@ pub fn run() {
 
     fb.clear(color::BLACK);
 
-    let font: &'static [u64] = unsafe { core::slice::from_raw_parts(include_bytes!("../901447-10.bin").as_ptr().cast(), 256) };
+    let font: &'static [u64] = unsafe {
+        core::slice::from_raw_parts(include_bytes!("../901447-10.bin").as_ptr().cast(), 256)
+    };
 
     let text = b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
     let mapping = |c: u8| -> u8 {
@@ -169,25 +174,36 @@ pub fn test_dma() {
     println_log!("CB Addr = {:p}", control_block_ptr);
     println_log!("Src Addr = {:p}", src);
     println_log!("Dest Addr = {:p}", dest);
-    
+
     unsafe {
-        let length = 8*1024*1024;
+        let length = 8 * 1024 * 1024;
         core::slice::from_raw_parts_mut(src, length).fill(0x55);
         let transfer_information = dma::DmaTransferInformation::wide_copy();
-        let cb = DmaControlBlock::linear_copy(transfer_information, src as u32, dest as u32, length as u32, 0);
+        let cb = DmaControlBlock::linear_copy(
+            transfer_information,
+            src as u32,
+            dest as u32,
+            length as u32,
+            0,
+        );
         println_log!("cb = {:#?}", &cb);
         control_block_ptr.write_volatile(cb);
-        
+
         DMA_0.set_control_block_address(control_block_ptr as u32);
 
         println_log!("Src = {:x}", src.read());
         println_log!("Dest = {:x}", dest.read());
         println_log!("cb: {:x}", DMA_0.control_block_address());
-        let status = DMA_0.control_and_status()
-            .active().set()
-            .axi_priority_level().set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
-            .axi_panic_priority_level().set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
-            .wait_for_outstanding_writes().set();
+        let status = DMA_0
+            .control_and_status()
+            .active()
+            .set()
+            .axi_priority_level()
+            .set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
+            .axi_panic_priority_level()
+            .set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
+            .wait_for_outstanding_writes()
+            .set();
         DMA_0.set_control_and_status(status);
         while !DMA_0.control_and_status().end().is_set() {
             println_log!("wait for transfer end");
@@ -199,18 +215,19 @@ pub fn test_dma() {
     }
 }
 
-pub fn test_usb() -> Option<()>{
+pub fn test_usb() -> Option<()> {
     use core::time::Duration;
-    use peripherals::usb;
     use peripherals::power;
-   
+    use peripherals::usb;
+
     println_log!("USB Vendor-ID {:#x}", usb::DwHciCore::vendor_id());
 
     let power_state = power::PowerDevice::USBHCD.state()?;
     println_log!("USB Exists: {}", power_state.exists());
     println_log!("USB Power On: {}", power_state.is_on());
     if !power_state.is_on() {
-        let timeout = core::time::Duration::from_millis(power::PowerDevice::USBHCD.timing_ms()? as u64);
+        let timeout =
+            core::time::Duration::from_millis(power::PowerDevice::USBHCD.timing_ms()? as u64);
         println_log!("USB Power On Timeout: {} msec", timeout.as_millis());
         let turned_on = power_state.with_on().with_wait_set();
         power::PowerDevice::USBHCD.set_state(turned_on);
@@ -219,48 +236,61 @@ pub fn test_usb() -> Option<()>{
         println_log!("USB Power On: {}", power_state.is_on());
     }
 
-    let ahb_config = usb::DwHciCore::ahb_config()
-        .enable_global_interrupt().set();
+    let ahb_config = usb::DwHciCore::ahb_config().enable_global_interrupt().set();
     usb::DwHciCore::set_ahb_config(ahb_config);
 
-    // todo! hook up irq 9 
+    // todo! hook up irq 9
 
     // DWHCIDeviceInitCore enter
     let usb_config = usb::DwHciCore::usb_config()
-        .ulpi_ext_vbus_drv().clear()
-        .term_sel_dl_pulse().clear();
+        .ulpi_ext_vbus_drv()
+        .clear()
+        .term_sel_dl_pulse()
+        .clear();
     usb::DwHciCore::set_usb_config(usb_config);
 
     // reset dwhci device
     let mut reset = usb::DwHciCoreReset::zero();
     usb::DwHciCore::set_reset(reset);
-    
-	// wait for AHB master IDLE state
-    reset = poll_await(usb::DwHciCore::get_reset, |r| r.ahb_idle().is_set(), 100, Duration::from_millis(1)).expect("ahb should turn idle");
+
+    // wait for AHB master IDLE state
+    reset = poll_await(
+        usb::DwHciCore::get_reset,
+        |r| r.ahb_idle().is_set(),
+        100,
+        Duration::from_millis(1),
+    )
+    .expect("ahb should turn idle");
 
     // soft reset
     usb::DwHciCore::set_reset(reset.soft_reset().set());
-    let _ = poll_await(usb::DwHciCore::get_reset, |r| r.soft_reset().is_clear(), 100, Duration::from_millis(1)).expect("soft reset bit should clear");
+    let _ = poll_await(
+        usb::DwHciCore::get_reset,
+        |r| r.soft_reset().is_clear(),
+        100,
+        Duration::from_millis(1),
+    )
+    .expect("soft reset bit should clear");
 
     system::arm_core::counter::wait(Duration::from_millis(100));
     // reset finished
 
     let usb_config = usb::DwHciCore::usb_config()
-        .ulpi_utmi_sel().clear()
-        .phyif().clear();
+        .ulpi_utmi_sel()
+        .clear()
+        .phyif()
+        .clear();
     usb::DwHciCore::set_usb_config(usb_config);
 
     // Internal DMA mode only
     let (_, hw_cfg2, _, _) = usb::DwHciCore::hw_config();
     let mut usb_config = usb::DwHciCore::usb_config();
-    usb_config = if let (Ok(usb::FsPhyType::Dedicated), Ok(usb::HsPhyType::Ulpi)) = (hw_cfg2.fs_phy_type().value(), hw_cfg2.hs_phy_type().value()) {
-        usb_config
-            .ulpi_clk_sus_m().set()
-            .ulpi_fsls().set()
+    usb_config = if let (Ok(usb::FsPhyType::Dedicated), Ok(usb::HsPhyType::Ulpi)) =
+        (hw_cfg2.fs_phy_type().value(), hw_cfg2.hs_phy_type().value())
+    {
+        usb_config.ulpi_clk_sus_m().set().ulpi_fsls().set()
     } else {
-        usb_config
-            .ulpi_clk_sus_m().clear()
-            .ulpi_fsls().clear()
+        usb_config.ulpi_clk_sus_m().clear().ulpi_fsls().clear()
     };
     usb::DwHciCore::set_usb_config(usb_config);
 
@@ -268,26 +298,30 @@ pub fn test_usb() -> Option<()>{
     assert!(num_host_channels >= 4 && num_host_channels <= 16);
 
     let ahb_config = usb::DwHciCore::ahb_config()
-        .enable_dma().set()
-        .wait_axi_writes().set()
-        .max_axi_burst().set_value(0);
+        .enable_dma()
+        .set()
+        .wait_axi_writes()
+        .set()
+        .max_axi_burst()
+        .set_value(0);
     usb::DwHciCore::set_ahb_config(ahb_config);
 
-	// HNP and SRP are not used
+    // HNP and SRP are not used
     let usb_config = usb::DwHciCore::usb_config()
-        .srp_capable().clear()
-        .hnp_capable().clear();
+        .srp_capable()
+        .clear()
+        .hnp_capable()
+        .clear();
     usb::DwHciCore::set_usb_config(usb_config);
 
     // DWHCIDeviceEnableCommonInterrupts
     // Clear any pending interrupts
     usb::DwHciCore::set_interrupt_state(DwHciCoreInterrupts::all_set());
-    
+
     // DWHCIDeviceInitCore finished
 
     // DWHCIDeviceEnableGlobalInterrupts enter
-    let ahb_config = usb::DwHciCore::ahb_config()
-        .enable_global_interrupt().set();
+    let ahb_config = usb::DwHciCore::ahb_config().enable_global_interrupt().set();
     usb::DwHciCore::set_ahb_config(ahb_config);
     // DWHCIDeviceEnableGlobalInterrupts finished
 
@@ -295,13 +329,17 @@ pub fn test_usb() -> Option<()>{
     // DWHCIDeviceInitHost leave
 
     Some(())
-
 }
 
 #[derive(Debug)]
 struct TimeoutError();
 
-fn poll_await<R: Copy, G: Fn() -> R, F: Fn(R) -> bool>(generate: G, predicate: F, mut timeout_count: usize, timeout_interval: core::time::Duration) -> Result<R,TimeoutError> {
+fn poll_await<R: Copy, G: Fn() -> R, F: Fn(R) -> bool>(
+    generate: G,
+    predicate: F,
+    mut timeout_count: usize,
+    timeout_interval: core::time::Duration,
+) -> Result<R, TimeoutError> {
     loop {
         let result = generate();
         if predicate(result) {

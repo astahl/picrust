@@ -1,4 +1,7 @@
-use core::{num::{NonZeroU16, NonZeroU32}, usize};
+use core::{
+    num::{NonZeroU16, NonZeroU32},
+    usize,
+};
 
 use mystd::bit_field;
 
@@ -26,8 +29,8 @@ pub const DMA_4: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 4 * DMA_CHAN
 pub const DMA_5: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 5 * DMA_CHANNEL_SZ);
 pub const DMA_6: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 6 * DMA_CHANNEL_SZ);
 
-type ControlAndStatusReg = PeripheralRegister<0x00, DmaControlAndStatus>; 
-type ControlBlockAddressReg = PeripheralRegister<0x04, u32>; 
+type ControlAndStatusReg = PeripheralRegister<0x00, DmaControlAndStatus>;
+type ControlBlockAddressReg = PeripheralRegister<0x04, u32>;
 type TransferInformationReg = PeripheralRegister<0x08, DmaTransferInformation>;
 type SourceAddressReg = PeripheralRegister<0x0c, u32>;
 type DestinationAddressReg = PeripheralRegister<0x10, u32>;
@@ -75,7 +78,7 @@ bit_field!(pub DmaControlAndStatus(u32) {
     31 => reset
 });
 
-impl DmaControlAndStatus{
+impl DmaControlAndStatus {
     pub const MAX_PRIORITY_LEVEL: u32 = 0xf;
 
     #[must_use]
@@ -85,8 +88,6 @@ impl DmaControlAndStatus{
     }
 }
 
-
-
 #[repr(C, align(32))]
 pub struct DmaControlBlock {
     transfer_information: DmaTransferInformation,
@@ -95,7 +96,7 @@ pub struct DmaControlBlock {
     transfer_length: DmaTransferLength,
     stride: Dma2dStride,
     next_control_block_address: u32,
-    reserved: [u32;2]
+    reserved: [u32; 2],
 }
 
 impl core::fmt::Debug for DmaControlBlock {
@@ -105,24 +106,45 @@ impl core::fmt::Debug for DmaControlBlock {
         let mut out = f.debug_struct("DmaControlBlock");
         let part_a = out
             .field("transfer_information", &self.transfer_information)
-            .field("source_address", &format_args!("{:#x}", self.source_address))
-            .field("destination_address", &format_args!("{:#x}", self.destination_address));
+            .field(
+                "source_address",
+                &format_args!("{:#x}", self.source_address),
+            )
+            .field(
+                "destination_address",
+                &format_args!("{:#x}", self.destination_address),
+            );
         let part_b = if is_2d {
-            part_a.field("transfer_length (2d)", unsafe { &self.transfer_length.two_d })
+            part_a.field("transfer_length (2d)", unsafe {
+                &self.transfer_length.two_d
+            })
         } else {
-            part_a.field("transfer_length (linear)",unsafe{ &self.transfer_length.linear})
+            part_a.field("transfer_length (linear)", unsafe {
+                &self.transfer_length.linear
+            })
         };
 
-        part_b.field("stride", &self.stride)
-            .field("next_control_block_address", &format_args!("{:#x}", self.next_control_block_address))
-            .field("reserved", &self.reserved).finish()
+        part_b
+            .field("stride", &self.stride)
+            .field(
+                "next_control_block_address",
+                &format_args!("{:#x}", self.next_control_block_address),
+            )
+            .field("reserved", &self.reserved)
+            .finish()
     }
 }
 
 impl DmaControlBlock {
     const MAX_LENGTH: u32 = (1 << 30) - 1;
 
-    pub fn linear_copy(transfer_information: DmaTransferInformation, source_address: u32, destination_address: u32, length: u32, next_control_block: u32) -> Self {
+    pub fn linear_copy(
+        transfer_information: DmaTransferInformation,
+        source_address: u32,
+        destination_address: u32,
+        length: u32,
+        next_control_block: u32,
+    ) -> Self {
         assert!(length <= Self::MAX_LENGTH);
         assert_eq!(0, length % 4);
         Self {
@@ -136,7 +158,6 @@ impl DmaControlBlock {
         }
     }
 }
-
 
 bit_field!(pub DmaTransferInformation(u32) {
     26 => disable_wide_bursts,
@@ -162,37 +183,52 @@ bit_field!(pub DmaTransferInformation(u32) {
 impl DmaTransferInformation {
     pub fn wide_copy() -> Self {
         Self::zero()
-            .dest_address_increment().set()
-            .dest_transfer_width().set_value(DmaTransferWidth::Bit128)
-            .src_address_increment().set()
-            .src_transfer_width().set_value(DmaTransferWidth::Bit128)
-            .burst_transfer_length().set_value(2)
+            .dest_address_increment()
+            .set()
+            .dest_transfer_width()
+            .set_value(DmaTransferWidth::Bit128)
+            .src_address_increment()
+            .set()
+            .src_transfer_width()
+            .set_value(DmaTransferWidth::Bit128)
+            .burst_transfer_length()
+            .set_value(2)
     }
 
     pub fn narrow_copy() -> Self {
         Self::zero()
-            .dest_address_increment().set()
-            .dest_transfer_width().set_value(DmaTransferWidth::Bit32)
-            .src_address_increment().set()
-            .src_transfer_width().set_value(DmaTransferWidth::Bit32)
-            .burst_transfer_length().set_value(8)
+            .dest_address_increment()
+            .set()
+            .dest_transfer_width()
+            .set_value(DmaTransferWidth::Bit32)
+            .src_address_increment()
+            .set()
+            .src_transfer_width()
+            .set_value(DmaTransferWidth::Bit32)
+            .burst_transfer_length()
+            .set_value(8)
     }
-
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Dma2dStride{
+pub struct Dma2dStride {
     pub source: i16,
-    pub destination: i16
+    pub destination: i16,
 }
 
 impl Dma2dStride {
     pub fn none() -> Self {
-        Self { source: 0, destination: 0 }
+        Self {
+            source: 0,
+            destination: 0,
+        }
     }
 
     pub fn new(source: i16, destination: i16) -> Self {
-        Self{ destination, source }
+        Self {
+            destination,
+            source,
+        }
     }
 
     pub fn as_u32(self) -> u32 {
@@ -202,24 +238,29 @@ impl Dma2dStride {
 
 #[derive(Clone, Copy, Debug)]
 struct DmaTransferLength2d {
-    x_byte_len: NonZeroU16, y_count: u16
+    x_byte_len: NonZeroU16,
+    y_count: u16,
 }
-
 
 pub union DmaTransferLength {
     linear: NonZeroU32,
-    two_d: DmaTransferLength2d
+    two_d: DmaTransferLength2d,
 }
 
 impl DmaTransferLength {
     pub fn new_2d(x_byte_len: NonZeroU16, y_count: u16) -> Self {
         assert!(y_count < 0x4000);
-        Self { two_d: DmaTransferLength2d { x_byte_len, y_count } }
+        Self {
+            two_d: DmaTransferLength2d {
+                x_byte_len,
+                y_count,
+            },
+        }
     }
 
     pub fn new_linear(byte_len: NonZeroU32) -> Self {
         assert!(byte_len.leading_zeros() > 2);
-        Self{ linear: byte_len }
+        Self { linear: byte_len }
     }
 
     pub fn linear(self) -> NonZeroU32 {
@@ -234,7 +275,6 @@ impl DmaTransferLength {
         unsafe { self.two_d.y_count }
     }
 }
-
 
 bit_field!(pub DmaDebug(u32) {
     28 => dma_lite,

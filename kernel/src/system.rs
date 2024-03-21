@@ -1,19 +1,24 @@
+pub mod arm_core;
 pub mod hal;
 pub mod peripherals;
-pub mod arm_core;
 
-use core::{cell::RefCell, fmt::{Debug, Display}};
+use core::{
+    cell::RefCell,
+    fmt::{Debug, Display},
+};
 
-use mystd::{io::SplitWriter, mutex::{Mutex, MutexGuard}};
+use mystd::{
+    io::SplitWriter,
+    mutex::{Mutex, MutexGuard},
+};
 use peripherals::uart;
 
 use peripherals::uart::Uart;
 
-
 pub type CombinedWriter = mystd::io::SplitWriter<Uart, Uart>;
 
 pub struct Stdout {
-    inner: &'static Mutex<RefCell<CombinedWriter>>
+    inner: &'static Mutex<RefCell<CombinedWriter>>,
 }
 
 impl mystd::io::Write for Stdout {
@@ -37,14 +42,14 @@ impl mystd::io::Write for &Stdout {
 }
 
 pub struct StdoutLock<'a> {
-    inner: MutexGuard::<'a, RefCell<CombinedWriter>>
+    inner: MutexGuard<'a, RefCell<CombinedWriter>>,
 }
 
-impl<'a> mystd::io::Write for StdoutLock<'a> {    
+impl<'a> mystd::io::Write for StdoutLock<'a> {
     fn write(&mut self, buf: &[u8]) -> mystd::io::Result<mystd::io::Size> {
         self.inner.borrow_mut().write(buf)
     }
-    
+
     fn flush(&mut self) -> mystd::io::Result<()> {
         self.inner.borrow_mut().flush()
     }
@@ -52,16 +57,16 @@ impl<'a> mystd::io::Write for StdoutLock<'a> {
 
 impl Stdout {
     pub fn lock(&self) -> StdoutLock<'static> {
-        StdoutLock { inner: unsafe { self.inner.lock() } }
+        StdoutLock {
+            inner: unsafe { self.inner.lock() },
+        }
     }
 }
 
 static OUT_WRITER: Mutex<RefCell<CombinedWriter>> = Mutex::new(RefCell::new(SplitWriter::empty()));
 
 pub fn std_out() -> Stdout {
-    Stdout {
-        inner: &OUT_WRITER
-    }
+    Stdout { inner: &OUT_WRITER }
 }
 
 fn init_serial_uart() {
@@ -71,7 +76,12 @@ fn init_serial_uart() {
     writer.replace_first(uart::UART_0);
     //writer.replace_second(uart::UART_0);
     use mystd::io::Write;
-    writeln!(writer, "OUT_WRITER at {:#?}", hal::info::MemoryBlock::from(&OUT_WRITER)).expect("WE JUST INITIALISED IT SHEESH");
+    writeln!(
+        writer,
+        "OUT_WRITER at {:#?}",
+        hal::info::MemoryBlock::from(&OUT_WRITER)
+    )
+    .expect("WE JUST INITIALISED IT SHEESH");
     // writer.replace_second(uart::UART_0);
 }
 
@@ -127,5 +137,3 @@ pub fn initialize() {
     //let _a = std_out().lock();
     //writeln!(std_out(), "System Initialized").expect("second write should work");
 }
-
-

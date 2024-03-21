@@ -10,7 +10,7 @@ use super::mmio::PeripheralRegister;
 #[derive(Clone, Copy)]
 pub enum Uart {
     Pl011Uart(usize),
-    MiniUart(usize)
+    MiniUart(usize),
 }
 
 pub const UART_BASE: usize = 0x201000;
@@ -54,10 +54,10 @@ impl Uart {
         // NOTE: Program the control registers as follows:
         // 1. Disable the UART.
         // 2. Wait for the end of transmission or reception of the current character.
-        // 3. Flush the transmit FIFO by setting the FEN bit to 0 in the Line Control Register, UART_LCRH. 
+        // 3. Flush the transmit FIFO by setting the FEN bit to 0 in the Line Control Register, UART_LCRH.
         // 4. Reprogram the Control Register, UART_CR.
         // 5. Enable the UART.
-        
+
         // disable UART
         let base_address = match self {
             Uart::Pl011Uart(a) => *a,
@@ -79,16 +79,22 @@ impl Uart {
 
         // Clear all pending UART interrupts
         UartInterruptClearReg::at(base_address).write(UartInterrupts::all_set());
-        
+
         let clock_rate = Clock::UART.rate().unwrap_or(3_000_000);
         let (brd_int, brd_frac) = UartBitrate::_1200Baud.to_int_frac(clock_rate);
         UartIntegerBaudRateDivisorReg::at(base_address).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(base_address).write(brd_frac);
-        
-        UartLineControlReg::at(base_address).write(UartLineControl::zero().word_length().set_value(UartWordLength::_8Bits).fifo_enabled().set());
+
+        UartLineControlReg::at(base_address).write(
+            UartLineControl::zero()
+                .word_length()
+                .set_value(UartWordLength::_8Bits)
+                .fifo_enabled()
+                .set(),
+        );
         // mask (disable) all interrupts
         UartInterruptMaskSetClearReg::at(base_address).write(UartInterrupts::all_set());
-        
+
         // enable UART
         UartControlReg::at(base_address).write(UartControl::enabled());
     }
@@ -105,7 +111,8 @@ impl Uart {
             core::hint::spin_loop();
         }
         let read = UartDataReg::at(self.base_address()).read();
-        let (status, data): (UartStatus, u8) = (read.status().into(), read.data().value().unwrap() as u8);
+        let (status, data): (UartStatus, u8) =
+            (read.status().into(), read.data().value().unwrap() as u8);
         if status.is_all_clear() {
             Ok(data)
         } else {
@@ -123,10 +130,14 @@ impl mystd::io::Write for Uart {
         while self.flags().txff().is_set() {
             core::hint::spin_loop();
         }
-        let reg_ptr = UartDataReg::at(self.base_address()).as_mut_ptr().cast::<u32>();
+        let reg_ptr = UartDataReg::at(self.base_address())
+            .as_mut_ptr()
+            .cast::<u32>();
         let mut count = 0;
         for b in buf {
-            unsafe { reg_ptr.write_volatile(*b as u32); }
+            unsafe {
+                reg_ptr.write_volatile(*b as u32);
+            }
             count += 1;
         }
         Ok(mystd::io::Size::from_usize(count))
@@ -151,10 +162,10 @@ impl mystd::io::Read for Uart {
         while count < buf.len() && !self.flags().rxfe().is_set() {
             let received = unsafe { reg_ptr.read_volatile() };
             if received.break_error().is_set() {
-                return Err(mystd::io::Error::Interrupted)
+                return Err(mystd::io::Error::Interrupted);
             }
             if received.parity_error().is_set() || received.framing_error().is_set() {
-                return Err(mystd::io::Error::InvalidData)
+                return Err(mystd::io::Error::InvalidData);
             }
             buf[count] = received.data().value().unwrap();
             count += 1;
@@ -163,22 +174,21 @@ impl mystd::io::Read for Uart {
     }
 }
 
-
 bit_field!(pub UartData(u32){
     /// Overrun error. This bit is set to 1 if data is received and the receive FIFO is already full.
-    /// 
-    /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it. 
+    ///
+    /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it.
     11 => overrun_error,
     /// Break error. This bit is set to 1 if a break condition was detected, indicating that the received data input was held LOW for longer than a full-word transmission time (defined as start, data, parity and stop bits).
-    /// 
+    ///
     /// In FIFO mode, this error is associated with the character at the top of the FIFO. When a break occurs, only one 0 character is loaded into the FIFO. The next character is only enabled after the receive data input goes to a 1 (marking state), and the next valid start bit is received.
     10 => break_error,
     /// Parity error. When set to 1, it indicates that the parity of the received data character does not match the parity that the EPS and SPS bits in the Line Control Register, UART_LCRH select.
-    /// 
+    ///
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
     9 => parity_error,
-    /// Framing error. When set to 1, it indicates that the received character did not have a valid stop bit (a valid stop bit is 1). 
-    /// 
+    /// Framing error. When set to 1, it indicates that the received character did not have a valid stop bit (a valid stop bit is 1).
+    ///
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
     8 => framing_error,
     8:11 => status,
@@ -187,19 +197,19 @@ bit_field!(pub UartData(u32){
 
 bit_field!(pub UartStatus(u32){
     /// Overrun error. This bit is set to 1 if data is received and the receive FIFO is already full.
-    /// 
-    /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it. 
+    ///
+    /// This is cleared to 0 once there is an empty space in the FIFO and a new character can be written to it.
     3 => overrun_error,
     /// Break error. This bit is set to 1 if a break condition was detected, indicating that the received data input was held LOW for longer than a full-word transmission time (defined as start, data, parity and stop bits).
-    /// 
+    ///
     /// In FIFO mode, this error is associated with the character at the top of the FIFO. When a break occurs, only one 0 character is loaded into the FIFO. The next character is only enabled after the receive data input goes to a 1 (marking state), and the next valid start bit is received.
     2 => break_error,
     /// Parity error. When set to 1, it indicates that the parity of the received data character does not match the parity that the EPS and SPS bits in the Line Control Register, UART_LCRH select.
-    /// 
+    ///
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
     1 => parity_error,
-    /// Framing error. When set to 1, it indicates that the received character did not have a valid stop bit (a valid stop bit is 1). 
-    /// 
+    /// Framing error. When set to 1, it indicates that the received character did not have a valid stop bit (a valid stop bit is 1).
+    ///
     /// In FIFO mode, this error is associated with the character at the top of the FIFO.
     0 => framing_error
 });
@@ -243,7 +253,7 @@ pub enum UartBitrate {
     _19200Baud = 19200,
     _38400Baud = 38400,
     _57600Baud = 57600,
-    _115200Baud = 115200
+    _115200Baud = 115200,
 }
 
 impl UartBitrate {
@@ -279,7 +289,6 @@ bit_field!(pub UartLineControl(u32){
     0 => send_break
 });
 
-
 bit_field!(pub UartControl (u32){
     15 => cts_hardware_flow_control,
     14 => rts_hardware_flow_control,
@@ -297,9 +306,12 @@ impl UartControl {
 
     pub fn enabled() -> Self {
         Self::zero()
-            .receive_enable().set()
-            .transmit_enable().set()
-            .uart_enable().set()
+            .receive_enable()
+            .set()
+            .transmit_enable()
+            .set()
+            .uart_enable()
+            .set()
     }
 }
 

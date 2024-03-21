@@ -9,8 +9,8 @@ pub struct PinSet(u32, u32);
 
 impl PinSet {
     pub const fn select(pins: &[u8]) -> Self {
-        let mut i = 0; 
-        let mut result = Self(0,0);
+        let mut i = 0;
+        let mut result = Self(0, 0);
         while i < pins.len() {
             let pin = pins[i];
             i += 1;
@@ -33,7 +33,10 @@ impl IntoIterator for PinSet {
     type IntoIter = PinSelectIterator;
 
     fn into_iter(self) -> Self::IntoIter {
-        PinSelectIterator { select: self, position: 0 }
+        PinSelectIterator {
+            select: self,
+            position: 0,
+        }
     }
 }
 
@@ -58,7 +61,7 @@ impl Iterator for PinSelectIterator {
                     return Some(pos);
                 }
             }
-        } 
+        }
         None
     }
 }
@@ -66,14 +69,14 @@ impl Iterator for PinSelectIterator {
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum PinFunction {
-    Input   = 0b000,
-    Output  = 0b001,
-    Alt0    = 0b100,
-    Alt1    = 0b101,
-    Alt2    = 0b110,
-    Alt3    = 0b111,
-    Alt4    = 0b011,
-    Alt5    = 0b010,
+    Input = 0b000,
+    Output = 0b001,
+    Alt0 = 0b100,
+    Alt1 = 0b101,
+    Alt2 = 0b110,
+    Alt3 = 0b111,
+    Alt4 = 0b011,
+    Alt5 = 0b010,
 }
 
 impl Gpio {
@@ -86,50 +89,69 @@ impl Gpio {
     const GPFSEL5: MMIO<GPIO_BASE, 0x14> = MMIO();
 
     pub fn set_functions(pins: PinSet, function: PinFunction) {
-        let mut state = [Self::GPFSEL0.read(), Self::GPFSEL1.read(), Self::GPFSEL2.read(), Self::GPFSEL3.read(), Self::GPFSEL4.read(), Self::GPFSEL5.read()];
+        let mut state = [
+            Self::GPFSEL0.read(),
+            Self::GPFSEL1.read(),
+            Self::GPFSEL2.read(),
+            Self::GPFSEL3.read(),
+            Self::GPFSEL4.read(),
+            Self::GPFSEL5.read(),
+        ];
         let mut updated = [false, false, false, false, false, false];
         for pin in pins {
             let bank_select = (pin as usize) / 10;
             let offset = (pin % 10) * 3;
             let old_state = state[bank_select];
             let mask = 0b111_u32 << offset;
-            let new_value = (function as u32) << offset; 
+            let new_value = (function as u32) << offset;
             let old_value = old_state & mask;
             if new_value != old_value {
                 state[bank_select] = (old_state & !mask) | new_value;
                 updated[bank_select] = true;
             }
         }
-        if updated[0] { Self::GPFSEL0.write(state[0]); }
-        if updated[1] { Self::GPFSEL1.write(state[1]); }
-        if updated[2] { Self::GPFSEL2.write(state[2]); }
-        if updated[3] { Self::GPFSEL3.write(state[3]); }
-        if updated[4] { Self::GPFSEL4.write(state[4]); }
-        if updated[5] { Self::GPFSEL5.write(state[5]); }
+        if updated[0] {
+            Self::GPFSEL0.write(state[0]);
+        }
+        if updated[1] {
+            Self::GPFSEL1.write(state[1]);
+        }
+        if updated[2] {
+            Self::GPFSEL2.write(state[2]);
+        }
+        if updated[3] {
+            Self::GPFSEL3.write(state[3]);
+        }
+        if updated[4] {
+            Self::GPFSEL4.write(state[4]);
+        }
+        if updated[5] {
+            Self::GPFSEL5.write(state[5]);
+        }
     }
 }
 
-#[cfg(feature="bcm2837")]
+#[cfg(feature = "bcm2837")]
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum Resistor {
     None = 0,
     PullDown = 0b01,
     PullUp = 0b10,
-    Reserved = 0b11
+    Reserved = 0b11,
 }
 
-#[cfg(any(feature="bcm2811", feature="bcm2812"))]
+#[cfg(any(feature = "bcm2811", feature = "bcm2812"))]
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum Resistor {
     None = 0,
     PullUp = 0b01,
     PullDown = 0b10,
-    Reserved = 0b11
+    Reserved = 0b11,
 }
 
-#[cfg(feature="bcm2837")]
+#[cfg(feature = "bcm2837")]
 impl Gpio {
     // Pull-up/down Register
     const GPPUD: MMIO<GPIO_BASE, 0x94> = MMIO();
@@ -138,7 +160,7 @@ impl Gpio {
     const GPPUDCLK1: MMIO<GPIO_BASE, 0x9c> = MMIO();
 
     pub fn set_pull_resistors(pins: PinSet, resistor: Resistor) {
-        // The GPIO Pull-up/down Clock Registers control the actuation of internal pull-downs on the respective GPIO pins. These registers must be used in conjunction with the GPPUD register to effect GPIO Pull-up/down changes. 
+        // The GPIO Pull-up/down Clock Registers control the actuation of internal pull-downs on the respective GPIO pins. These registers must be used in conjunction with the GPPUD register to effect GPIO Pull-up/down changes.
         // The following sequence of events is required:
         // 1. Write to GPPUD to set the required control signal (i.e. Pull-up or Pull-Down or neither to remove the current Pull-up/down)
         Self::GPPUD.write(resistor as u32);
@@ -157,15 +179,14 @@ impl Gpio {
     }
 }
 
-
-#[cfg(any(feature="bcm2811", feature="bcm2812"))]
+#[cfg(any(feature = "bcm2811", feature = "bcm2812"))]
 impl Gpio {
     // Pull-up/down Control Registers
     const GPIO_PUP_PDN_CNTRL_REG0: MMIO<GPIO_BASE, 0xe4> = MMIO();
     const GPIO_PUP_PDN_CNTRL_REG1: MMIO<GPIO_BASE, 0xe8> = MMIO();
     const GPIO_PUP_PDN_CNTRL_REG2: MMIO<GPIO_BASE, 0xec> = MMIO();
     const GPIO_PUP_PDN_CNTRL_REG3: MMIO<GPIO_BASE, 0xf0> = MMIO();
-    
+
     const fn get_pull_control_register(bank_select: usize) -> u32 {
         match bank_select {
             0 => Self::GPIO_PUP_PDN_CNTRL_REG0.read(),
@@ -186,10 +207,10 @@ impl Gpio {
 
     pub fn set_pull_resistor(pin: u8, resistor: Resistor) {
         let offset = (pin << 1) & 0x1f; // (pin * 2) % 32
-        let bank_select = pin >> 4; // (pin * 2) / 32 
+        let bank_select = pin >> 4; // (pin * 2) / 32
         let old_state = Self::get_pull_control_register(bank_select);
         let mask = 0b11_u32 << offset;
-        let new_value = (resistor as u32) << offset; 
+        let new_value = (resistor as u32) << offset;
         let old_value = old_state & mask;
         if new_value != old_value {
             Self::set_pull_control_register(bank_select, (old_state & !mask) | new_value);
@@ -197,23 +218,36 @@ impl Gpio {
     }
 
     pub fn set_pull_resistors(pins: PinSet, resistor: Resistor) {
-        let mut state = [Self::GPIO_PUP_PDN_CNTRL_REG0.read(), Self::GPIO_PUP_PDN_CNTRL_REG1.read(), Self::GPIO_PUP_PDN_CNTRL_REG2.read(), Self::GPIO_PUP_PDN_CNTRL_REG3.read()];
+        let mut state = [
+            Self::GPIO_PUP_PDN_CNTRL_REG0.read(),
+            Self::GPIO_PUP_PDN_CNTRL_REG1.read(),
+            Self::GPIO_PUP_PDN_CNTRL_REG2.read(),
+            Self::GPIO_PUP_PDN_CNTRL_REG3.read(),
+        ];
         let mut updated = [false, false, false, false];
         for pin in pins {
             let offset = (pin << 1) & 0x1f; // (pin * 2) % 32
-            let bank_select = pin >> 4; // (pin * 2) / 32 
+            let bank_select = pin >> 4; // (pin * 2) / 32
             let old_state = state[bank_select];
             let mask = 0b11_u32 << offset;
-            let new_value = (resistor as u32) << offset; 
+            let new_value = (resistor as u32) << offset;
             let old_value = old_state & mask;
             if new_value != old_value {
                 state[bank_select] = (old_state & !mask) | new_value;
                 updated[bank_select] = true;
             }
         }
-        if updated[0] { Self::GPIO_PUP_PDN_CNTRL_REG0.write(state[0]); }
-        if updated[1] { Self::GPIO_PUP_PDN_CNTRL_REG1.write(state[1]); }
-        if updated[2] { Self::GPIO_PUP_PDN_CNTRL_REG2.write(state[2]); }
-        if updated[3] { Self::GPIO_PUP_PDN_CNTRL_REG3.write(state[3]); }
+        if updated[0] {
+            Self::GPIO_PUP_PDN_CNTRL_REG0.write(state[0]);
+        }
+        if updated[1] {
+            Self::GPIO_PUP_PDN_CNTRL_REG1.write(state[1]);
+        }
+        if updated[2] {
+            Self::GPIO_PUP_PDN_CNTRL_REG2.write(state[2]);
+        }
+        if updated[3] {
+            Self::GPIO_PUP_PDN_CNTRL_REG3.write(state[3]);
+        }
     }
 }

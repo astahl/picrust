@@ -24,7 +24,6 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     monitor::Monitor::new(uart, uart).run();
 }
 
-
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     system::initialize();
