@@ -82,10 +82,10 @@ mod tests {
 
     #[test]
     fn split_works() {
-        let a: FixedPoint::<8, i32> = (3.25_f32).try_into().unwrap();
+        let a: FixedPoint<8, i32> = (3.25_f32).try_into().unwrap();
         assert_eq!((3, 0b0100_0000), a.split_int_frac());
 
-        let a: FixedPoint::<8, i32> = (-3.5_f32).try_into().unwrap();
+        let a: FixedPoint<8, i32> = (-3.5_f32).try_into().unwrap();
         assert_eq!((-4, 0b1000_0000), a.split_int_frac());
 
         // let a: FixedPoint::<8, i32> = (-3.375_f32).try_into().unwrap();
@@ -94,6 +94,6 @@ mod tests {
         let f_uart_clk = FixedPoint::<6, u32>::from_int(3_000_000);
         let baud_rate = 115200;
         let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
-        assert_eq!((1,40), baud_rate_divisor.split_int_frac());
+        assert_eq!((1, 40), baud_rate_divisor.split_int_frac());
     }
 }

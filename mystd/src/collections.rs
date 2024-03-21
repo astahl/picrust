@@ -1,6 +1,6 @@
-pub mod ring;
-pub mod line;
 pub mod bunch;
+pub mod line;
+pub mod ring;
 pub mod sync_ring;
 
 pub trait Sliceable<T>: AsRef<[T]> + AsMut<[T]> {
@@ -22,7 +22,6 @@ pub enum BufferError {
     OutOfRange { read_index: usize },
     IndexAlreadyFreed { index: usize },
 }
-
 
 pub fn collect_into_array<T, const N: usize, I>(iter: I, fill: T) -> [T; N]
 where

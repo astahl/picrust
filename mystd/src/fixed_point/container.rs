@@ -11,7 +11,6 @@ pub trait FixedPointContainer:
 {
     const BIT_WIDTH: usize = (core::mem::size_of::<Self>() * 8) as usize;
     const BIT_SHIFT_MAX: usize = Self::BIT_WIDTH - 1;
-    
     const ONE: Self;
     const ZERO: Self;
 

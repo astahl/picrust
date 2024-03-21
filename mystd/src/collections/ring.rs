@@ -200,7 +200,7 @@ impl<T, S: Sliceable<T>, const N: usize> Ring<T, S, N> {
     }
 }
 
-impl<S: Sliceable<u8>, const N: usize> Ring<u8, S, N>  {
+impl<S: Sliceable<u8>, const N: usize> Ring<u8, S, N> {
     pub fn to_str(&mut self) -> Result<&str, Utf8Error> {
         core::str::from_utf8(self.make_continuous())
     }

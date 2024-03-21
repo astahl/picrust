@@ -1,6 +1,5 @@
 use core::{fmt::Debug, marker::PhantomData, ops::BitAnd};
 
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BitFieldError {
     ValueTooLargeForField,
@@ -10,13 +9,13 @@ pub enum BitFieldError {
 pub trait BitField: Clone + Copy {
     type Underlying: Copy;
     const BIT_WIDTH: usize;
-    
+
     fn with_bit_value(self, position: usize, value: bool) -> Self;
 
     fn with_bit_cleared(self, position: usize) -> Self;
-    
+
     fn with_bit_set(self, position: usize) -> Self;
-    
+
     fn is_bit_set(self, position: usize) -> bool;
 
     fn field_value(self, lsb: usize, msb: usize) -> Self::Underlying;
@@ -28,15 +27,12 @@ pub trait BitField: Clone + Copy {
     fn with_field_all_set(self, lsb: usize, msb: usize) -> Self;
 }
 
-
-
-
 #[derive(Clone, Copy)]
 pub struct BitMask<const N: usize, T: BitField>(T);
 
 impl<const N: usize, T: BitField> BitMask<N, T> {
     pub const POSITION: usize = N;
-    
+
     pub const fn new(bitfield: T) -> Self {
         Self(bitfield)
     }
@@ -77,16 +73,15 @@ impl<const N: usize, T: BitField> BitMask<N, T> {
     }
 }
 
-
 #[derive(Clone, Copy)]
 pub struct FieldMask<const FROM: usize, const TO: usize, T: BitField>(T);
 
 impl<const FROM: usize, const TO: usize, T: BitField> FieldMask<FROM, TO, T> {
-    const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
+    const MIN_MAX: (usize, usize) = if FROM < TO { (FROM, TO) } else { (TO, FROM) };
     pub const LSB: usize = Self::MIN_MAX.0;
-    pub const MSB: usize = Self::MIN_MAX.1; 
+    pub const MSB: usize = Self::MIN_MAX.1;
     pub const WIDTH: usize = Self::MSB - Self::LSB + 1;
-    
+
     pub const fn new(bitfield: T) -> Self {
         Self(bitfield)
     }
@@ -103,9 +98,12 @@ impl<const FROM: usize, const TO: usize, T: BitField> FieldMask<FROM, TO, T> {
         self.0.field_value(Self::LSB, Self::MSB)
     }
 
-    pub fn into<U>(self) -> U where U: From<T::Underlying> {
+    pub fn into<U>(self) -> U
+    where
+        U: From<T::Underlying>,
+    {
         self.value().into()
-    } 
+    }
 
     /// Accepts the underlying type, but truncates the value to the size of the field.
     #[must_use]
@@ -124,20 +122,21 @@ impl<const FROM: usize, const TO: usize, T: BitField> FieldMask<FROM, TO, T> {
     }
 }
 
-
 #[derive(Clone, Copy)]
 pub struct TypedBitMask<const N: usize, T, U>(T, PhantomData<U>)
-    where T: BitField, U: From<bool> + Into<bool> + Debug
-
-;
+where
+    T: BitField,
+    U: From<bool> + Into<bool> + Debug;
 
 impl<const N: usize, T, U> TypedBitMask<N, T, U>
-where T: BitField, U: From<bool> + Into<bool> + Debug
+where
+    T: BitField,
+    U: From<bool> + Into<bool> + Debug,
 {
     pub const POSITION: usize = N;
-    
+
     pub const fn new(bitfield: T) -> Self {
-        Self(bitfield, PhantomData{})
+        Self(bitfield, PhantomData {})
     }
 
     pub fn value(self) -> U {
@@ -155,13 +154,15 @@ where T: BitField, U: From<bool> + Into<bool> + Debug
 }
 
 #[derive(Clone, Copy)]
-pub struct TypedFieldMask<const FROM: usize, const TO: usize, T, U>(
-    T,
-    PhantomData<U>
-) where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug;
+pub struct TypedFieldMask<const FROM: usize, const TO: usize, T, U>(T, PhantomData<U>)
+where
+    T: BitField,
+    U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug;
 
 impl<const FROM: usize, const TO: usize, T, U> PartialEq<U> for TypedFieldMask<FROM, TO, T, U>
-where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug + PartialEq<U> + Copy
+where
+    T: BitField,
+    U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug + PartialEq<U> + Copy,
 {
     fn eq(&self, other: &U) -> bool {
         match self.value() {
@@ -172,15 +173,17 @@ where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug + Par
 }
 
 impl<const FROM: usize, const TO: usize, T, U> TypedFieldMask<FROM, TO, T, U>
-where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug
+where
+    T: BitField,
+    U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug,
 {
-    const MIN_MAX: (usize, usize) = if FROM < TO { (FROM,TO) } else { (TO,FROM)};
+    const MIN_MAX: (usize, usize) = if FROM < TO { (FROM, TO) } else { (TO, FROM) };
     pub const LSB: usize = Self::MIN_MAX.0;
-    pub const MSB: usize = Self::MIN_MAX.1; 
+    pub const MSB: usize = Self::MIN_MAX.1;
     pub const WIDTH: usize = Self::MSB - Self::LSB + 1;
-    
+
     pub const fn new(bitfield: T) -> Self {
-        Self(bitfield, PhantomData{})
+        Self(bitfield, PhantomData {})
     }
 
     pub fn value(self) -> Result<U, U::Error> {
@@ -198,13 +201,14 @@ where T: BitField, U: TryFrom<T::Underlying> + Into<T::Underlying> + Debug
 }
 
 impl<const FROM: usize, const TO: usize, T, U> TypedFieldMask<FROM, TO, T, U>
-where T: BitField, U: From<T::Underlying> + Into<T::Underlying> + Debug
+where
+    T: BitField,
+    U: From<T::Underlying> + Into<T::Underlying> + Debug,
 {
     pub fn value_into(self) -> U {
         U::from(self.0.field_value(Self::LSB, Self::MSB))
     }
 }
-
 
 #[macro_export]
 macro_rules! ensure_bit_fits {
@@ -223,7 +227,7 @@ macro_rules! ensure_bit_fits {
 macro_rules! bit_field_method {
 
     (
-        $(#[$meta:meta])* 
+        $(#[$meta:meta])*
         $bit_position:literal => $bit_name:ident
     ) => {
         $(#[$meta])*
@@ -233,7 +237,7 @@ macro_rules! bit_field_method {
     };
 
     (
-        $(#[$meta:meta])* 
+        $(#[$meta:meta])*
         $field_from:literal : $field_to:literal => $field_name:ident
     ) => {
         $(#[$meta])*
@@ -244,7 +248,7 @@ macro_rules! bit_field_method {
 
 
     (
-        $(#[$meta:meta])* 
+        $(#[$meta:meta])*
         $bit_position:literal => $bit_name:ident : $bit_type:ty
     ) => {
         $(#[$meta])*
@@ -254,15 +258,15 @@ macro_rules! bit_field_method {
     };
 
     (
-        $(#[$meta:meta])* 
+        $(#[$meta:meta])*
         $field_from:literal : $field_to:literal => $field_name:ident : $field_type:ty
     ) => {
-        
+
         $(#[$meta])*
         pub const fn $field_name(self) -> $crate::bitfield2::TypedFieldMask<$field_from, $field_to, Self, $field_type> {
             $crate::bitfield2::TypedFieldMask::new(self)
         }
-    
+
     };
 }
 
@@ -274,9 +278,9 @@ macro_rules! bit_field_type_definition {
     (
         $bit_from:literal;$bit_to:literal;
         $(#[$meta:meta])*
-        $v:vis enum $name:ident<$underlying_type:ty> { 
+        $v:vis enum $name:ident<$underlying_type:ty> {
             $(
-                $(#[$value_meta:meta])* 
+                $(#[$value_meta:meta])*
                 $value_name:ident = $value_expr:literal
             ),*
             $(,)?
@@ -285,7 +289,7 @@ macro_rules! bit_field_type_definition {
         $(#[$meta])*
         #[derive(Debug, PartialEq, Clone, Copy)]
         #[repr($underlying_type)]
-        $v enum $name { 
+        $v enum $name {
             $(
                 $(#[$value_meta])*
                 $value_name = $value_expr
@@ -312,20 +316,20 @@ macro_rules! bit_field_type_definition {
     (
         $bit_position:literal;
         $(#[$meta:meta])*
-        $v:vis enum $name:ident<$underlying_type:ty> { 
-            $(#[$value_false_meta:meta])* 
+        $v:vis enum $name:ident<$underlying_type:ty> {
+            $(#[$value_false_meta:meta])*
             $value_false_name:ident,
-            $(#[$value_true_meta:meta])* 
+            $(#[$value_true_meta:meta])*
             $value_true_name:ident$(,)?
         }
     ) => {
         $(#[$meta])*
         #[derive(Debug, PartialEq, Clone, Copy)]
-        $v enum $name { 
-            $(#[$value_false_meta])* 
+        $v enum $name {
+            $(#[$value_false_meta])*
             $value_false_name,
-             
-            $(#[$value_true_meta])* 
+
+            $(#[$value_true_meta])*
             $value_true_name
         }
 
@@ -360,14 +364,14 @@ macro_rules! bit_field {
 
     // };
     (
-        $( #[ $meta:meta ] )* 
+        $( #[ $meta:meta ] )*
         $v:vis $type_name:ident ($underlying_type:ty) {
             $(
-                $( #[ $bit_meta:meta ] )* 
+                $( #[ $bit_meta:meta ] )*
                 $bit_from:literal $(: $bit_to:literal )? => $bit_name:ident
                     $(: $field_type:ty )?
-                    $(: 
-                        $( #[ $field_type_meta:meta ] )* 
+                    $(:
+                        $( #[ $field_type_meta:meta ] )*
                         enum $field_type_definition:ident $field_typedef:tt
                     )?
                     $(= $field_default_expr:expr)?
@@ -457,7 +461,7 @@ macro_rules! bit_field {
 
             $(
                 $crate::bit_field_method!(
-                    $(#[$bit_meta])* 
+                    $(#[$bit_meta])*
                     $bit_from$(:$bit_to)? => $bit_name$(:$field_type)?$(:$field_type_definition)?
                 );
             )*
@@ -507,9 +511,9 @@ macro_rules! bit_field {
                 let mut result = Self::zero();
                 $(
                     #[allow(unused_doc_comments)]
-                    $(#[$bit_meta])* 
+                    $(#[$bit_meta])*
                     {
-                        $( 
+                        $(
                         result = result
                             .$bit_name().set_value($field_default_expr)
                         )?
@@ -537,7 +541,7 @@ macro_rules! bit_field {
                 builder.field("binary", &format_args!("{:#0width$b}", &self.0, width=(<$underlying_type>::BITS as usize)));
                 $(
                     #[allow(unused_doc_comments)]
-                    $(#[$bit_meta])* 
+                    $(#[$bit_meta])*
                     builder.field(concat!(stringify!($bit_name),"[", stringify!($bit_from) $(, ":", stringify!($bit_to))?, "]"),
                         &self.$bit_name().value());
                 )*
@@ -577,7 +581,7 @@ macro_rules! bit_field {
 
         impl<T: Into<$underlying_type>> core::ops::BitOr<T> for $type_name{
             type Output = Self;
-        
+
             fn bitor(self, rhs: T) -> Self::Output {
                 Self::new(self.0 | rhs.into())
             }
@@ -585,18 +589,18 @@ macro_rules! bit_field {
 
         impl<T: Into<$underlying_type>> core::ops::BitAnd<T> for $type_name{
             type Output = Self;
-        
+
             fn bitand(self, rhs: T) -> Self::Output {
                 Self::new(self.0 & rhs.into())
             }
         }
-    
+
 
         $(
             $crate::bit_field_type_definition!(
             $bit_from; $($bit_to;)?
             $(
-                $(#[$field_type_meta])* 
+                $(#[$field_type_meta])*
                 $v enum $field_type_definition<$underlying_type> $field_typedef
             )?
             );
@@ -604,7 +608,6 @@ macro_rules! bit_field {
     };
 
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum Fuzzy {
@@ -616,7 +619,6 @@ pub enum Fuzzy {
     Ex = 0x10,
     Yes = 0x11,
 }
-
 
 // impl TryFrom<u32> for Buzz {
 //     type Error = BitFieldError;
@@ -639,7 +641,7 @@ impl From<u8> for Fuzzy {
             0b1 => Fuzzy::On,
             0b10 => Fuzzy::Ex,
             0b11 => Fuzzy::Yes,
-            _ => panic!("Value out of range")
+            _ => panic!("Value out of range"),
         }
     }
 }
@@ -650,17 +652,13 @@ impl Into<u8> for Fuzzy {
     }
 }
 
-
-
-
 #[derive(Debug, PartialEq)]
 pub enum Buzzy {
     /// When Buzz is gone
     Off = 0b0,
     /// When Doki doki
-    On = 0b1
+    On = 0b1,
 }
-
 
 impl From<bool> for Buzzy {
     fn from(value: bool) -> Self {
@@ -681,15 +679,15 @@ impl Into<bool> for Buzzy {
 }
 
 bit_field!(
-    pub MyReg(u8) { 
+    pub MyReg(u8) {
         2 => a = true,
         /// probably fine
         3 => b: enum ABool {
-            Ass, 
+            Ass,
             Bee
         } = ABool::Bee,
         /// # The best field
-        /// 
+        ///
         /// A field so good it shows
         0:7 => my_field,
         1 => buzzys: Buzzy,
@@ -699,10 +697,9 @@ bit_field!(
         6 => not_today = true
 });
 
-
 bit_field!(pub X(u32) {
     31 => x,
-    4:5 => y: 
+    4:5 => y:
     /// Please note that this does not have the zero value
     enum YFieldValue {
         /// This is an odd value
@@ -711,8 +708,6 @@ bit_field!(pub X(u32) {
         A = 4,
     },
 });
-
-
 
 #[cfg(test)]
 mod tests {
@@ -733,7 +728,7 @@ mod tests {
 
     #[test]
     fn test_created_types() {
-        let x = X::zero().y().set_value(YFieldValue::Odd); 
+        let x = X::zero().y().set_value(YFieldValue::Odd);
         assert_eq!(Ok(YFieldValue::Odd), x.y().value())
     }
 

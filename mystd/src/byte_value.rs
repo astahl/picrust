@@ -1,4 +1,3 @@
-
 pub struct ByteValue(pub u64);
 
 impl ByteValue {

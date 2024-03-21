@@ -75,7 +75,7 @@ where
 
 impl<T> Debug for BitField<T>
 where
-    T: BitContainer
+    T: BitContainer,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if f.alternate() {
@@ -98,7 +98,7 @@ where
 
 impl<T> core::fmt::Display for BitField<T>
 where
-    T: BitContainer
+    T: BitContainer,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:b}", &self)
@@ -107,43 +107,39 @@ where
 
 impl<T> core::fmt::Binary for BitField<T>
 where
-    T: BitContainer
+    T: BitContainer,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:0width$b}", &self.0, width=Self::BIT_WIDTH)
+        write!(f, "{:0width$b}", &self.0, width = Self::BIT_WIDTH)
     }
 }
 
 impl<T> core::fmt::LowerHex for BitField<T>
 where
-    T: BitContainer
+    T: BitContainer,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:0width$x}", &self.0, width=Self::HEX_WIDTH)
+        write!(f, "{:0width$x}", &self.0, width = Self::HEX_WIDTH)
     }
 }
 
 impl<T> core::fmt::UpperHex for BitField<T>
 where
-    T: BitContainer
+    T: BitContainer,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:0width$X}", &self.0, width=Self::HEX_WIDTH)
+        write!(f, "{:0width$X}", &self.0, width = Self::HEX_WIDTH)
     }
 }
 
 impl<T> core::fmt::Octal for BitField<T>
 where
-    T: BitContainer
+    T: BitContainer,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:0width$o}", &self.0, width=Self::OCTAL_WIDTH)
+        write!(f, "{:0width$o}", &self.0, width = Self::OCTAL_WIDTH)
     }
 }
-
-
-
-
 
 impl<T> BitField<T>
 where
@@ -178,11 +174,15 @@ where
     }
 
     pub fn field_set(&mut self, lsb: usize, length: usize, value: T) {
-        self.0 = ((value & Self::mask_up_to(length)) << lsb) | (self.0 & !(Self::mask_up_to(length) << lsb))
+        self.0 = ((value & Self::mask_up_to(length)) << lsb)
+            | (self.0 & !(Self::mask_up_to(length) << lsb))
     }
 
     pub fn with_field_set(&self, lsb: usize, length: usize, value: T) -> Self {
-        Self(((value & Self::mask_up_to(length)) << lsb) | (self.0 & !(Self::mask_up_to(length) << lsb)))
+        Self(
+            ((value & Self::mask_up_to(length)) << lsb)
+                | (self.0 & !(Self::mask_up_to(length) << lsb)),
+        )
     }
 
     pub fn bit_test(&self, position: usize) -> bool {
@@ -215,54 +215,68 @@ where
 }
 
 #[derive(Clone, Copy)]
-pub struct FieldIterator<T, const LEN: usize> where T: BitContainer {
+pub struct FieldIterator<T, const LEN: usize>
+where
+    T: BitContainer,
+{
     top: usize,
     bottom: usize,
-    bit_field: BitField<T>
+    bit_field: BitField<T>,
 }
 
 impl<T, const LEN: usize> ExactSizeIterator for FieldIterator<T, LEN>
-where T: BitContainer
+where
+    T: BitContainer,
 {
     fn len(&self) -> usize {
         ((self.top - self.bottom) + (LEN - 1)) / LEN
     }
 }
 
-struct Hexer<T, I>(I) where T: BitContainer, I: Iterator<Item = (T, usize)> + Clone;
-struct Biner<T, I>(I) where T: BitContainer, I: Iterator<Item = (T, usize)> + Clone;
+struct Hexer<T, I>(I)
+where
+    T: BitContainer,
+    I: Iterator<Item = (T, usize)> + Clone;
+struct Biner<T, I>(I)
+where
+    T: BitContainer,
+    I: Iterator<Item = (T, usize)> + Clone;
 
 impl<T, I> core::fmt::Debug for Biner<T, I>
-where T: BitContainer, I: Iterator<Item = (T, usize)> + Clone
+where
+    T: BitContainer,
+    I: Iterator<Item = (T, usize)> + Clone,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         for (i, field) in self.0.clone().enumerate() {
             if i != 0 {
                 f.write_char(' ')?;
             }
-            write!(f, "{:0width$b}", field.0, width=field.1)?
+            write!(f, "{:0width$b}", field.0, width = field.1)?
         }
         Ok(())
     }
 }
 
 impl<T, I> core::fmt::Debug for Hexer<T, I>
-where T: BitContainer, I: Iterator<Item = (T, usize)> + Clone
+where
+    T: BitContainer,
+    I: Iterator<Item = (T, usize)> + Clone,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         for (i, field) in self.0.clone().enumerate() {
             if i != 0 {
                 f.write_char(' ')?;
             }
-            write!(f, "{:>width$x}", field.0, width=field.1)?
+            write!(f, "{:>width$x}", field.0, width = field.1)?
         }
         Ok(())
     }
 }
 
-
 impl<T, const LEN: usize> FieldIterator<T, LEN>
-where T: BitContainer
+where
+    T: BitContainer,
 {
     const TOP_START: usize = BitField::<T>::BIT_WIDTH;
     const REM: usize = BitField::<T>::BIT_WIDTH % LEN;
@@ -273,18 +287,17 @@ where T: BitContainer
         Self {
             top: Self::TOP_START,
             bottom: 0,
-            bit_field
+            bit_field,
         }
     }
 }
 
-
-
 impl<T, const LEN: usize> core::iter::Iterator for FieldIterator<T, LEN>
-where T: BitContainer
+where
+    T: BitContainer,
 {
     type Item = (T, usize);
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.top <= self.bottom {
             None
@@ -300,9 +313,9 @@ where T: BitContainer
     }
 }
 
-
 impl<T, const LEN: usize> core::iter::DoubleEndedIterator for FieldIterator<T, LEN>
-where T: BitContainer
+where
+    T: BitContainer,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.bottom >= self.top {
@@ -321,8 +334,6 @@ where T: BitContainer
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use crate::collections::ring::RingArray;
@@ -333,14 +344,19 @@ mod tests {
     #[test]
     fn debug_fmt_works() {
         let mut buf: RingArray<u8, 32> = RingArray::new();
-        write!(&mut buf, "{:?}", BitField::<u8>::new(0b101010)).expect("Debug printing should work");
+        write!(&mut buf, "{:?}", BitField::<u8>::new(0b101010))
+            .expect("Debug printing should work");
         assert_eq!("BitField[8](00101010)", buf.to_str().unwrap());
     }
     #[test]
     fn debug_alt_fmt_works() {
         let mut buf: RingArray<u8, 128> = RingArray::new();
-        write!(&mut buf, "{:#?}", BitField::<u8>::new(0b101010)).expect("Debug printing should work");
-        assert_eq!("BitField {\n    bin: 0010 1010,\n    hex:    2    a,\n}", buf.to_str().unwrap());
+        write!(&mut buf, "{:#?}", BitField::<u8>::new(0b101010))
+            .expect("Debug printing should work");
+        assert_eq!(
+            "BitField {\n    bin: 0010 1010,\n    hex:    2    a,\n}",
+            buf.to_str().unwrap()
+        );
     }
 
     #[test]
@@ -353,14 +369,16 @@ mod tests {
     #[test]
     fn octal_fmt_works() {
         let mut buf: RingArray<u8, 32> = RingArray::new();
-        write!(&mut buf, "{:o}", BitField::<u8>::new(0b101010)).expect("Debug printing should work");
+        write!(&mut buf, "{:o}", BitField::<u8>::new(0b101010))
+            .expect("Debug printing should work");
         assert_eq!("052", buf.to_str().unwrap());
     }
 
     #[test]
     fn hex_fmt_works() {
         let mut buf: RingArray<u8, 32> = RingArray::new();
-        write!(&mut buf, "{:x}", BitField::<u8>::new(0b101010)).expect("Debug printing should work");
+        write!(&mut buf, "{:x}", BitField::<u8>::new(0b101010))
+            .expect("Debug printing should work");
         assert_eq!("2a", buf.to_str().unwrap());
     }
 

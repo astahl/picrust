@@ -1,5 +1,5 @@
-use core::sync::atomic;
 use atomic::Ordering::*;
+use core::sync::atomic;
 
 pub struct AtomicRing256<T> {
     read_write_idx: atomic::AtomicU16,
@@ -7,10 +7,13 @@ pub struct AtomicRing256<T> {
 }
 
 impl<T> AtomicRing256<T> {
-    pub fn new() -> Self where T: Default + Copy {
-        Self { 
-            read_write_idx: atomic::AtomicU16::new(0), 
-            data: [Default::default(); 256] 
+    pub fn new() -> Self
+    where
+        T: Default + Copy,
+    {
+        Self {
+            read_write_idx: atomic::AtomicU16::new(0),
+            data: [Default::default(); 256],
         }
     }
 
@@ -29,7 +32,7 @@ impl<T> AtomicRing256<T> {
         read.wrapping_sub(write).wrapping_sub(1) as usize
     }
 
-    pub fn put(&mut self, value: T) -> Result<T,()>{
+    pub fn put(&mut self, value: T) -> Result<T, ()> {
         let index_update = self.read_write_idx.fetch_update(SeqCst, SeqCst, |current| {
             let [read, mut write] = current.to_ne_bytes();
             write = write.wrapping_add(1);
@@ -44,13 +47,16 @@ impl<T> AtomicRing256<T> {
                 let [_, write] = old_index.to_ne_bytes();
                 let dest = unsafe { self.data.get_unchecked_mut(write as usize) };
                 Ok(core::mem::replace(dest, value))
-            },
+            }
             Err(_) => Err(()),
         }
     }
 
     /// Returns None when the buffer is empty
-    pub fn pop_take(&mut self) -> Option<T> where T: Default {
+    pub fn pop_take(&mut self) -> Option<T>
+    where
+        T: Default,
+    {
         let index_update = self.read_write_idx.fetch_update(SeqCst, SeqCst, |current| {
             let [read, write] = current.to_ne_bytes();
             if read == write {
@@ -64,13 +70,16 @@ impl<T> AtomicRing256<T> {
                 let [read, _] = old_index.to_ne_bytes();
                 let src = unsafe { self.data.get_unchecked_mut(read as usize) };
                 Some(core::mem::take(src))
-            },
+            }
             Err(_) => None,
         }
     }
 
     /// Returns None when the buffer is empty
-    pub fn peek_copy(&mut self) -> Option<T> where T: Copy {
+    pub fn peek_copy(&mut self) -> Option<T>
+    where
+        T: Copy,
+    {
         let mut latest_copy: Option<T> = None;
         let index_update = self.read_write_idx.fetch_update(SeqCst, SeqCst, |current| {
             let [read, write] = current.to_ne_bytes();

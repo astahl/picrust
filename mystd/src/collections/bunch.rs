@@ -1,7 +1,6 @@
-use super::Sliceable;
 use super::BufferError;
+use super::Sliceable;
 use core::marker::PhantomData;
-
 
 pub struct Bunch<T, S: Sliceable<T>, const N: usize> {
     count_filled: usize,

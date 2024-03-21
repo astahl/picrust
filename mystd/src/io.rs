@@ -10,20 +10,20 @@ pub enum Error {
     Interrupted,
     UnexpectedEof,
     ReadBufferZeroLength,
-    Unknown{err_code: i32}
+    Unknown { err_code: i32 },
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum Size {
     Eof,
-    Num(core::num::NonZeroUsize)
+    Num(core::num::NonZeroUsize),
 }
 
 impl Size {
     pub const fn from_usize(value: usize) -> Self {
         match value {
             0 => Self::Eof,
-            n => Self::Num(unsafe { NonZeroUsize::new_unchecked(n) })
+            n => Self::Num(unsafe { NonZeroUsize::new_unchecked(n) }),
         }
     }
 
@@ -47,13 +47,13 @@ pub trait Write {
             match self.write(&buf) {
                 Ok(Size::Eof) => return Err(Error::WriteZero),
                 Ok(written) => buf = &buf[written.to_usize()..],
-                Err(Error::Interrupted) => {},
+                Err(Error::Interrupted) => {}
                 Err(e) => return Err(e),
             }
         }
         Ok(())
     }
-    
+
     fn write_fmt(&mut self, fmt: core::fmt::Arguments<'_>) -> self::Result<()> {
         struct Adapter<'a, T: ?Sized + 'a> {
             inner: &'a mut T,
@@ -71,7 +71,10 @@ pub trait Write {
                 }
             }
         }
-        let mut output = Adapter { inner: self, error: Ok(()) };
+        let mut output = Adapter {
+            inner: self,
+            error: Ok(()),
+        };
         match core::fmt::write(&mut output, fmt) {
             Ok(_) => Ok(()),
             Err(_) => {
@@ -85,7 +88,10 @@ pub trait Write {
         }
     }
 
-    fn by_ref(&mut self) -> &mut Self where Self: Sized {
+    fn by_ref(&mut self) -> &mut Self
+    where
+        Self: Sized,
+    {
         self
     }
 }
@@ -97,12 +103,14 @@ impl self::Write for &mut [u8] {
         }
         let count = self.len().min(buf.len());
         let (dst, tail) = core::mem::take(self).split_at_mut(count);
-        dst.copy_from_slice(&buf[..count]); 
+        dst.copy_from_slice(&buf[..count]);
         *self = tail;
         Ok(Size::from_usize(count))
     }
 
-    fn flush(&mut self) -> Result<()> { Ok(()) }
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<T: self::Write> self::Write for Option<T> {
@@ -141,20 +149,21 @@ impl self::Write for &mut dyn self::Write {
     }
 }
 
-
 impl core::fmt::Write for dyn self::Write {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.write_all(s.as_bytes()).map_err(|_| core::fmt::Error)
     }
 }
 
-
-pub struct SplitWriter<W1, W2> (Option<W1>, Option<W2>) 
-where W1: self::Write, W2: self::Write;
-
+pub struct SplitWriter<W1, W2>(Option<W1>, Option<W2>)
+where
+    W1: self::Write,
+    W2: self::Write;
 
 impl<W1, W2> SplitWriter<W1, W2>
-where W1: self::Write, W2: self::Write
+where
+    W1: self::Write,
+    W2: self::Write,
 {
     pub const fn empty() -> Self {
         Self(None, None)
@@ -173,8 +182,11 @@ where W1: self::Write, W2: self::Write
     }
 }
 
-impl<A,B> self::Write for SplitWriter<A, B> where A: self::Write, B: self::Write {
-   
+impl<A, B> self::Write for SplitWriter<A, B>
+where
+    A: self::Write,
+    B: self::Write,
+{
     fn write(&mut self, buf: &[u8]) -> Result<Size> {
         match self.0.write(buf) {
             Ok(written) => match self.1.write_all(&buf[..written.to_usize()]) {
@@ -215,22 +227,23 @@ pub trait Read {
         Ok(())
     }
 
-    fn bytes(self) -> Bytes<Self> where Self: Sized {
-        Bytes {
-            reader: self
-        }
+    fn bytes(self) -> Bytes<Self>
+    where
+        Self: Sized,
+    {
+        Bytes { reader: self }
     }
 }
 
 pub struct Bytes<T: Read> {
-    reader: T
+    reader: T,
 }
 
 impl<T: Read> Iterator for Bytes<T> {
     type Item = self::Result<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut buf = [0_u8]; 
+        let mut buf = [0_u8];
         match self.reader.read(&mut buf) {
             Ok(Size::Eof) => None,
             Ok(_) => Some(Ok(buf[0])),
@@ -250,14 +263,14 @@ impl self::Read for &[u8] {
             return Err(Error::ReadBufferZeroLength);
         }
         let count = self.len().min(buf.len());
-        let (src, tail) = core::mem::take(self).split_at(count); 
+        let (src, tail) = core::mem::take(self).split_at(count);
         // avoid overhead of memcopy for single-element copy
         match count {
             1 => buf[0] = src[0],
             2 => unsafe { *buf.as_mut_ptr().cast::<[u8; 2]>() = *src.as_ptr().cast::<[u8; 2]>() },
             3 => unsafe { *buf.as_mut_ptr().cast::<[u8; 3]>() = *src.as_ptr().cast::<[u8; 3]>() },
             4 => unsafe { *buf.as_mut_ptr().cast::<[u8; 4]>() = *src.as_ptr().cast::<[u8; 4]>() },
-            _ => buf[..count].copy_from_slice(src)
+            _ => buf[..count].copy_from_slice(src),
         }
         *self = tail;
         Ok(Size::from_usize(count))
@@ -270,7 +283,7 @@ mod tests {
 
     #[test]
     fn read_u8_works() {
-        let arr: [u8; 8] = [1, 2, 3, 4,5,6,7,8];
+        let arr: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
         let mut slice = arr.as_slice();
 
         let mut dst0: [u8; 1] = [0; 1];
@@ -281,7 +294,7 @@ mod tests {
         let mut slice = arr.as_slice();
         slice.read(&mut dst2).unwrap();
         assert_eq!([1], dst0);
-        assert_eq!([2,3,4], dst1);
-        assert_eq!([1,2,3,4,5,6,7,8,0,0], dst2);
+        assert_eq!([2, 3, 4], dst1);
+        assert_eq!([1, 2, 3, 4, 5, 6, 7, 8, 0, 0], dst2);
     }
 }

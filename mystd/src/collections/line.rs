@@ -1,5 +1,5 @@
-use super::Sliceable;
 use super::BufferError;
+use super::Sliceable;
 use core::marker::PhantomData;
 
 pub struct Line<T, S: Sliceable<T>, const N: usize> {
