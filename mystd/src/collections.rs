@@ -1,9 +1,24 @@
+
 pub mod bunch;
 pub mod line;
 pub mod ring;
 pub mod sync_ring;
+pub mod rectangular;
 
-pub trait Sliceable<T>: AsRef<[T]> + AsMut<[T]> {
+pub trait Sliceable<T> {
+    fn as_slice(&self) -> &[T];
+    fn as_mut_slice(&mut self) -> &mut [T];
+}
+impl<T, const N: usize> Sliceable<T> for [T; N] {
+    fn as_slice(&self) -> &[T] {
+        self.as_slice()
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self.as_mut_slice()
+    }
+}
+impl<T> Sliceable<T> for [T] {
     fn as_slice(&self) -> &[T] {
         self.as_ref()
     }
@@ -12,9 +27,15 @@ pub trait Sliceable<T>: AsRef<[T]> + AsMut<[T]> {
         self.as_mut()
     }
 }
-impl<T, const N: usize> Sliceable<T> for [T; N] {}
-impl<T> Sliceable<T> for [T] {}
-impl<T> Sliceable<T> for &mut [T] {}
+impl<T> Sliceable<T> for &mut [T] {
+    fn as_slice(&self) -> &[T] {
+        self.as_slice()
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self.as_mut_slice()
+    }
+}
 
 #[derive(Debug)]
 pub enum BufferError {

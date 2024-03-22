@@ -56,7 +56,7 @@ impl<T, S: Sliceable<T>, const N: usize> Line<T, S, N> {
     }
 
     pub fn as_slice(&self) -> &[T] {
-        unsafe { self.data.as_ref().get_unchecked(..self.end) }
+        unsafe { self.data.as_slice().get_unchecked(..self.end) }
     }
 }
 

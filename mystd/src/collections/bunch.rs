@@ -26,7 +26,7 @@ impl<T, S: Sliceable<T>, const N: usize> Bunch<T, S, N> {
         if index == N {
             return Err(BufferError::Overflow { write_index: index });
         }
-        self.data.as_mut()[index] = value;
+        self.data.as_mut_slice()[index] = value;
         self.insert_index = self.insert_map[index];
         self.insert_map[index] = 0;
         self.count_filled += 1;
@@ -37,7 +37,7 @@ impl<T, S: Sliceable<T>, const N: usize> Bunch<T, S, N> {
     where
         T: Copy,
     {
-        let copy = self.data.as_mut()[index];
+        let copy = self.data.as_mut_slice()[index];
         self.free(index)?;
         Ok(copy)
     }
