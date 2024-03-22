@@ -135,4 +135,11 @@ mod tests {
         let rect = arr2d!([1, 2, 3], [1, 2+5, 3]);
         assert_eq!(7, *rect.get(1, 1).unwrap());
     }
+
+
+    #[test]
+    fn as_slice() {
+        let mut rect = arr2d!([1,2,3], [1,2,3]);
+        *rect.as_mut_slice2d().get_mut((1,2)).unwrap() = 3;
+    }
 }

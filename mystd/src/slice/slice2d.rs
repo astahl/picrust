@@ -14,15 +14,27 @@ pub unsafe trait MutSlice2dIndex<T: ?Sized> : Slice2dIndex<T> {
     fn index_mut(self, slice2d: &mut T) -> &mut Self::Output;
 }
 
+pub trait Slice2dTrait<T> {
+    fn as_ptr(&self) -> *const T;
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+    fn pitch(&self) -> usize;
+}
 
-pub struct SliceBase2d<T> {
+pub trait MutSlice2dTrait<T>: Slice2dTrait<T> {
+    fn as_mut_ptr(&mut self) -> *mut T;
+}
+
+
+pub struct SliceBase2d<'a, T> {
     data: T,
     width: usize,
     pitch: usize,
     height: usize,
+    phantom_data: core::marker::PhantomData<&'a T>
 }
 
-impl<T> SliceBase2d<T> {
+impl<T> SliceBase2d<'_, T> {
     pub const fn width(&self) -> usize {
         self.width
     }
@@ -35,6 +47,10 @@ impl<T> SliceBase2d<T> {
         self.pitch
     }
 
+    pub const fn buf_len(&self) -> usize {
+        self.pitch * self.height
+    }
+
     pub fn index_asserted(&self, (x,y): (usize, usize)) -> usize {
         debug_assert!(x < self.width, "Access out of bounds: width={}, x={}", self.width, x);
         debug_assert!(y < self.height, "Access out of bounds: height={}, y={}", self.height, y);
@@ -43,30 +59,18 @@ impl<T> SliceBase2d<T> {
 }
 
 
-pub type Slice2d<'a, T> = SliceBase2d<&'a[T]>;
+pub type Slice2d<'a, T> = SliceBase2d<'a, *const T>;
 
-pub type MutSlice2d<'a, T> = SliceBase2d<&'a mut [T]>;
-
-// pub struct Slice2d<'a, T> {
-//     data: &'a [T],
-//     width: usize,
-//     pitch: usize,
-//     height: usize,
-// }
-
+pub type MutSlice2d<'a, T> = SliceBase2d<'a, *mut T>;
 
 impl<T> Slice2d<'_, T> {
 
-    pub const fn buf_len(&self) -> usize {
-        self.data.len()
-    }
-
     pub const fn as_ptr(&self) -> *const T {
-        self.data.as_ptr()
+        self.data
     }
 
-    pub const fn buf(&self) -> &[T] {
-        self.data
+    pub fn buf(&self) -> &[T] {
+        unsafe { core::slice::from_raw_parts(self.data, self.buf_len()) }
     }
 
     pub fn get<I: Slice2dIndex<Self>>(&self, index2d: I) -> Option<&I::Output> {
@@ -79,24 +83,20 @@ impl<T> Slice2d<'_, T> {
 }
 
 impl<T> MutSlice2d<'_, T> {
-    pub fn buf_len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn buf(&self) -> &[T] {
+    pub const fn as_ptr(&self) -> *const T {
         self.data
-    }
-
-    pub fn buf_mut(&mut self) -> &mut [T] {
-        self.data
-    }
-
-    pub fn as_ptr(&self) -> *const T {
-        self.data.as_ptr()
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut T {
-        self.data.as_mut_ptr()
+        self.data
+    }
+
+    pub fn buf(&self) -> &[T] {
+        unsafe { core::slice::from_raw_parts(self.data, self.buf_len()) }
+    }
+
+    pub fn buf_mut(&mut self) -> &mut [T] {
+        unsafe { core::slice::from_raw_parts_mut(self.data, self.buf_len()) }
     }
 
     pub fn get<I: MutSlice2dIndex<Self>>(&self, index2d: I) -> Option<&I::Output> {
@@ -118,12 +118,12 @@ impl<T> MutSlice2d<'_, T> {
 
 
 pub unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, width: usize, pitch: usize, height: usize) -> MutSlice2d<'a, T> {
-    MutSlice2d { data: core::slice::from_raw_parts_mut(data, height * pitch), width, pitch, height }
+    MutSlice2d { data, width, pitch, height, phantom_data: core::marker::PhantomData{} }
 }
 
 
 pub unsafe fn from_raw_parts<'a, T>(data: *const T, width: usize, pitch: usize, height: usize) -> Slice2d<'a, T> {
-    Slice2d { data: core::slice::from_raw_parts(data, height * pitch), width, pitch, height }
+    Slice2d { data, width, pitch, height, phantom_data: core::marker::PhantomData{} }
 }
 
 impl<'a, T, I> Index<I> for Slice2d<'a, T> where I: Slice2dIndex<Slice2d<'a, T>> {
