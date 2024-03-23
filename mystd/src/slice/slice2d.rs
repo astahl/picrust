@@ -1,95 +1,11 @@
-use core::{ops::{Index, IndexMut, RangeBounds}, usize};
+use core::{ops::{Index, IndexMut}, usize};
+
+
+use self::traits::{DebugSlice2dTrait, MutSlice2dIndex, Slice2dIndex, Slice2dTrait};
+use self::traits::MutSlice2dTrait;
 
 pub mod iter;
-
-pub unsafe trait Slice2dIndex<T: ?Sized>{
-    type Output: ?Sized;
-
-    fn get(self, slice2d: &T) -> Option<&Self::Output>;
-    unsafe fn get_unchecked(self, slice2d: *const T) -> *const Self::Output;
-    fn index(self, slice2d: &T) -> &Self::Output;
-}
-
-pub unsafe trait MutSlice2dIndex<T: ?Sized> : Slice2dIndex<T> {
-    fn get_mut(self, slice2d: &mut T) -> Option<&mut Self::Output>;
-    unsafe fn get_unchecked_mut(self, slice2d: *mut T) -> *mut Self::Output;
-    fn index_mut(self, slice2d: &mut T) -> &mut Self::Output;
-}
-
-pub trait Slice2dTrait {
-    type Element;
-
-    fn as_ptr(&self) -> *const Self::Element;
-    fn width(&self) -> usize;
-    fn height(&self) -> usize;
-    fn pitch(&self) -> usize;
-    
-    fn is_empty(&self) -> bool {
-        self.width() == 0 || self.height() == 0
-    }
-
-    fn buf_len(&self) -> usize {
-        self.pitch() * self.width()
-    }
-
-    fn buf_slice(&self) -> &[Self::Element] {
-        unsafe { core::slice::from_raw_parts(self.as_ptr(), self.buf_len())}
-    }
-
-    fn index_asserted(&self, (x,y): (usize, usize)) -> usize {
-        debug_assert!(x < self.width(), "Access out of bounds: width={}, x={}", self.width(), x);
-        debug_assert!(y < self.height(), "Access out of bounds: height={}, y={}", self.height(), y);
-        x + self.pitch() * y
-    }
-
-    fn rows(&self) -> iter::RowIter<Self::Element> {
-        iter::RowIter::new(self.as_ptr(), self.width(), self.pitch(), self.height())
-    }
-
-    fn row_unchecked(&self, row_idx: usize) -> &[Self::Element] {
-        unsafe { core::slice::from_raw_parts(self.as_ptr().wrapping_add(row_idx * self.pitch()), self.width())}
-    }
-
-    fn col(&self, col_idx: usize) -> iter::ColIter<Self::Element> {
-        if col_idx < self.width() {
-            iter::ColIter::new(self.as_ptr().wrapping_add(col_idx), self.pitch(), self.height())
-        } else {
-            iter::ColIter::new(self.as_ptr(), 0, 0)
-        }
-    }
-
-    fn as_slice2d(&self) -> Slice2d<Self::Element> {
-        unsafe { Slice2d::from_raw_parts(self.as_ptr(), self.width(), self.pitch(), self.height())}
-    }
-}
-
-pub trait MutSlice2dTrait: Slice2dTrait {
-    fn as_mut_ptr(&mut self) -> *mut Self::Element;
-
-    fn buf_mut_slice(&mut self) -> &mut [Self::Element] {
-        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.buf_len())}
-    }
-
-    fn rows_mut(&mut self) -> iter::RowIterMut<Self::Element> {
-        iter::RowIterMut::new(self.as_mut_ptr(), self.width(), self.pitch(), self.height())
-    }
-
-    fn row_mut_unchecked(&mut self, row_idx: usize) -> &mut [Self::Element] {
-        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr().wrapping_add(row_idx * self.pitch()), self.width())}
-    }
-
-    fn col_mut(&mut self, col_idx: usize) -> iter::ColIterMut<Self::Element> {
-        if col_idx < self.width() {
-            iter::ColIterMut::new(self.as_mut_ptr().wrapping_add(col_idx), self.pitch(), self.height())
-        } else {
-            iter::ColIterMut::new(self.as_mut_ptr(), 0, 0)
-        }
-    }
-
-    fn as_mut_slice2d(&mut self) -> MutSlice2d<Self::Element> {
-        unsafe { MutSlice2d::from_raw_parts(self.as_mut_ptr(), self.width(), self.pitch(), self.height())}
-    }
-}
+pub mod traits;
 
 
 pub struct Slice2d<'a, T> {
@@ -108,7 +24,7 @@ pub struct MutSlice2d<'a, T> {
     phantom_data: core::marker::PhantomData<&'a T>
 }
 
-impl<T> Slice2dTrait for Slice2d<'_, T> {
+impl<T> traits::Slice2dTrait for Slice2d<'_, T> {
     type Element = T;
     
     #[inline]
@@ -132,7 +48,7 @@ impl<T> Slice2dTrait for Slice2d<'_, T> {
     }
 }
 
-fn range_to_offset_len<R: core::ops::RangeBounds<usize>>(range: R, mut bound: (usize, usize)) -> (usize, usize) {
+pub fn range_to_offset_len<R: core::ops::RangeBounds<usize>>(range: R, mut bound: (usize, usize)) -> (usize, usize) {
     match range.start_bound() {
         core::ops::Bound::Included(first) => bound.0 = *first,
         core::ops::Bound::Excluded(start) => bound.0 = *start + 1,
@@ -195,7 +111,7 @@ impl<T> Slice2d<'_, T> {
 
     pub fn sub_slice2d<R: core::ops::RangeBounds<usize>, S: core::ops::RangeBounds<usize>>(&self, (col_range, line_range): (R, S)) -> Slice2d<T> {
         let (x, width) = range_to_offset_len(col_range, (0, self.width));
-        let (y, height) = range_to_offset_len(line_range, (0, self.width));
+        let (y, height) = range_to_offset_len(line_range, (0, self.height));
         unsafe {
             let data = self.get_unchecked((x,y)) as *const T;
             Slice2d::from_raw_parts(data, width, self.pitch, height)
@@ -267,7 +183,7 @@ impl<T> MutSlice2d<'_, T> {
     }
 }
 
-impl<T> Slice2dTrait for MutSlice2d<'_, T> {
+impl<T> traits::Slice2dTrait for MutSlice2d<'_, T> {
     type Element = T;
 
     #[inline]
@@ -291,12 +207,27 @@ impl<T> Slice2dTrait for MutSlice2d<'_, T> {
     }
 }
 
-impl<T> MutSlice2dTrait for MutSlice2d<'_, T> {
+impl<T> traits::MutSlice2dTrait for MutSlice2d<'_, T> {
     #[inline]
     fn as_mut_ptr(&mut self) -> *mut Self::Element {
         self.data
     }
 }
+
+impl<T: core::fmt::Debug> traits::DebugSlice2dTrait for Slice2d<'_, T> {}
+impl<T: core::fmt::Debug> core::fmt::Debug for Slice2d<'_, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.fmt_debug(f)
+    }
+}
+
+impl<T: core::fmt::Debug> traits::DebugSlice2dTrait for MutSlice2d<'_, T> {}
+impl<T: core::fmt::Debug> core::fmt::Debug for MutSlice2d<'_, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.fmt_debug(f)
+    }
+}
+
 
 pub unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, width: usize, pitch: usize, height: usize) -> MutSlice2d<'a, T> {
     MutSlice2d { data, width, pitch, height, phantom_data: core::marker::PhantomData{} }
@@ -403,44 +334,15 @@ unsafe impl<'a, T> MutSlice2dIndex<MutSlice2d<'a, T>> for (usize, usize) {
 }
 
 
-impl<T: PartialEq, R: Slice2dTrait<Element=T>> core::cmp::PartialEq<R> for Slice2d<'_, T> {
+impl<T: PartialEq, R: traits::Slice2dTrait<Element=T>> core::cmp::PartialEq<R> for Slice2d<'_, T> {
     fn eq(&self, other: &R) -> bool {
         self.rows().zip(other.rows()).all(|(l,r)| l.eq(r))
     }
 }
 
-impl<T: PartialEq, R: Slice2dTrait<Element=T>> core::cmp::PartialEq<R> for MutSlice2d<'_, T> {
+impl<T: PartialEq, R: traits::Slice2dTrait<Element=T>> core::cmp::PartialEq<R> for MutSlice2d<'_, T> {
     fn eq(&self, other: &R) -> bool {
         self.rows().zip(other.rows()).all(|(l,r)| l.eq(r))
-    }
-}
-
-
-impl<T: core::fmt::Debug> core::fmt::Debug for Slice2d<'_, T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if f.alternate() {
-            let mut w = &mut f.debug_list(); 
-            for r in self.rows() {
-                w = w.entry(&format_args!("{:?}", r));
-            }
-            w.finish()
-        } else {
-            f.debug_list().entries(self.rows()).finish()
-        }
-    }
-}
-
-impl<T: core::fmt::Debug> core::fmt::Debug for MutSlice2d<'_, T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if f.alternate() {
-            let mut w = &mut f.debug_list(); 
-            for r in self.rows() {
-                w = w.entry(&format_args!("{:?}", r));
-            }
-            w.finish()
-        } else {
-            f.debug_list().entries(self.rows()).finish()
-        }
     }
 }
 

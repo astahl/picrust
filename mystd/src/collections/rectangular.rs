@@ -1,6 +1,5 @@
-use core::{ops::Index, ptr::{slice_from_raw_parts, slice_from_raw_parts_mut}};
 
-use crate::slice::slice2d::{from_raw_parts_mut, MutSlice2d, MutSlice2dTrait, Slice2d, Slice2dTrait};
+use crate::slice::slice2d::traits::{self, DebugSlice2dTrait, MutSlice2dTrait, Slice2dTrait};
 
 use super::Sliceable;
 
@@ -21,18 +20,18 @@ pub struct Rectangular<T, S: Sliceable<T>, const W: usize, const P: usize, const
     _phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: core::fmt::Debug, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> core::fmt::Debug for Rectangular<T, S, W, P, H> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if f.alternate() {
-            let mut w = &mut f.debug_list(); 
-            for r in self.rows() {
+impl<T, S, const W: usize, const P: usize, const H: usize> traits::DebugSlice2dTrait for Rectangular<T, S, W, P, H>
+where 
+    T: core::fmt::Debug, 
+    S: Sliceable<T>{}
 
-                w = w.entry(&format_args!("{:?}", r));
-            }
-            w.finish()
-        } else {
-            f.debug_list().entries(self.rows()).finish()
-        }
+impl<T, S, const W: usize, const P: usize, const H: usize> core::fmt::Debug 
+for Rectangular<T, S, W, P, H> 
+where 
+    T: core::fmt::Debug, 
+    S: Sliceable<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.fmt_debug(f)
     }
 }
 
@@ -147,7 +146,7 @@ macro_rules! arr2d {
 
 #[cfg(test)]
 mod tests {
-    use crate::{collections::ring::RingArray, slice::slice2d::Slice2dTrait};
+    use crate::{collections::ring::RingArray, slice::slice2d::traits::Slice2dTrait};
 
     use super::*;
 
