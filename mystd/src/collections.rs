@@ -10,30 +10,36 @@ pub trait Sliceable<T> {
     fn as_mut_slice(&mut self) -> &mut [T];
 }
 impl<T, const N: usize> Sliceable<T> for [T; N] {
-    fn as_slice(&self) -> &[T] {
-        self.as_slice()
-    }
-
-    fn as_mut_slice(&mut self) -> &mut [T] {
-        self.as_mut_slice()
-    }
-}
-impl<T> Sliceable<T> for [T] {
+    #[inline]
     fn as_slice(&self) -> &[T] {
         self.as_ref()
     }
-
+    #[inline]
     fn as_mut_slice(&mut self) -> &mut [T] {
         self.as_mut()
     }
 }
-impl<T> Sliceable<T> for &mut [T] {
+
+impl<T> Sliceable<T> for [T] {
+    #[inline]
     fn as_slice(&self) -> &[T] {
-        self.as_slice()
+        self.as_ref()
+    }
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self.as_mut()
+    }
+}
+
+impl<T> Sliceable<T> for &mut [T] {
+    #[inline]
+    fn as_slice(&self) -> &[T] {
+        self.as_ref()
     }
 
+    #[inline]
     fn as_mut_slice(&mut self) -> &mut [T] {
-        self.as_mut_slice()
+        self.as_mut()
     }
 }
 

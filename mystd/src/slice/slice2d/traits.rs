@@ -137,3 +137,13 @@ where
         }
     }
 }
+
+pub trait PartialEqSlice2dTrait<R: Slice2dTrait> : Slice2dTrait + core::cmp::PartialEq<R>
+    where Self::Element: core::cmp::PartialEq<R::Element>
+{
+    fn cmp_eq(&self, other: &R) -> bool {
+        self.width() == other.width() &&
+        self.height() == other.height() &&
+        self.rows().zip(other.rows()).all(|(l,r)| l == r)
+    }
+}

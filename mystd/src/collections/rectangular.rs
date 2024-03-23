@@ -4,38 +4,16 @@ use crate::slice::slice2d::traits::{self, DebugSlice2dTrait, MutSlice2dTrait, Sl
 use super::Sliceable;
 
 
-impl<T, const M: usize, const N: usize> Sliceable<T> for [[T; M]; N] {
-    fn as_slice(&self) -> &[T] {
-        unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), M * N) }
-    }
-
-    fn as_mut_slice(&mut self) -> &mut [T] {
-        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr().cast(), M * N) }
-    }
-}
-
-
-pub struct Rectangular<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> {
+pub struct Rectangular<T, S, const W: usize, const P: usize, const H: usize> 
+where S: Sliceable<T> {
     data: S,
     _phantom: core::marker::PhantomData<T>,
 }
 
-impl<T, S, const W: usize, const P: usize, const H: usize> traits::DebugSlice2dTrait for Rectangular<T, S, W, P, H>
-where 
-    T: core::fmt::Debug, 
-    S: Sliceable<T>{}
 
-impl<T, S, const W: usize, const P: usize, const H: usize> core::fmt::Debug 
-for Rectangular<T, S, W, P, H> 
-where 
-    T: core::fmt::Debug, 
-    S: Sliceable<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.fmt_debug(f)
-    }
-}
-
-impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> Rectangular<T, S, W, P, H> {
+impl<T, S, const W: usize, const P: usize, const H: usize> 
+Rectangular<T, S, W, P, H> 
+where S: Sliceable<T> {
     pub fn adapting(buffer: S) -> Self {
         Self {
             data: buffer,
@@ -69,7 +47,8 @@ impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> Rectang
 }
 
 
-impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> Slice2dTrait for Rectangular<T, S, W, P, H> {
+impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> Slice2dTrait 
+for Rectangular<T, S, W, P, H> {
     type Element = T;
 
     #[inline]
@@ -93,34 +72,64 @@ impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> Slice2d
     }
 }
 
-impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> MutSlice2dTrait for Rectangular<T, S, W, P, H> {
+impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> MutSlice2dTrait 
+for Rectangular<T, S, W, P, H> {
     fn as_mut_ptr(&mut self) -> *mut Self::Element {
         self.data.as_mut_slice().as_mut_ptr()
     }
 }
 
 
-// impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize, I: Index2d> core::ops::Index<I> for Rectangular<T,S,W,P,H> {
-//     type Output = T;
 
-//     fn index(&self, index: I) -> &Self::Output {
-//         let x = index.x();
-//         let y = index.y();
-//         assert!(x < W, "2D Index x={x} out of bounds, width is {W}");
-//         assert!(y < H, "2D Index y={y} out of bounds, height is {H}");
-//         unsafe { self.get_unchecked(x, y) }
-//     }
-// }
+impl<T, S, const W: usize, const P: usize, const H: usize> traits::DebugSlice2dTrait 
+for Rectangular<T, S, W, P, H>
+where 
+    T: core::fmt::Debug, 
+    S: Sliceable<T>
+{}
 
-// impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize, I: Index2d> core::ops::IndexMut<I> for Rectangular<T,S,W,P,H> {
-//     fn index_mut(&mut self, index: I) -> &mut Self::Output {
-//         let x = index.x();
-//         let y = index.y();
-//         assert!(x < W, "2D Index x={x} out of bounds, width is {W}");
-//         assert!(y < H, "2D Index y={y} out of bounds, height is {H}");
-//         unsafe { self.get_unchecked_mut(x, y) }
-//     }
-// }
+impl<T, S, const W: usize, const P: usize, const H: usize> core::fmt::Debug 
+for Rectangular<T, S, W, P, H> 
+where 
+    T: core::fmt::Debug, 
+    S: Sliceable<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.fmt_debug(f)
+    }
+}
+
+impl<R, T, S, const W: usize, const P: usize, const H: usize> traits::PartialEqSlice2dTrait<R> 
+for Rectangular<T, S, W, P, H>
+where 
+    R: Slice2dTrait,
+    T: PartialEq<R::Element>,
+    S: Sliceable<T>
+{}
+
+impl<R, T, S, const W: usize, const P: usize, const H: usize> core::cmp::PartialEq<R> 
+for Rectangular<T, S, W, P, H>
+where 
+    R: Slice2dTrait,
+    T: PartialEq<R::Element>,
+    S: Sliceable<T>
+{
+    fn eq(&self, other: &R) -> bool {
+        use traits::PartialEqSlice2dTrait;
+        self.cmp_eq(other)
+    }
+}
+
+
+impl<T, const M: usize, const N: usize> Sliceable<T> for [[T; M]; N] {
+    fn as_slice(&self) -> &[T] {
+        unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), M * N) }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr().cast(), M * N) }
+    }
+}
+
 
 pub type RectangularArray<T, const W: usize, const H: usize> = Rectangular<T, [[T; W]; H], W, W, H>;
 

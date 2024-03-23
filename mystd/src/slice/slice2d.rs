@@ -1,11 +1,12 @@
 use core::{ops::{Index, IndexMut}, usize};
 
 
-use self::traits::{DebugSlice2dTrait, MutSlice2dIndex, Slice2dIndex, Slice2dTrait};
+use self::traits::{DebugSlice2dTrait, MutSlice2dIndex, PartialEqSlice2dTrait, Slice2dIndex, Slice2dTrait};
 use self::traits::MutSlice2dTrait;
 
 pub mod iter;
 pub mod traits;
+
 
 
 pub struct Slice2d<'a, T> {
@@ -228,6 +229,38 @@ impl<T: core::fmt::Debug> core::fmt::Debug for MutSlice2d<'_, T> {
     }
 }
 
+impl<T, R> traits::PartialEqSlice2dTrait<R> for Slice2d<'_, T> 
+    where 
+        R: Slice2dTrait,
+        T: PartialEq<R::Element> 
+{
+}
+
+impl<T, R> core::cmp::PartialEq<R> for Slice2d<'_, T>
+where 
+        R: Slice2dTrait,
+        T: PartialEq<R::Element> {
+    fn eq(&self, other: &R) -> bool {
+        self.cmp_eq(other)
+    }
+}
+
+impl<T, R> traits::PartialEqSlice2dTrait<R> for MutSlice2d<'_, T> 
+    where 
+        R: Slice2dTrait,
+        T: PartialEq<R::Element> 
+{
+}
+
+impl<T, R> core::cmp::PartialEq<R> for MutSlice2d<'_, T>
+where 
+        R: Slice2dTrait,
+        T: PartialEq<R::Element> {
+    fn eq(&self, other: &R) -> bool {
+        self.cmp_eq(other)
+    }
+}
+
 
 pub unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, width: usize, pitch: usize, height: usize) -> MutSlice2d<'a, T> {
     MutSlice2d { data, width, pitch, height, phantom_data: core::marker::PhantomData{} }
@@ -330,19 +363,6 @@ unsafe impl<'a, T> MutSlice2dIndex<MutSlice2d<'a, T>> for (usize, usize) {
     fn index_mut<'b>(self, slice2d: &'b mut MutSlice2d<'a, T>) -> &'b mut Self::Output {
         let index = self.0 + (*slice2d).pitch * self.1;
         &mut (*slice2d).buf_mut_slice()[index]
-    }
-}
-
-
-impl<T: PartialEq, R: traits::Slice2dTrait<Element=T>> core::cmp::PartialEq<R> for Slice2d<'_, T> {
-    fn eq(&self, other: &R) -> bool {
-        self.rows().zip(other.rows()).all(|(l,r)| l.eq(r))
-    }
-}
-
-impl<T: PartialEq, R: traits::Slice2dTrait<Element=T>> core::cmp::PartialEq<R> for MutSlice2d<'_, T> {
-    fn eq(&self, other: &R) -> bool {
-        self.rows().zip(other.rows()).all(|(l,r)| l.eq(r))
     }
 }
 
