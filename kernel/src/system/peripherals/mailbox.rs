@@ -3,6 +3,7 @@ use core::ptr::read_volatile;
 use crate::exception::ExceptionSyndrome;
 use crate::peripherals::mmio;
 use crate::peripherals::mmio::MMIO;
+use crate::println_debug;
 
 use super::mmio::DynamicMmioField;
 
@@ -13,6 +14,16 @@ pub struct Mailbox<const BUFFER_SIZE: usize> {
     size: u32,
     req_res_code: ReqResCode,
     buffer: [u32; BUFFER_SIZE],
+}
+
+impl<const BUFFER_SIZE: usize> core::fmt::Debug for Mailbox<BUFFER_SIZE> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Mailbox")
+            .field("size", &self.size)
+            //.field("req_res_code", &self.req_res_code)
+            .field("buffer", &self.buffer)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -81,6 +92,8 @@ pub enum Tag {
     TestOnboardLedStatus = 0x00034041,
     SetOnboardLedStatus = 0x00038041,
 }
+
+pub const CHANNEL_PROPERTIES: u8 = 8;
 
 impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
     const MBOX_READ: MMIO<MBOX_BASE, 0x00> = MMIO();
@@ -200,6 +213,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         &'a mut self,
         channel: u8,
     ) -> Result<ResponseIterator<'a>, MailboxError> {
+
         // for (i, v) in self.buffer.iter().enumerate() {
         //     crate::peripherals::uart::Uart0::put_uint(i as u64);
         //     crate::peripherals::uart::Uart0::putc(b'>');
@@ -270,13 +284,14 @@ impl<'a> Response<'a> {
                 .align_offset(core::mem::align_of::<T>())
                 == 0
         );
-        debug_assert!(self.value_buffer.len() >= (core::mem::size_of::<T>() + 3) >> 2);
+        let message_size = (core::mem::size_of::<T>() + 3) >> 2;
+        debug_assert!(self.value_buffer.len() >= message_size, "Response buffer length {}, but required response type size is {}", self.value_buffer.len(), message_size);
         if self
             .value_buffer
             .as_ptr()
             .align_offset(core::mem::align_of::<T>())
             == 0
-            && self.value_buffer.len() >= (core::mem::size_of::<T>() + 3) >> 2
+            && self.value_buffer.len() >= message_size
         {
             Some(unsafe { self.value_as_unchecked() })
         } else {

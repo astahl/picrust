@@ -1,4 +1,6 @@
 use core::fmt::DebugStruct;
+use crate::{peripherals::mailbox, println_debug, system::peripherals::mailbox::MailboxError};
+
 
 pub mod color {
     pub const WHITE: u32 = 0xff_ff_ff_ff;
@@ -30,6 +32,51 @@ mod tags {
     pub const FB_GET_VIRTUAL_OFFSET: u32 = 0x00040009;
     pub const FB_TEST_VIRTUAL_OFFSET: u32 = 0x00044009;
     pub const FB_SET_VIRTUAL_OFFSET: u32 = 0x00048009;
+
+    /// # [Get palette](https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface#get-palette)
+    /// * Tag: 0x0004000b
+    /// * Request:
+    ///     * Length: 0
+    /// * Response:
+    ///     * Length: 1024
+    ///     * Value:
+    ///         * u32...: RGBA palette values (index 0 to 255)
+    pub const FB_GET_PALETTE: u32 = 0x0004000b;
+
+    /// # [Test palette](https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface#test-palette)
+    /// * Tag: 0x0004400b
+    /// * Request:
+    ///     * Length: 24..1032
+    ///     * Value:
+    ///         * u32: offset: first palette index to set (0-255)
+    ///         * u32: length: number of palette entries to set (1-256)
+    ///         * u32...: RGBA palette values (offset to offset+length-1)
+    /// * Response:
+    ///     * Length: 4
+    ///     * Value:
+    ///         * u32: 0=valid, 1=invalid
+    /// 
+    /// Response is the same as the request (or modified), to indicate if this 
+    /// configuration is supported (in combination with all the other settings). 
+    /// Does not modify the current hardware or frame buffer state.
+    pub const FB_TEST_PALETTE: u32 = 0x0004400b;
+
+    /// # [Set palette](https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface#set-palette)
+    /// * Tag: 0x0004800b
+    /// * Request:
+    ///     * Length: 24..1032
+    ///     * Value:
+    ///         * u32: offset: first palette index to set (0-255)
+    ///         * u32: length: number of palette entries to set (1-256)
+    ///         * u32...: RGBA palette values (offset to offset+length-1)
+    /// * Response:
+    ///     * Length: 4
+    ///     * Value:
+    ///         * u32: 0=valid, 1=invalid
+    /// 
+    /// The response may not be the same as the request so it must be checked. 
+    /// Palette changes should not be partially applied.
+    pub const FB_SET_PALETTE: u32 = 0x0004800b;
 
     #[repr(u32)]
     #[derive(Copy, Clone)]
@@ -71,15 +118,19 @@ mod tags {
 
     pub type Palette = [u32; 256];
 
+    
+    #[derive(Debug)]
+    #[repr(C)]
     pub struct PaletteChange<const N: usize> {
-        offset: u32,
-        length: u32,
-        values: [u32; N],
+        pub offset: u32,
+        pub length: u32,
+        pub values: [u32; N],
     }
 }
 
 pub struct Framebuffer {
-    ptr: *mut u8,
+    pub ptr: *mut u8,
+    pub base_address: u32,
     pub size_bytes: u32,
     pub width_px: u32,
     pub height_px: u32,
@@ -88,10 +139,10 @@ pub struct Framebuffer {
 }
 
 impl Framebuffer {
-    pub fn new(width: u32, height: u32) -> Option<Self> {
-        use crate::peripherals::mailbox::*;
+    pub fn new(width: u32, height: u32, bpp: u32) -> Option<Self> {
+        
         use tags::*;
-        let mut mailbox = Mailbox::<64>::new();
+        let mut mailbox = mailbox::Mailbox::<64>::new();
         let dimensions = FbDimensions {
             width_px: width,
             height_px: height,
@@ -107,7 +158,7 @@ impl Framebuffer {
             .push_request_zeroed(tags::FB_SET_VIRTUAL_OFFSET, 8)
             .ok()?;
 
-        *mailbox.push_request(tags::FB_SET_DEPTH, 4).ok()? = 32_u32;
+        *mailbox.push_request(tags::FB_SET_DEPTH, 4).ok()? = bpp;
         *mailbox.push_request(tags::FB_SET_PIXEL_ORDER, 4).ok()? = PixelOrder::Bgr;
 
         // alignment to page size
@@ -115,7 +166,7 @@ impl Framebuffer {
 
         mailbox.push_request_empty(tags::FB_GET_PITCH, 4).ok()?;
 
-        let mut responses = mailbox.submit_messages(8).ok()?;
+        let mut responses = mailbox.submit_messages(mailbox::CHANNEL_PROPERTIES).ok()?;
         let (width_px, height_px) = *responses.next()?.ok()?.try_value_as()?;
         // FbSetVirtualDimensions {..},
         let _ = responses.next();
@@ -125,19 +176,51 @@ impl Framebuffer {
         // FbSetPixelOrder { .. },
         responses.next();
 
-        let (base_address_bytes, size_bytes): (u32, u32) =
+        let (base_address, size_bytes): (u32, u32) =
             *responses.next()?.ok()?.try_value_as()?;
         let pitch_bytes: u32 = *responses.next()?.ok()?.try_value_as()?;
 
-        let ptr: *mut u8 = (0x3FFFFFFF & base_address_bytes) as *mut u8;
+        let ptr: *mut u8 = (0x3FFFFFFF & base_address) as *mut u8;
         Some(Self {
             width_px,
             height_px,
             ptr,
+            base_address,
             size_bytes,
             bits_per_pixel,
             pitch_bytes,
         })
+    }
+
+    ///
+    /// returns true if palette update was valid
+    pub fn set_palette<const N: usize>(offset: u8, colors: &[u32;N]) -> Result<bool, MailboxError> {
+        let mut mailbox = mailbox::Mailbox::<280>::new();
+        let request = tags::PaletteChange::<N>{
+            offset: offset as u32,
+            length: N as u32,
+            values: *colors,
+        };
+        *mailbox
+            .push_request(tags::FB_SET_PALETTE, core::mem::size_of::<tags::PaletteChange::<N>>() as u32)? = request;
+        if let Some(response) = mailbox.submit_messages(mailbox::CHANNEL_PROPERTIES)?.next() {
+            let res: u32 = *response?.try_value_as().expect("Response should contain a single u32 value");
+            Ok(res == 0)
+        } else {
+            Err(MailboxError::Unknown)
+        }
+    }
+
+    pub fn get_palette() -> [u32; 256] {
+        let mut mailbox = mailbox::Mailbox::<280>::new();
+        mailbox.push_request_empty(tags::FB_GET_PALETTE, 256 * 4).expect("Mailbox should work");
+        let response = mailbox
+            .submit_messages(mailbox::CHANNEL_PROPERTIES)
+            .expect("Mailbox should work")
+            .next()
+            .expect("Should have at least one response")
+            .expect("response should not be an error");
+        *response.try_value_as().expect("The palette should fit exactly into array of 256 u32")
     }
 
     pub fn set_pixel_a8b8g8r8(&self, x: u32, y: u32, value: u32) {

@@ -1,5 +1,11 @@
 pub struct ByteValue(pub u64);
 
+impl core::fmt::Debug for ByteValue {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        <Self as core::fmt::Display>::fmt(&self, f)
+    }
+}
+
 impl ByteValue {
     pub const fn from_bytes(bytes: u64) -> Self {
         Self(bytes)

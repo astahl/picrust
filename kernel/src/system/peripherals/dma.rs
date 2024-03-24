@@ -1,9 +1,10 @@
 use core::{
-    num::{NonZeroU16, NonZeroU32},
-    usize,
+    num::{NonZeroU16, NonZeroU32}, ops::Sub, usize
 };
 
-use mystd::bit_field;
+use mystd::{bit_field, byte_value::ByteValue, slice::slice2d::{traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d, Slice2d}};
+
+use crate::{print_log, println_debug, println_log};
 
 use super::mmio::PeripheralRegister;
 
@@ -138,7 +139,7 @@ impl core::fmt::Debug for DmaControlBlock {
 impl DmaControlBlock {
     const MAX_LENGTH: u32 = (1 << 30) - 1;
 
-    pub fn linear_copy(
+    pub fn new_linear_copy(
         transfer_information: DmaTransferInformation,
         source_address: u32,
         destination_address: u32,
@@ -157,6 +158,26 @@ impl DmaControlBlock {
             reserved: [0, 0],
         }
     }
+
+    pub fn new_2d_copy(transfer_information: DmaTransferInformation,
+        source_address: u32,
+        destination_address: u32,
+        y_count: u16,
+        x_byte_len: NonZeroU16,
+        src_stride: i16,
+        dst_stride: i16,
+        next_control_block_address: u32) -> Self {
+            debug_assert!(transfer_information._2d_mode().is_set(), "Must set 2d mode in transfer information");
+            Self {
+                transfer_information,
+                source_address,
+                destination_address,
+                transfer_length: DmaTransferLength::new_2d(x_byte_len, y_count),
+                stride: Dma2dStride::new(src_stride, dst_stride),
+                next_control_block_address,
+                reserved: [0,0],
+            }
+        }
 }
 
 bit_field!(pub DmaTransferInformation(u32) {
@@ -210,6 +231,7 @@ impl DmaTransferInformation {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Dma2dStride {
     pub source: i16,
@@ -236,12 +258,14 @@ impl Dma2dStride {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 struct DmaTransferLength2d {
     x_byte_len: NonZeroU16,
     y_count: u16,
 }
 
+#[repr(C)]
 pub union DmaTransferLength {
     linear: NonZeroU32,
     two_d: DmaTransferLength2d,
@@ -286,3 +310,44 @@ bit_field!(pub DmaDebug(u32) {
     1 => fifo_error,
     0 => read_last_not_set_error
 });
+
+
+pub fn one_shot_copy<T>(src: &[T], dst: *mut T)
+{
+    let control_block = DmaControlBlock::new_linear_copy(DmaTransferInformation::wide_copy(), src.as_ptr() as u32, dst as u32, (src.len() * core::mem::size_of::<T>()) as u32, 0);
+    DMA_0.set_control_block_address(core::ptr::addr_of!(control_block) as u32);
+    let status = DMA_0
+        .control_and_status()
+        .active().set();
+    DMA_0.set_control_and_status(status);
+    while DMA_0.control_block_address() != 0 {
+        core::hint::spin_loop();
+    }
+}
+
+pub fn one_shot_copy2d<T>(src: &Slice2d<T>, dst: &mut MutSlice2d<T>)
+{
+    assert_eq!(src.width(), dst.width(), "Source and destination must be the same width");
+    assert_eq!(src.height(), dst.height(), "Source and destination must be the same height");
+    assert!(src.height() <= (u16::MAX >> 2) as usize, "Height is too tall for one-shot copy");
+    let x_byte_len = src.width() * core::mem::size_of::<T>();
+    assert!(x_byte_len <= u16::MAX as usize, "Width is too wide for one-shot copy");
+    assert!(x_byte_len > 0, "Width must not be zero");
+    let x_byte_len = unsafe { NonZeroU16::new_unchecked(x_byte_len as u16) };
+
+    let src_stride: i16 = ((src.pitch() as i16) - (src.width() as i16)) * core::mem::size_of::<T>() as i16;
+    let dst_stride: i16 = ((dst.pitch() as i16) - (dst.width() as i16)) * core::mem::size_of::<T>() as i16;
+    let y_count = src.height() as u16;
+    let dst_address = dst.as_mut_ptr() as u32;
+    let src_address = src.as_ptr() as u32;
+    let ti = DmaTransferInformation::wide_copy()._2d_mode().set();
+    let control_block = DmaControlBlock::new_2d_copy(ti, src_address, dst_address, y_count, x_byte_len, src_stride, dst_stride, 0);
+    DMA_0.set_control_block_address(core::ptr::addr_of!(control_block) as u32);
+    let status = DMA_0
+        .control_and_status()
+        .active().set();
+    DMA_0.set_control_and_status(status);
+    while DMA_0.control_block_address() != 0 {
+        core::hint::spin_loop();
+    }
+}

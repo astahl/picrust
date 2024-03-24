@@ -1,6 +1,7 @@
 pub mod arm_core;
 pub mod hal;
 pub mod peripherals;
+pub mod screen;
 
 use core::{
     cell::RefCell,
@@ -88,7 +89,10 @@ fn init_serial_uart() {
 #[macro_export]
 macro_rules! println_log {
     ($($param:tt)*) => {
-        writeln!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
+        {
+            use mystd::io::Write;
+            writeln!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
+        }
     };
 }
 

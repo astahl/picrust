@@ -93,7 +93,7 @@ impl<'a, T> Iterator for RowIter<'a, T> {
 }
 
 impl<'a, T> Iterator for ColIterMut<'a, T> {
-    type Item = &'a T;
+    type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.start == self.end {
@@ -104,17 +104,17 @@ impl<'a, T> Iterator for ColIterMut<'a, T> {
                 None
             } else {
                 self.height -= 1;
-                Some(unsafe { &*self.start })
+                Some(unsafe { &mut *self.start })
             }
         }
     }
 }
 
 impl<'a, T> Iterator for RowIterMut<'a, T> {
-    type Item = &'a [T];
+    type Item = &'a mut [T];
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.start_iter.next().map(|s| unsafe { core::slice::from_raw_parts(s, self.width) })
+        self.start_iter.next().map(|s| unsafe { core::slice::from_raw_parts_mut(s, self.width) })
     }
 }
 
@@ -150,7 +150,7 @@ impl<'a, T> DoubleEndedIterator for ColIterMut<'a, T> {
                 None
             } else {
                 self.height -= 1;
-                Some(unsafe { &*self.end })
+                Some(unsafe { &mut *self.end })
             }
         }
     }
@@ -158,7 +158,7 @@ impl<'a, T> DoubleEndedIterator for ColIterMut<'a, T> {
 
 impl<'a, T> DoubleEndedIterator for RowIterMut<'a, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.start_iter.next_back().map(|s| unsafe { core::slice::from_raw_parts(s, self.width) })
+        self.start_iter.next_back().map(|s| unsafe { core::slice::from_raw_parts_mut(s, self.width) })
     }
 }
 

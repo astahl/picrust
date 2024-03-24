@@ -118,6 +118,40 @@ pub trait MutSlice2dTrait: Slice2dTrait {
             MutSlice2d::from_raw_parts(ptr, width, self.pitch(), height)
         }
     }
+
+    fn fill(&mut self, value: Self::Element) where Self::Element: Copy {
+        if self.width() == 1 && self.height() == 1 {
+            unsafe {
+                *self.as_mut_ptr() = value; 
+            }
+        } else if self.width() == self.pitch() {
+            self.buf_mut_slice().fill(value);
+        } else {
+            for dst in self.rows_mut() {
+                dst.fill(value)
+            }
+        }
+    }
+
+    fn copy_from_slice2d<S: Slice2dTrait<Element = Self::Element>>(&mut self, other: &S) where Self::Element: Copy {
+        assert_eq!(self.width(), other.width());
+        assert_eq!(self.height(), other.height());
+        if self.width() == 1 && self.height() == 1 {
+            unsafe {
+                *self.as_mut_ptr() = *other.as_ptr(); 
+            }
+        } else if self.width() == self.pitch() && other.width() == other.pitch() {
+            self.buf_mut_slice().copy_from_slice(other.buf_slice());
+        } else {
+            for (dst, src) in self.rows_mut().zip(other.rows()) {
+                dst.copy_from_slice(src)
+            }
+        }
+    }
+
+    unsafe fn copy_buf_unchecked<S: Slice2dTrait<Element = Self::Element>>(&mut self, other: &S) where Self::Element: Copy {
+        core::ptr::copy_nonoverlapping(other.as_ptr(), self.as_mut_ptr(), self.buf_len())
+    }
 }
 
 pub trait DebugSlice2dTrait : Slice2dTrait + core::fmt::Debug

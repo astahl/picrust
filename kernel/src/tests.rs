@@ -1,5 +1,9 @@
+use core::slice;
+
+use crate::println_debug;
 use crate::println_log;
 use crate::system::hal::clocks;
+use crate::system::hal::framebuffer::Framebuffer;
 use crate::system::peripherals;
 use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
@@ -10,8 +14,13 @@ use crate::system::peripherals::usb::DwHciCoreInterrupts;
 
 use super::hal;
 use super::system;
+use mystd::arr2d;
+use mystd::byte_value::ByteValue;
 use mystd::collections;
+use mystd::collections::rectangular::RectangularArray;
 use mystd::io::Write;
+use mystd::slice::slice2d::traits::MutSlice2dTrait;
+use mystd::slice::slice2d::traits::Slice2dTrait;
 
 pub fn run() {
     println_log!("{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM));
@@ -29,6 +38,7 @@ pub fn run() {
     let fb = hal::framebuffer::Framebuffer::new(
         resolution.horizontal as u32,
         resolution.vertical as u32,
+        32,
     )
     .unwrap();
 
@@ -155,8 +165,42 @@ pub fn run() {
     // }
 }
 
+pub fn test_screen() {
+    use super::system::screen::*;
+    let ptr = ByteValue::from_mibi(128).as_bytes() as *mut u8;
+    let slice = unsafe {
+        slice::from_raw_parts_mut(ptr, ByteValue::from_mibi(16).as_bytes() as usize)
+    };
+    let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, 320, 200).expect("Creating the screen should work");
+    let mut palette = Framebuffer::get_palette();
+    palette[1] = 0xff_ff_ff_ff;
+    assert!(Framebuffer::set_palette(0, &palette).expect("Palette update should work"));
+    for j in 1..=200 {
+        for i in 0..320 {
+            screen.draw(|buf| {
+                //buf.fill(0xff_00_00_ff);
+                buf[(i,200 - j)] = 1;
+            });
+            screen.present();
+        }
+    }
+}
+
 pub fn test_dma() {
     use super::peripherals::dma;
+
+    let src = [0x0f_u8;1024];
+    let mut dst = [0x00_u8;1024];
+    dma::one_shot_copy(&src, dst.as_mut_ptr());
+    assert_eq!(src, dst);
+
+    let src_buf = arr2d!([1_u32,1,1,1,0,0], [1,1,1,1,0,0], [1,1,1,1,0,0], [1,1,1,1,0,0], [0,0,0,0,0,0]);
+    let mut dst_buf: RectangularArray<u32, 8, 8> = RectangularArray::new();
+    let mut dst = dst_buf.sub_mut_slice2d((1..5, 1..5));
+    let src = src_buf.sub_slice2d((..4, ..4));
+    dma::one_shot_copy2d(&src, &mut dst);
+    assert_eq!(src, dst);
+
     // let mut status = dma::Dma0::control_status();
     // status.set_reset();
     // writeln!(str_buffer, "{:?}", dma::Dma0::control_status()).unwrap();
@@ -179,7 +223,7 @@ pub fn test_dma() {
         let length = 8 * 1024 * 1024;
         core::slice::from_raw_parts_mut(src, length).fill(0x55);
         let transfer_information = dma::DmaTransferInformation::wide_copy();
-        let cb = DmaControlBlock::linear_copy(
+        let cb = DmaControlBlock::new_linear_copy(
             transfer_information,
             src as u32,
             dest as u32,
