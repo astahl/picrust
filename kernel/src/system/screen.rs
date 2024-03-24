@@ -1,6 +1,6 @@
 use mystd::{byte_value::ByteValue, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
 
-use super::hal::framebuffer::Framebuffer;
+use super::hal::framebuffer::{self, Framebuffer};
 
 #[derive(Debug)]
 pub enum ScreenError {
@@ -13,7 +13,7 @@ pub enum ScreenError {
 pub struct Screen<'a, T> where T: Copy {
     vram: MutSlice2d<'a, T>,
     framebuffer: MutSlice2d<'a, T>,
-    framebuffer_vc_address: u32,
+    framebuffer_vc: MutSlice2d<'a, T>,
 }
 
 impl<'a, T> Screen<'a, T> where T: Copy {
@@ -35,8 +35,11 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         let framebuffer = unsafe {
             slice2d::MutSlice2d::from_raw_parts(fb.ptr.cast(), fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
         };
+        let framebuffer_vc = unsafe {
+            slice2d::MutSlice2d::from_raw_parts(fb.base_address as *mut T, fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
+        };
 
-        Ok(Screen { vram, framebuffer, framebuffer_vc_address: fb.base_address })
+        Ok(Screen { vram, framebuffer, framebuffer_vc })
     }
 
     pub fn draw<F: Fn(&mut MutSlice2d<'a, T>)> (&mut self, f: F) {
@@ -44,12 +47,11 @@ impl<'a, T> Screen<'a, T> where T: Copy {
     }
 
     pub fn present(&mut self) {
-        crate::peripherals::dma::one_shot_copy2d(&self.vram.as_slice2d(), &mut self.framebuffer);
-        //crate::peripherals::dma::one_shot_copy(self.vram.buf_slice(), self.framebuffer_vc_address as *mut T);
-        //crate::peripherals::dma::one_shot_copy(self.vram.buf_slice(), self.framebuffer.as_mut_ptr());
         // swap buffers and copy the formerly current buffer to the framebuffer
+        crate::peripherals::dma::one_shot_copy2d(&self.vram.as_slice2d(), &mut self.framebuffer);
+        //crate::peripherals::dma::one_shot_copy(self.vram.buf_slice(), self.framebuffer.buf_mut_slice());
         unsafe {
-            //self.framebuffer.copy_buf_unchecked(&self.vram);
+        //    self.framebuffer_vc.copy_buf_unchecked(&self.vram);
         }
     }
 }

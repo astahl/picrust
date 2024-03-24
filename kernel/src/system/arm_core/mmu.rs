@@ -351,14 +351,14 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         .wxn().clear()
     //    .i().clear()    // no i-cache
         .i().set()
-    //    .sa0().clear()  // no stack pointer alignment check at EL0
-        .sa0().set()
-    //    .sa().clear()   // no stack pointer alignment check at EL1
-        .sa().set()
+        .sa0().clear()  // no stack pointer alignment check at EL0
+    //    .sa0().set()
+        .sa().clear()   // no stack pointer alignment check at EL1
+    //    .sa().set()
     //    .c().clear()    // no d-cache
         .c().set()
-    //    .a().clear()    // no data alignment check
-        .a().set()
+        .a().clear()    // no data alignment check
+    //    .a().set()
         .m().set()      // enable MMU
         ;
 

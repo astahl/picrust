@@ -171,15 +171,15 @@ pub fn test_screen() {
     let slice = unsafe {
         slice::from_raw_parts_mut(ptr, ByteValue::from_mibi(16).as_bytes() as usize)
     };
-    let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, 320, 200).expect("Creating the screen should work");
+    let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, 640, 480).expect("Creating the screen should work");
     let mut palette = Framebuffer::get_palette();
     palette[1] = 0xff_ff_ff_ff;
     assert!(Framebuffer::set_palette(0, &palette).expect("Palette update should work"));
-    for j in 1..=200 {
-        for i in 0..320 {
+    for j in 1..=480 {
+        for i in 0..640 {
             screen.draw(|buf| {
-                //buf.fill(0xff_00_00_ff);
-                buf[(i,200 - j)] = 1;
+                //buf.fill(0);
+                buf[(i,480 - j)] = 1;
             });
             screen.present();
         }
@@ -191,7 +191,7 @@ pub fn test_dma() {
 
     let src = [0x0f_u8;1024];
     let mut dst = [0x00_u8;1024];
-    dma::one_shot_copy(&src, dst.as_mut_ptr());
+    dma::one_shot_copy(&src, &mut dst);
     assert_eq!(src, dst);
 
     let src_buf = arr2d!([1_u32,1,1,1,0,0], [1,1,1,1,0,0], [1,1,1,1,0,0], [1,1,1,1,0,0], [0,0,0,0,0,0]);

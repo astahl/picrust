@@ -138,6 +138,7 @@ impl core::fmt::Debug for DmaControlBlock {
 
 impl DmaControlBlock {
     const MAX_LENGTH: u32 = (1 << 30) - 1;
+    const MAX_HEIGHT: u16 = (1 << 14) - 1;
 
     pub fn new_linear_copy(
         transfer_information: DmaTransferInformation,
@@ -146,7 +147,7 @@ impl DmaControlBlock {
         length: u32,
         next_control_block: u32,
     ) -> Self {
-        assert!(length <= Self::MAX_LENGTH);
+        assert!(length <= Self::MAX_LENGTH, "Can't copy more than {} bytes in one transfer, length={}", Self::MAX_LENGTH, length);
         assert_eq!(0, length % 4);
         Self {
             transfer_information,
@@ -167,6 +168,7 @@ impl DmaControlBlock {
         src_stride: i16,
         dst_stride: i16,
         next_control_block_address: u32) -> Self {
+            assert!(y_count <= Self::MAX_HEIGHT, "Can't copy more than {} lines in one transfer, y_count={}", Self::MAX_HEIGHT, y_count);
             debug_assert!(transfer_information._2d_mode().is_set(), "Must set 2d mode in transfer information");
             Self {
                 transfer_information,
@@ -312,15 +314,18 @@ bit_field!(pub DmaDebug(u32) {
 });
 
 
-pub fn one_shot_copy<T>(src: &[T], dst: *mut T)
+pub fn one_shot_copy<T>(src: &[T], dst: &mut [T])
 {
-    let control_block = DmaControlBlock::new_linear_copy(DmaTransferInformation::wide_copy(), src.as_ptr() as u32, dst as u32, (src.len() * core::mem::size_of::<T>()) as u32, 0);
-    DMA_0.set_control_block_address(core::ptr::addr_of!(control_block) as u32);
+    assert_eq!(src.len(), dst.len(), "Source and destination must be the same length");
+    let control_block = DmaControlBlock::new_linear_copy(DmaTransferInformation::wide_copy(), src.as_ptr() as u32, dst.as_mut_ptr() as u32, (src.len() * core::mem::size_of::<T>()) as u32, 0);
+    let control_block_address = core::ptr::addr_of!(control_block) as u32;
+    DMA_0.set_control_block_address(control_block_address);
     let status = DMA_0
         .control_and_status()
+        .wait_for_outstanding_writes().set()
         .active().set();
     DMA_0.set_control_and_status(status);
-    while DMA_0.control_block_address() != 0 {
+    while DMA_0.control_block_address() == control_block_address {
         core::hint::spin_loop();
     }
 }
@@ -342,12 +347,20 @@ pub fn one_shot_copy2d<T>(src: &Slice2d<T>, dst: &mut MutSlice2d<T>)
     let src_address = src.as_ptr() as u32;
     let ti = DmaTransferInformation::wide_copy()._2d_mode().set();
     let control_block = DmaControlBlock::new_2d_copy(ti, src_address, dst_address, y_count, x_byte_len, src_stride, dst_stride, 0);
-    DMA_0.set_control_block_address(core::ptr::addr_of!(control_block) as u32);
+    let control_block_address = core::ptr::addr_of!(control_block) as u32;
+    
+    while DMA_0.control_block_address() != 0 {
+        core::hint::spin_loop();
+    }
+
+    DMA_0.set_control_block_address(control_block_address);
     let status = DMA_0
         .control_and_status()
+        .wait_for_outstanding_writes().set()
         .active().set();
     DMA_0.set_control_and_status(status);
-    while DMA_0.control_block_address() != 0 {
+
+    while DMA_0.control_block_address() == control_block_address {
         core::hint::spin_loop();
     }
 }
