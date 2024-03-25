@@ -18,14 +18,21 @@ use system::peripherals::uart;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
-    let mut uart = uart::UART_0;
-    let _ = writeln!(uart, "Doki Doki! {info}");
-    hal::led::status_blink_twice(100);
-    monitor::Monitor::new(uart, uart).run();
+
+    if cfg!(feature = "serial_uart") {
+        let mut uart = uart::UART_0;
+        let _ = writeln!(uart, "Doki Doki! {info}");
+        monitor::Monitor::new(uart, uart).run();
+    } else {
+        loop {
+            hal::led::status_blink_twice(100);
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
+    hal::led::status_blink_twice(100);
     system::initialize();
     //tests::test_dma();
     tests::test_screen();

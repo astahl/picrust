@@ -11,7 +11,8 @@ pub enum ScreenError {
 }
 
 pub struct Screen<'a, T> where T: Copy {
-    vram: MutSlice2d<'a, T>,
+    front: MutSlice2d<'a, T>,
+    back: MutSlice2d<'a, T>,
     framebuffer: MutSlice2d<'a, T>,
     framebuffer_vc: MutSlice2d<'a, T>,
 }
@@ -27,7 +28,7 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         if memory.len() < required_size_bytes {
             return Err(ScreenError::NotEnoughMemory { required: ByteValue::from_bytes(required_size_bytes as u64) })
         }
-        let vram = slice2d::MutSlice2d::with_mut_slice(memory, width, width, height).ok_or(ScreenError::CouldNotCreateVRam)?.0;
+        let vram = slice2d::MutSlice2d::with_mut_slice(memory, width, width, height * 2).ok_or(ScreenError::CouldNotCreateVRam)?.0;
 
         // todo create framebuffer
         let fb = Framebuffer::new(width as u32, height as u32, Self::BYTES_PER_PIXEL as u32 * 8).ok_or(ScreenError::CouldNotCreateFramebuffer)?;
@@ -38,21 +39,22 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         let framebuffer_vc = unsafe {
             slice2d::MutSlice2d::from_raw_parts(fb.base_address as *mut T, fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
         };
-
-        Ok(Screen { vram, framebuffer, framebuffer_vc })
+        let (front, back) = vram.split_at_line_mut(height);
+        Ok(Screen { front, back, framebuffer, framebuffer_vc })
     }
 
     pub fn draw<F: Fn(&mut MutSlice2d<'a, T>)> (&mut self, f: F) {
-        f(&mut self.vram)
+        f(&mut self.back)
     }
 
     pub fn present(&mut self) {
-        // swap buffers and copy the formerly current buffer to the framebuffer
-        crate::peripherals::dma::one_shot_copy2d(&self.vram.as_slice2d(), &mut self.framebuffer);
-        //crate::peripherals::dma::one_shot_copy(self.vram.buf_slice(), self.framebuffer.buf_mut_slice());
+        // swap buffers and copy the formerly back buffer to the framebuffer
         unsafe {
-        //    self.framebuffer_vc.copy_buf_unchecked(&self.vram);
+            self.front.swap_with_slice2d_unchecked(&mut self.back);
+            self.framebuffer.copy_buf_unchecked(&self.front);
         }
+        //crate::peripherals::dma::dma_copy_slice2d(&self.vram.as_slice2d(), &mut self.framebuffer);
+        //crate::peripherals::dma::one_shot_copy(self.vram.buf_slice(), self.framebuffer.buf_mut_slice());
     }
 }
 

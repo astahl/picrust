@@ -75,20 +75,13 @@ fn init_serial_uart() {
     let mut writer = locked_out.borrow_mut();
     uart::UART_0.init();
     writer.replace_first(uart::UART_0);
-    //writer.replace_second(uart::UART_0);
-    use mystd::io::Write;
-    writeln!(
-        writer,
-        "OUT_WRITER at {:#?}",
-        hal::info::MemoryBlock::from(&OUT_WRITER)
-    )
-    .expect("WE JUST INITIALISED IT SHEESH");
-    // writer.replace_second(uart::UART_0);
+    
 }
 
 #[macro_export]
 macro_rules! println_log {
     ($($param:tt)*) => {
+        if core::cfg!(any(feature = "serial_uart", feature = "framebuffer"))
         {
             use mystd::io::Write;
             writeln!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
@@ -99,6 +92,7 @@ macro_rules! println_log {
 #[macro_export]
 macro_rules! print_log {
     ($($param:tt)*) => {
+        if core::cfg!(any(feature = "serial_uart", feature = "framebuffer"))
         {
             use mystd::io::Write;
             write!($crate::system::std_out(), $($param)*).expect("write to stdout should always work!");
@@ -110,6 +104,7 @@ macro_rules! print_log {
 #[macro_export]
 macro_rules! println_debug {
     ($($param:tt)*) => {
+        if core::cfg!(any(feature = "serial_uart", feature = "framebuffer"))
         {
             use mystd::io::Write;
             writeln!($crate::system::std_out(), $($param)*).expect("debug write should always work!");
@@ -124,10 +119,12 @@ macro_rules! println_debug {
 }
 
 pub fn initialize() {
-    // let core_id = system::get_core_num();
-    // if core_id == 0 {
     if cfg!(feature = "serial_uart") {
         init_serial_uart();
+        crate::println_debug!(
+            "OUT_WRITER at {:#?}",
+            hal::info::MemoryBlock::from(&OUT_WRITER)
+        );
         print_log!("System Initialize...");
         // print a memory map
         println_debug!("{:#?}", hal::info::MemoryMap());

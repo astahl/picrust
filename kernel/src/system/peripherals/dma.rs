@@ -41,41 +41,131 @@ type NextControlBlockAddressReg = PeripheralRegister<0x1c, u32>;
 type DebugReg = PeripheralRegister<0x20, DmaDebug>;
 
 impl DmaStandardChannel {
-    pub fn control_and_status(&self) -> DmaControlAndStatus {
-        ControlAndStatusReg::at(self.0).read()
+    pub fn control_and_status(&self) -> ControlAndStatusReg {
+        ControlAndStatusReg::at(self.0)
     }
 
-    pub fn set_control_and_status(&self, value: DmaControlAndStatus) {
-        ControlAndStatusReg::at(self.0).write(value)
+    pub fn control_block_address(&self) -> ControlBlockAddressReg {
+        ControlBlockAddressReg::at(self.0)
     }
 
-    pub fn set_control_block_address(&self, value: u32) {
-        ControlBlockAddressReg::at(self.0).write(value)
+    /// # DMA Next Control Block Address
+    /// The value loaded into this register can be overwritten so that the linked list of Control Block data structures can be altered. However it is only safe to do this when the DMA is paused. 
+    /// The address must be 256-bit aligned and so the bottom 5 bits cannot be set and will read back as zero.
+    #[doc(alias = "NEXTCONBK")]
+    pub fn next_control_block_address(&self) -> NextControlBlockAddressReg {
+        NextControlBlockAddressReg::at(self.0)
     }
 
-    pub fn control_block_address(&self) -> u32 {
-        ControlBlockAddressReg::at(self.0).read()
+    pub fn transfer_length(&self) -> TransferLengthReg {
+        TransferLengthReg::at(self.0)
     }
 
-    pub fn debug(&self) -> DmaDebug {
-        DebugReg::at(self.0).read()
+    /// DMA Debug register
+    pub fn debug(&self) -> DebugReg {
+        DebugReg::at(self.0)
+    }
+
+    pub fn start_transfer(&self, control_block: &DmaControlBlock) {
+        self.control_block_address().write(core::ptr::addr_of!(*control_block) as u32);
+        self
+            .control_and_status()
+            .update(|status| 
+                status
+                    //.wait_for_outstanding_writes().set()
+                    .active().set()
+                );
+    }
+
+    pub fn wait_for_idle(&self) {
+        while self.control_and_status().read().active().is_set() {
+            core::hint::spin_loop();
+        }
+    }
+
+    pub fn wait_for_end(&self) {
+        while self.control_and_status().read().end().is_clear() {
+            core::hint::spin_loop();
+        }
+        self.control_and_status().update(|cs| cs.end().set());
     }
 }
 
 bit_field!(pub DmaControlAndStatus(u32) {
+    /// # Activate the DMA (RW)
+    /// This bit enables the DMA. The DMA will start if this bit is set and the CB_ADDR is non zero. The DMA transfer can be paused and resumed by clearing, then setting it again.
+    /// This bit is automatically cleared at the end of the complete DMA transfer, i.e. after a NEXTCONBK = 0x0000_0000 has been loaded.
     0 => active,
+    
+    /// # DMA End Flag (W1C)
+    /// Set when the transfer described by the current Control Block is complete. Write 1 to clear.
     1 => end,
+
+    /// # Interrupt Status (W1C)
+    /// This is set when the transfer for the CB ends and INTEN is set to 1. Once set it must be manually cleared down, even if the next CB has INTEN = 0.
+    /// Write 1 to clear.
+    //#[doc(alias = "INT")]
     2 => interrupted,
+
+    /// # DREQ State (RO)
+    /// Indicates the state of the selected DREQ (Data Request) signal, i.e. the DREQ selected by the PERMAP field of the transfer info.
+    /// * 1 = Requesting data. This will only be valid once the DMA has started and the PERMAP field has been loaded from the CB. It will remain valid, indicating the selected DREQ signal, until a new CB is loaded. If PERMAP is set to zero (un-paced transfer) then this bit will read back as 1.
+    /// * 0 = No data request.
     3 => data_request,
+
+    /// # DMA Paused State (RO)
+    /// Indicates if the DMA is currently paused and not transferring data. This will occur if: the active bit has been cleared, the DMA is currently executing wait cycles, the debug_pause signal has been set by the debug block, or the number of outstanding writes has exceeded the max count. 
+    /// * 1 = DMA channel is paused.
+    /// * 0 = DMA channel is running.
     4 => paused,
+
+    /// # DMA Paused by DREQ State
+    /// Indicates if the DMA is currently paused and not transferring data due to the DREQ being inactive. 
+    /// * 1 = DMA channel is paused.
+    /// * 0 = DMA channel is running.
     5 => paused_by_data_request_state,
+
+    /// # DMA is Waiting for the Last Write to be Received (RO)
+    /// Indicates if the DMA is currently waiting for any outstanding writes to be received, and is not transferring data.
+    /// * 1 = DMA channel is waiting.
     6 => waiting_for_outstanding_writes,
+
+    /// # DMA Error (RO)
+    /// Indicates if the DMA has detected an error. The error flags are available in the debug register, and have to be cleared by writing to that register.
+    /// * 1 = DMA channel has an error flag set.
+    /// * 0 = DMA channel is OK.
     8 => error,
+
+    /// # AXI Priority Level (RW)
+    /// Sets the priority of normal AXI bus transactions. This value is used when the panic bit of the selected peripheral channel is zero.
+    /// * Zero is the lowest priority.
     16:19 => axi_priority_level,
+
+    /// # AXI Panic Priority Level (RW)
+    /// Sets the priority of panicking AXI bus transactions. This value is used when the panic bit of the selected peripheral channel is 1.
+    /// * Zero is the lowest priority.
     20:23 => axi_panic_priority_level,
+
+    /// # Wait for outstanding writes (RW)
+    /// When set to 1, the DMA will keep a tally of the AXI writes going out and the write responses coming in. 
+    /// At the very end of the current DMA transfer it will wait until the last outstanding write response has 
+    /// been received before indicating the transfer is complete. Whilst waiting it will load the next CB 
+    /// address (but will not fetch the CB), clear the active flag (if the next CB address = zero), and it will 
+    /// defer setting the END flag or the INT flag until the last outstanding write response has been received.
+    /// In this mode, the DMA will pause if it has more than 13 outstanding writes at any one time.
     28 => wait_for_outstanding_writes,
+
+    /// # Disable debug pause signal (RW)
+    /// When set to 1, the DMA will not stop when the debug pause signal is asserted.
     29 => disable_debug_signal,
+
+    /// # Abort DMA (W1SC)
+    /// Writing a 1 to this bit will abort the current DMA CB. The DMA will load the next CB and attempt to continue. 
+    /// The bit cannot be read, and will self clear.
     30 => abort,
+
+    /// # DMA Channel Reset (W1SC)
+    /// Writing a 1 to this bit will reset the DMA. The bit cannot be read, and will self clear.
     31 => reset
 });
 
@@ -145,7 +235,7 @@ impl DmaControlBlock {
         source_address: u32,
         destination_address: u32,
         length: u32,
-        next_control_block: u32,
+        next_control_block_address: u32,
     ) -> Self {
         assert!(length <= Self::MAX_LENGTH, "Can't copy more than {} bytes in one transfer, length={}", Self::MAX_LENGTH, length);
         assert_eq!(0, length % 4);
@@ -155,12 +245,13 @@ impl DmaControlBlock {
             destination_address,
             transfer_length: DmaTransferLength::new_linear(length.try_into().unwrap()),
             stride: Dma2dStride::none(),
-            next_control_block_address: next_control_block,
+            next_control_block_address,
             reserved: [0, 0],
         }
     }
 
-    pub fn new_2d_copy(transfer_information: DmaTransferInformation,
+    pub fn new_2d_copy(
+        transfer_information: DmaTransferInformation,
         source_address: u32,
         destination_address: u32,
         y_count: u16,
@@ -180,6 +271,41 @@ impl DmaControlBlock {
                 reserved: [0,0],
             }
         }
+    
+    pub fn copy_slice<T>(src: &[T], dst: &mut [T]) -> Self {
+        assert_eq!(src.len(), dst.len(), "Source and destination must be the same length");
+        Self::new_linear_copy(
+            DmaTransferInformation::wide_copy(), 
+            src.as_ptr() as u32, 
+            dst.as_mut_ptr() as u32, 
+            (src.len() * core::mem::size_of::<T>()) as u32, 
+            0)
+    }
+
+    pub fn copy_slice2d<T>(src: &Slice2d<T>, dst: &mut MutSlice2d<T>) -> Self {   
+        let src_stride: i16 = ((src.pitch() - src.width()) * core::mem::size_of::<T>()) as i16;
+        let dst_stride: i16 = ((dst.pitch() - dst.width()) * core::mem::size_of::<T>()) as i16;
+
+        if src_stride == 0 && dst_stride == 0 {
+            // if there is no stride to handle, we can just use the linear copy instead
+            return Self::copy_slice(src.buf_slice(), dst.buf_mut_slice())
+        }
+        assert_eq!(src.width(), dst.width(), "Source and destination must be the same width");
+        assert_eq!(src.height(), dst.height(), "Source and destination must be the same height");
+        assert!(src.height() <= (u16::MAX >> 2) as usize, "Height is too tall for one-shot copy");
+
+        let x_byte_len = src.width() * core::mem::size_of::<T>();
+        assert!(x_byte_len <= u16::MAX as usize, "Width is too wide for one-shot copy");
+
+        
+        Self::new_2d_copy(
+            DmaTransferInformation::wide_copy()._2d_mode().set(), 
+            src.as_ptr() as u32, 
+            dst.as_mut_ptr() as u32, 
+            src.height() as u16, 
+            NonZeroU16::new(x_byte_len as u16).expect("Width should not be zero"), 
+            src_stride, dst_stride, 0)
+    }
 }
 
 bit_field!(pub DmaTransferInformation(u32) {
@@ -314,53 +440,16 @@ bit_field!(pub DmaDebug(u32) {
 });
 
 
-pub fn one_shot_copy<T>(src: &[T], dst: &mut [T])
-{
-    assert_eq!(src.len(), dst.len(), "Source and destination must be the same length");
-    let control_block = DmaControlBlock::new_linear_copy(DmaTransferInformation::wide_copy(), src.as_ptr() as u32, dst.as_mut_ptr() as u32, (src.len() * core::mem::size_of::<T>()) as u32, 0);
-    let control_block_address = core::ptr::addr_of!(control_block) as u32;
-    DMA_0.set_control_block_address(control_block_address);
-    let status = DMA_0
-        .control_and_status()
-        .wait_for_outstanding_writes().set()
-        .active().set();
-    DMA_0.set_control_and_status(status);
-    while DMA_0.control_block_address() == control_block_address {
-        core::hint::spin_loop();
-    }
+pub fn dma_copy_slice<T>(src: &[T], dst: &mut [T]) {
+    let control_block = DmaControlBlock::copy_slice(src, dst);
+    
+    DMA_0.start_transfer(&control_block);
+    DMA_0.wait_for_end();
 }
 
-pub fn one_shot_copy2d<T>(src: &Slice2d<T>, dst: &mut MutSlice2d<T>)
-{
-    assert_eq!(src.width(), dst.width(), "Source and destination must be the same width");
-    assert_eq!(src.height(), dst.height(), "Source and destination must be the same height");
-    assert!(src.height() <= (u16::MAX >> 2) as usize, "Height is too tall for one-shot copy");
-    let x_byte_len = src.width() * core::mem::size_of::<T>();
-    assert!(x_byte_len <= u16::MAX as usize, "Width is too wide for one-shot copy");
-    assert!(x_byte_len > 0, "Width must not be zero");
-    let x_byte_len = unsafe { NonZeroU16::new_unchecked(x_byte_len as u16) };
+pub fn dma_copy_slice2d<T>(src: &Slice2d<T>, dst: &mut MutSlice2d<T>) {   
+    let control_block = DmaControlBlock::copy_slice2d(src, dst);
 
-    let src_stride: i16 = ((src.pitch() as i16) - (src.width() as i16)) * core::mem::size_of::<T>() as i16;
-    let dst_stride: i16 = ((dst.pitch() as i16) - (dst.width() as i16)) * core::mem::size_of::<T>() as i16;
-    let y_count = src.height() as u16;
-    let dst_address = dst.as_mut_ptr() as u32;
-    let src_address = src.as_ptr() as u32;
-    let ti = DmaTransferInformation::wide_copy()._2d_mode().set();
-    let control_block = DmaControlBlock::new_2d_copy(ti, src_address, dst_address, y_count, x_byte_len, src_stride, dst_stride, 0);
-    let control_block_address = core::ptr::addr_of!(control_block) as u32;
-    
-    while DMA_0.control_block_address() != 0 {
-        core::hint::spin_loop();
-    }
-
-    DMA_0.set_control_block_address(control_block_address);
-    let status = DMA_0
-        .control_and_status()
-        .wait_for_outstanding_writes().set()
-        .active().set();
-    DMA_0.set_control_and_status(status);
-
-    while DMA_0.control_block_address() == control_block_address {
-        core::hint::spin_loop();
-    }
+    DMA_0.start_transfer(&control_block);
+    DMA_0.wait_for_end();
 }

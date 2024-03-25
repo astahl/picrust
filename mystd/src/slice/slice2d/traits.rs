@@ -76,7 +76,9 @@ pub trait Slice2dTrait {
         }
     }
 
-
+    fn enumerate(&self) -> iter::Enumerate2d<Self::Element> {
+        iter::Enumerate2d::new(self.as_ptr(), self.width(), self.pitch(), self.height())
+    }
 }
 
 pub trait MutSlice2dTrait: Slice2dTrait {

@@ -4,7 +4,8 @@ SECTIONS
 {
 	. = 0x80000;
 	.text :	{ 
-		KEEP(*(.text.boot)) *(.text .text.* .gnu.linkonce.t*)	
+		KEEP(*(.text.boot))
+		*(.text .text.* .gnu.linkonce.t*)	
 	}
 	.rodata : ALIGN(0x1000) {	
 		*(.rodata* .gnu.linkonce.r*)

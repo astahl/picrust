@@ -178,11 +178,10 @@ pub fn test_screen() {
     for j in 1..=480 {
         for i in 0..640 {
             screen.draw(|buf| {
-                //buf.fill(0);
-                buf[(i,480 - j)] = 1;
+                buf[(i,480 - j)] = (i ^ j) as u8 & 1;
             });
-            screen.present();
         }
+        screen.present();
     }
 }
 
@@ -191,14 +190,14 @@ pub fn test_dma() {
 
     let src = [0x0f_u8;1024];
     let mut dst = [0x00_u8;1024];
-    dma::one_shot_copy(&src, &mut dst);
+    dma::dma_copy_slice(&src, &mut dst);
     assert_eq!(src, dst);
 
     let src_buf = arr2d!([1_u32,1,1,1,0,0], [1,1,1,1,0,0], [1,1,1,1,0,0], [1,1,1,1,0,0], [0,0,0,0,0,0]);
     let mut dst_buf: RectangularArray<u32, 8, 8> = RectangularArray::new();
     let mut dst = dst_buf.sub_mut_slice2d((1..5, 1..5));
     let src = src_buf.sub_slice2d((..4, ..4));
-    dma::one_shot_copy2d(&src, &mut dst);
+    dma::dma_copy_slice2d(&src, &mut dst);
     assert_eq!(src, dst);
 
     // let mut status = dma::Dma0::control_status();
@@ -233,13 +232,14 @@ pub fn test_dma() {
         println_log!("cb = {:#?}", &cb);
         control_block_ptr.write_volatile(cb);
 
-        DMA_0.set_control_block_address(control_block_ptr as u32);
+        DMA_0.control_block_address().write(control_block_ptr as u32);
 
         println_log!("Src = {:x}", src.read());
         println_log!("Dest = {:x}", dest.read());
-        println_log!("cb: {:x}", DMA_0.control_block_address());
-        let status = DMA_0
-            .control_and_status()
+        println_log!("cb: {:x}", DMA_0.control_block_address().read());
+        DMA_0
+            .control_and_status().update(|cs|
+                cs
             .active()
             .set()
             .axi_priority_level()
@@ -247,15 +247,13 @@ pub fn test_dma() {
             .axi_panic_priority_level()
             .set_value(DmaControlAndStatus::MAX_PRIORITY_LEVEL)
             .wait_for_outstanding_writes()
-            .set();
-        DMA_0.set_control_and_status(status);
-        while !DMA_0.control_and_status().end().is_set() {
-            println_log!("wait for transfer end");
-        }
-        println_log!("cb: {:x}", DMA_0.control_block_address());
+            .set());
+        
+        DMA_0.wait_for_end();
+        println_log!("cb: {:x}", DMA_0.control_block_address().read());
         println_log!("Dest = {:x}", dest.read());
-        println_log!("Ended? {:?}", DMA_0.control_and_status().end().is_set());
-        println_log!("dbg: {:#?}", DMA_0.debug());
+        println_log!("Ended? {:?}", DMA_0.control_and_status().read().end().is_set());
+        println_log!("dbg: {:#?}", DMA_0.debug().read());
     }
 }
 

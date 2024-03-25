@@ -182,6 +182,18 @@ impl<T> MutSlice2d<'_, T> {
             Self::from_raw_parts(self.data.wrapping_add(col_n), self.width - col_n, self.pitch, self.height)
         )}
     }
+
+    pub fn swap_with_slice2d(&mut self, other: &mut Self) {
+        assert_eq!(self.width, other.width);
+        assert_eq!(self.pitch, other.pitch);
+        assert_eq!(self.height, other.height);
+        unsafe { self.swap_with_slice2d_unchecked(other) }
+    }
+
+    /// width, pitch and height must be equal
+    pub unsafe fn swap_with_slice2d_unchecked(&mut self, other: &mut Self) {
+        core::mem::swap(&mut self.data, &mut other.data);
+    }
 }
 
 impl<T> traits::Slice2dTrait for MutSlice2d<'_, T> {

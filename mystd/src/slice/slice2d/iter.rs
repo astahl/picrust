@@ -24,6 +24,30 @@ pub struct RowIterMut<'a, T> {
     width: usize,
 }
 
+pub struct Enumerate2d<'a, T> {
+    start: *const T,
+    end: *const T,
+    position_start: (usize, usize),
+    position_end: (usize, usize),
+    height: usize,
+    pitch: usize,
+    width: usize,
+    stride: usize,
+    phantom_data: core::marker::PhantomData<&'a T>
+}
+
+pub struct EnumerateMut2d<'a, T> {
+    start: *mut T,
+    end: *mut T,
+    position_start: (usize, usize),
+    position_end: (usize, usize),
+    height: usize,
+    pitch: usize,
+    width: usize,
+    stride: usize,
+    phantom_data: core::marker::PhantomData<&'a T>
+}
+
 impl<'a, T> ColIter<'a, T> {
     pub fn new(base: *const T, pitch: usize, height: usize) -> Self {
         Self {
@@ -41,6 +65,22 @@ impl<'a, T> RowIter<'a, T> {
         Self {
             start_iter: ColIter::new(base, pitch, height),
             width
+        }
+    }
+}
+
+impl<'a, T> Enumerate2d<'a, T> {
+    pub fn new(base: *const T, width: usize, pitch: usize, height: usize) -> Self {
+        Self {
+            start: base.wrapping_sub(pitch - width),
+            end: base.wrapping_add(pitch * height),
+            position_start: (width - 1, usize::MAX),
+            position_end: (0, height),
+            width,
+            pitch,
+            height,
+            stride: (pitch - width),
+            phantom_data: core::marker::PhantomData,
         }
     }
 }
@@ -89,6 +129,30 @@ impl<'a, T> Iterator for RowIter<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.start_iter.next().map(|s| unsafe { core::slice::from_raw_parts(s, self.width) })
+    }
+}
+
+impl<'a, T> Iterator for Enumerate2d<'a, T> {
+    type Item = ((usize, usize), &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        } else {
+            self.position_start.0 += 1;
+            if self.position_start.0 == self.width {
+                self.position_start.1 = self.position_start.1.wrapping_add(1);
+                self.position_start.0 = 0;
+                self.start = self.start.wrapping_add(self.stride);
+            } else {
+                self.start = self.start.wrapping_add(1);
+            }
+            if self.start == self.end {
+                None
+            } else {
+                Some((self.position_start, unsafe { &*self.start }))
+            }
+        }
     }
 }
 
