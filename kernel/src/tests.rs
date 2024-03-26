@@ -172,16 +172,22 @@ pub fn test_screen() {
         slice::from_raw_parts_mut(ptr, ByteValue::from_mibi(16).as_bytes() as usize)
     };
     let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, 640, 480).expect("Creating the screen should work");
-    let mut palette = Framebuffer::get_palette();
-    palette[1] = 0xff_ff_ff_ff;
-    assert!(Framebuffer::set_palette(0, &palette).expect("Palette update should work"));
-    for j in 1..=480 {
-        for i in 0..640 {
+    let palette = Screen::<u8>::PALETTE_CGA;
+    screen.set_palette(&palette);
+    for i in 0..palette.len() {
+        for col in 0..=640 {
+            
             screen.draw(|buf| {
-                buf[(i,480 - j)] = (i ^ j) as u8 & 1;
+                let (mut left, mut right) = buf.split_at_col_mut(col);
+                left.fill(((i + 1) % palette.len()) as u8);
+                right.fill(i as u8)
+                // for ((i,j), element) in fillme.enumerate_mut() {
+                //     *element = (i ^ j) as u8 & 1;
+                // }
             });
+            
+            screen.present(SwapStrategy::Swap, PresentStrategy::Memcopy);
         }
-        screen.present();
     }
 }
 

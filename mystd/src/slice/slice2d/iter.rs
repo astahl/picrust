@@ -36,7 +36,7 @@ pub struct Enumerate2d<'a, T> {
     phantom_data: core::marker::PhantomData<&'a T>
 }
 
-pub struct EnumerateMut2d<'a, T> {
+pub struct Enumerate2dMut<'a, T> {
     start: *mut T,
     end: *mut T,
     position_start: (usize, usize),
@@ -102,6 +102,22 @@ impl<'a, T> RowIterMut<'a, T> {
         Self {
             start_iter: ColIterMut::new(base, pitch, height),
             width
+        }
+    }
+}
+
+impl<'a, T> Enumerate2dMut<'a, T> {
+    pub fn new(base: *mut T, width: usize, pitch: usize, height: usize) -> Self {
+        Self {
+            start: base.wrapping_sub(pitch - width),
+            end: base.wrapping_add(pitch * height),
+            position_start: (width - 1, usize::MAX),
+            position_end: (0, height),
+            width,
+            pitch,
+            height,
+            stride: (pitch - width),
+            phantom_data: core::marker::PhantomData,
         }
     }
 }
@@ -179,6 +195,30 @@ impl<'a, T> Iterator for RowIterMut<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.start_iter.next().map(|s| unsafe { core::slice::from_raw_parts_mut(s, self.width) })
+    }
+}
+
+impl<'a, T> Iterator for Enumerate2dMut<'a, T> {
+    type Item = ((usize, usize), &'a mut T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        } else {
+            self.position_start.0 += 1;
+            if self.position_start.0 == self.width {
+                self.position_start.1 = self.position_start.1.wrapping_add(1);
+                self.position_start.0 = 0;
+                self.start = self.start.wrapping_add(self.stride);
+            } else {
+                self.start = self.start.wrapping_add(1);
+            }
+            if self.start == self.end {
+                None
+            } else {
+                Some((self.position_start, unsafe { &mut *self.start }))
+            }
+        }
     }
 }
 

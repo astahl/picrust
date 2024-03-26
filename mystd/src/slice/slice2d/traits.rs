@@ -30,7 +30,7 @@ pub trait Slice2dTrait {
     }
 
     fn buf_len(&self) -> usize {
-        self.pitch() * self.width()
+        self.pitch() * self.height()
     }
 
     fn buf_slice(&self) -> &[Self::Element] {
@@ -153,6 +153,10 @@ pub trait MutSlice2dTrait: Slice2dTrait {
 
     unsafe fn copy_buf_unchecked<S: Slice2dTrait<Element = Self::Element>>(&mut self, other: &S) where Self::Element: Copy {
         core::ptr::copy_nonoverlapping(other.as_ptr(), self.as_mut_ptr(), self.buf_len())
+    }
+
+    fn enumerate_mut(&mut self) -> iter::Enumerate2dMut<Self::Element> {
+        iter::Enumerate2dMut::new(self.as_mut_ptr(), self.width(), self.pitch(), self.height())
     }
 }
 

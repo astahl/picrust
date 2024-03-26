@@ -1,3 +1,5 @@
+use core::usize;
+
 use mystd::{byte_value::ByteValue, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
 
 use super::hal::framebuffer::{self, Framebuffer};
@@ -10,11 +12,24 @@ pub enum ScreenError {
     CouldNotCreateVRam,
 }
 
+pub enum SwapStrategy<T> {
+    SwapAndClear(T),
+    SwapAndCopy,
+    Swap
+}
+
+pub enum PresentStrategy {
+    Memcopy,
+    Dma,
+    Dma2d,
+}
+
+
 pub struct Screen<'a, T> where T: Copy {
     front: MutSlice2d<'a, T>,
     back: MutSlice2d<'a, T>,
-    framebuffer: MutSlice2d<'a, T>,
-    framebuffer_vc: MutSlice2d<'a, T>,
+    framebuffer: MutSlice2d<'a, T>
+    //framebuffer_vc: MutSlice2d<'a, T>,
 }
 
 impl<'a, T> Screen<'a, T> where T: Copy {
@@ -36,25 +51,66 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         let framebuffer = unsafe {
             slice2d::MutSlice2d::from_raw_parts(fb.ptr.cast(), fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
         };
-        let framebuffer_vc = unsafe {
-            slice2d::MutSlice2d::from_raw_parts(fb.base_address as *mut T, fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
-        };
+        // let framebuffer_vc = unsafe {
+        //     slice2d::MutSlice2d::from_raw_parts(fb.base_address as *mut T, fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
+        // };
         let (front, back) = vram.split_at_line_mut(height);
-        Ok(Screen { front, back, framebuffer, framebuffer_vc })
+        Ok(Screen { front, back, framebuffer,
+            // framebuffer_vc 
+            })
     }
 
     pub fn draw<F: Fn(&mut MutSlice2d<'a, T>)> (&mut self, f: F) {
         f(&mut self.back)
     }
 
-    pub fn present(&mut self) {
+    pub fn present(&mut self, swap: SwapStrategy<T>, present: PresentStrategy) {
         // swap buffers and copy the formerly back buffer to the framebuffer
-        unsafe {
-            self.front.swap_with_slice2d_unchecked(&mut self.back);
-            self.framebuffer.copy_buf_unchecked(&self.front);
+        unsafe { self.front.swap_with_slice2d_unchecked(&mut self.back); }
+        match present {
+            PresentStrategy::Memcopy => unsafe { self.framebuffer.copy_buf_unchecked(&self.front); },
+            PresentStrategy::Dma2d => crate::peripherals::dma::dma_copy_slice2d(&self.front.as_slice2d(), &mut self.framebuffer),
+            PresentStrategy::Dma => crate::peripherals::dma::dma_copy_slice(self.front.buf_slice(), self.framebuffer.buf_mut_slice()),
         }
-        //crate::peripherals::dma::dma_copy_slice2d(&self.vram.as_slice2d(), &mut self.framebuffer);
-        //crate::peripherals::dma::one_shot_copy(self.vram.buf_slice(), self.framebuffer.buf_mut_slice());
+        match swap {            
+            SwapStrategy::SwapAndClear(value) => self.back.fill(value),
+            SwapStrategy::SwapAndCopy => self.back.copy_from_slice2d(&self.front),
+            _ => {}
+        }
+        
+    }
+}
+
+impl<'a> Screen<'a, u8> {
+    pub const PALETTE_CGA: [u32; 16] = Self::palette_cga();
+
+    pub fn set_palette<const N: usize>(&mut self, colors: &[u32; N]) {
+        assert!(Framebuffer::set_palette(0, colors).expect("Palette update should work"));
+    }
+
+    pub fn get_palette(&self) -> [u32;256] {
+        Framebuffer::get_palette()
+    }
+
+    const fn palette_cga() -> [u32; 16] {
+        [
+            0xff_00_00_00,
+            0xff_00_00_aa,
+            0xff_00_aa_00,
+            0xff_00_aa_aa,
+            0xff_aa_00_00,
+            0xff_aa_00_aa,
+            0xff_aa_55_00,
+            0xff_aa_aa_aa,
+            0xff_55_55_55,
+            0xff_55_55_ff,
+            0xff_55_ff_55,
+            0xff_55_ff_ff,
+            0xff_ff_55_55,
+            0xff_ff_55_ff,
+            0xff_ff_ff_55,
+            0xff_ff_ff_ff,
+        ]
     }
 }
 

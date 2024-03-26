@@ -1,8 +1,7 @@
+use crate::slice::slice2d::{traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d};
+
 pub struct PixelCanvas<'a, T> {
-    pub width: usize,
-    pub height: usize,
-    pitch: usize,
-    data: &'a mut [T],
+    data: &'a mut MutSlice2d<'a, T>,
 }
 
 pub type PixelCanvasU8<'a> = PixelCanvas<'a, u8>;
@@ -16,74 +15,82 @@ pub enum CanvasAccessError {
     OverlappingMemoryRegions,
 }
 
-impl<'a, T> PixelCanvas<'a, T> {
-    pub fn with_slice(
-        width: usize,
-        height: usize,
-        pitch: usize,
-        slice: &'a mut [T],
-    ) -> Option<Self> {
-        let size = Self::required_size(height, pitch);
-        if size <= slice.len() {
-            unsafe { Some(Self::with_slice_unchecked(width, height, pitch, slice)) }
+pub enum BoundsStrategy {
+    Panic,
+    Fail,
+    Clip,
+    Mirror,
+    Repeat,
+}
+
+impl BoundsStrategy {
+    pub const fn test_signed(&self, upper_limit: usize, value: isize) -> Option<usize> {
+        let unsigned_value = value as usize;
+        if unsigned_value < upper_limit {
+            Some(value as usize)
         } else {
-            None
-        }
-    }
-
-    pub unsafe fn with_slice_unchecked(
-        width: usize,
-        height: usize,
-        pitch: usize,
-        slice: &'a mut [T],
-    ) -> Self {
-        let size = Self::required_size(height, pitch);
-        Self {
-            width,
-            height,
-            pitch,
-            data: slice.get_unchecked_mut(0..size),
-        }
-    }
-
-    pub unsafe fn from_raw_parts(width: usize, height: usize, pitch: usize, ptr: *mut T) -> Self {
-        Self {
-            width,
-            height,
-            pitch,
-            data: core::slice::from_raw_parts_mut(ptr, Self::required_size(height, pitch)),
-        }
-    }
-
-    pub fn copy_from(&mut self, other: &Self) -> Result<(), CanvasAccessError> {
-        if self.height < other.height {
-            Err(CanvasAccessError::OverflowY)
-        } else if self.pitch != other.pitch {
-            Err(CanvasAccessError::PitchMismatch)
-        } else if self
-            .data
-            .as_ptr_range()
-            .contains(&other.data.as_ptr_range().start)
-            || self
-                .data
-                .as_ptr_range()
-                .contains(&other.data.as_ptr_range().end)
-        {
-            Err(CanvasAccessError::OverlappingMemoryRegions)
-        } else {
-            unsafe {
-                self.copy_from_unchecked(other);
+            let absolute_value = value.unsigned_abs();
+            match self {
+                BoundsStrategy::Panic => panic!(),
+                BoundsStrategy::Fail => None,
+                BoundsStrategy::Clip => {
+                    if value.is_positive() {
+                        Some(upper_limit - 1)
+                    } else {
+                        Some(0)
+                    }
+                },
+                BoundsStrategy::Mirror => {
+                    let remainder = absolute_value % upper_limit;
+                    if value.is_positive() {
+                        Some(upper_limit.wrapping_sub(remainder))
+                    } else {
+                        Some(remainder)
+                    }
+                }
+                BoundsStrategy::Repeat => {
+                    let remainder = absolute_value % upper_limit;
+                    if value.is_negative() {
+                        Some(upper_limit.wrapping_sub(remainder))
+                    } else {
+                        Some(remainder)
+                    }
+                }
             }
-            Ok(())
         }
     }
 
-    pub unsafe fn copy_from_unchecked(&mut self, other: &Self) {
-        core::ptr::copy_nonoverlapping(
-            other.data.as_ptr(),
-            self.data.as_mut_ptr(),
-            self.data.len(),
-        );
+    pub const fn test_unsigned(&self, upper_limit: usize, value: usize) -> Option<usize> {
+        if value < upper_limit {
+            Some(value as usize)
+        } else {
+            match self {
+                BoundsStrategy::Panic => panic!(),
+                BoundsStrategy::Fail => None,
+                BoundsStrategy::Clip => {
+                    Some(upper_limit - 1)
+                },
+                BoundsStrategy::Mirror => {
+                    let remainder = value % upper_limit;
+                    Some(upper_limit - remainder)
+                }
+                BoundsStrategy::Repeat => {
+                    Some(value % upper_limit)
+                }
+            }
+        }
+    }
+}
+
+impl<'a, T> PixelCanvas<'a, T> {
+    pub fn with_slice2d(
+        slice: &'a mut MutSlice2d<'a, T>,
+    ) -> Self {
+        Self { data: slice }
+    }
+
+    pub fn copy_from(&mut self, other: &Self) where T: Copy {
+        self.data.copy_from_slice2d(other.data)
     }
 
     pub fn put(&mut self, value: T, (x, y): (usize, usize)) -> Result<(), CanvasAccessError> {
@@ -95,25 +102,25 @@ impl<'a, T> PixelCanvas<'a, T> {
     }
 
     pub unsafe fn put_unchecked(&mut self, value: T, (x, y): (usize, usize)) {
-        *self.data.get_unchecked_mut(x + y * self.pitch) = value;
+        *self.data.get_unchecked_mut((x,y)) = value;
     }
 
-    const fn required_size(height: usize, pitch: usize) -> usize {
-        height * pitch
-    }
-
-    const fn lin(&self, x: usize, y: usize) -> usize {
-        self.pitch * y + x
-    }
-
-    const fn check_bounds(&self, x: usize, y: usize) -> Result<(), CanvasAccessError> {
-        if x >= self.width {
+    fn check_bounds(&self, x: usize, y: usize) -> Result<(), CanvasAccessError> {
+        if x >= self.data.width() {
             Err(CanvasAccessError::OverflowX)
-        } else if y >= self.height {
+        } else if y >= self.data.height() {
             Err(CanvasAccessError::OverflowY)
         } else {
             Ok(())
         }
+    }
+
+    fn lin(&self, x: usize, y: usize) -> usize {
+        x + y * self.data.pitch()
+    }
+
+    fn bounded_coords(&self, (x, y): (isize, isize), horizontal_bounds: BoundsStrategy, vertical_bounds: BoundsStrategy) -> Option<(usize, usize)> {
+        Some((horizontal_bounds.test_signed(self.data.width(), x)?, vertical_bounds.test_signed(self.data.height(), y)?))
     }
 }
 
@@ -138,7 +145,7 @@ where
         let mut end_line: usize = match range.end_bound() {
             core::ops::Bound::Included(y) => y + 1,
             core::ops::Bound::Excluded(y) => *y,
-            core::ops::Bound::Unbounded => self.height,
+            core::ops::Bound::Unbounded => self.data.height(),
         };
 
         if end_line < start_line {
@@ -150,8 +157,8 @@ where
 
         unsafe {
             let lines = end_line - start_line;
-            let from_ptr = self.data.as_mut_ptr().add(start_line * self.pitch);
-            core::slice::from_raw_parts_mut(from_ptr, lines * self.pitch).fill(value);
+            let from_ptr = self.data.as_mut_ptr().add(start_line * self.data.pitch());
+            core::slice::from_raw_parts_mut(from_ptr, lines * self.data.pitch()).fill(value);
         }
         Ok(())
     }
@@ -180,7 +187,7 @@ where
         let mut from_ptr = self.data.as_mut_ptr().add(self.lin(x0, y0));
         loop {
             core::slice::from_raw_parts_mut(from_ptr, len).fill(value);
-            from_ptr = from_ptr.add(self.pitch);
+            from_ptr = from_ptr.add(self.data.pitch());
             y0 += 1;
             if y0 == y1 {
                 break;
@@ -190,18 +197,18 @@ where
 
     pub fn fill_bytes(&mut self, value: u8) {
         unsafe {
-            core::ptr::write_bytes(self.data.as_mut_ptr(), value, self.pitch * self.height);
+            core::ptr::write_bytes(self.data.as_mut_ptr(), value, self.data.pitch() * self.data.height());
         }
     }
 
     pub fn scale_in_place(&mut self, x_repeat: usize, y_repeat: usize) {
-        let rows = self.height / y_repeat;
-        let cols = self.width / x_repeat;
+        let rows = self.data.height() / y_repeat;
+        let cols = self.data.width() / x_repeat;
         unsafe {
             // stretch lines (starting at the top right)
             if x_repeat > 1 {
                 for y in 0..rows {
-                    let line_offset = y * self.pitch;
+                    let line_offset = y * self.data.pitch();
                     let mut dst_ptr = self.data.as_mut_ptr().add(cols * x_repeat + line_offset);
                     let mut src_ptr = self.data.as_ptr().add(cols + line_offset);
                     while src_ptr != dst_ptr {
@@ -216,8 +223,8 @@ where
             }
             // repeat lines (starting at the bottom left)
             if y_repeat > 1 {
-                let line_offset = rows * self.pitch;
-                let row_step = -(self.pitch as isize);
+                let line_offset = rows * self.data.pitch();
+                let row_step = -(self.data.pitch() as isize);
                 let mut dst = self.data.as_mut_ptr().add(y_repeat * line_offset);
                 let mut src = self.data.as_ptr().add(line_offset);
                 let mut repeat_counter = 0;
@@ -226,7 +233,7 @@ where
                         src = src.offset(row_step);
                         repeat_counter = y_repeat;
                     }
-                    core::ptr::copy_nonoverlapping(src, dst, self.width);
+                    core::ptr::copy_nonoverlapping(src, dst, self.data.width());
                     dst = dst.offset(row_step);
                     repeat_counter -= 1;
                 }
@@ -266,7 +273,7 @@ impl<'a> PixelCanvas<'a, u32> {
         let v_off = vdupq_n_u32(off);
         let v_on = vdupq_n_u32(on);
 
-        let line_step = self.pitch;
+        let line_step = self.data.pitch();
 
         let start = self.lin(x, y);
         let line0 = self.data.as_mut_ptr().add(start);
@@ -357,7 +364,7 @@ impl<'a> PixelCanvas<'a, u32> {
         let v_off = vdupq_n_u32(off);
         let v_on = vdupq_n_u32(on);
 
-        let line_step = self.pitch;
+        let line_step = self.data.pitch();
 
         let start = self.lin(x, y);
         let mut line0 = self.data.as_mut_ptr().add(start);
@@ -457,13 +464,13 @@ impl<'a> PixelCanvas<'a, u8> {
         let v_on = vdupq_n_u8(on);
         let start = self.lin(x, y);
         let line0 = self.data.as_mut_ptr().add(start);
-        let line1 = line0.add(self.pitch);
-        let line2 = line1.add(self.pitch);
-        let line3 = line2.add(self.pitch);
-        let line4 = line3.add(self.pitch);
-        let line5 = line4.add(self.pitch);
-        let line6 = line5.add(self.pitch);
-        let line7 = line6.add(self.pitch);
+        let line1 = line0.add(self.data.pitch());
+        let line2 = line1.add(self.data.pitch());
+        let line3 = line2.add(self.data.pitch());
+        let line4 = line3.add(self.data.pitch());
+        let line5 = line4.add(self.data.pitch());
+        let line6 = line5.add(self.data.pitch());
+        let line7 = line6.add(self.data.pitch());
 
         let mask = vld1q_dup_u8(MASK.as_ptr());
         let val0 = vld4_dup_u8(src.as_ptr());
@@ -489,5 +496,64 @@ impl<'a> PixelCanvas<'a, u8> {
         vst1_u8(line5, vget_low_u8(v2));
         vst1_u8(line6, vget_high_u8(v3));
         vst1_u8(line7, vget_low_u8(v3));
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounds_strategy_signed_repeat_works() {
+        let strategy = BoundsStrategy::Repeat;
+        assert_eq!(Some(1), strategy.test_signed(13, 1));
+        assert_eq!(Some(1), strategy.test_signed(13, 14));
+        assert_eq!(Some(1), strategy.test_signed(13, 27));
+        assert_eq!(Some(1), strategy.test_signed(13, -12));
+        assert_eq!(Some(1), strategy.test_signed(13, -25));
+    }
+
+    #[test]
+    fn bounds_strategy_unsigned_repeat_works() {
+        let strategy = BoundsStrategy::Repeat;
+        assert_eq!(Some(1), strategy.test_unsigned(13, 1));
+        assert_eq!(Some(1), strategy.test_unsigned(13, 14));
+        assert_eq!(Some(1), strategy.test_unsigned(13, 27));
+    }
+
+    #[test]
+    fn bounds_strategy_signed_mirror_works() {
+        let strategy = BoundsStrategy::Mirror;
+        assert_eq!(Some(1), strategy.test_signed(13, 1));
+        assert_eq!(Some(13), strategy.test_signed(13, 13));
+        assert_eq!(Some(1), strategy.test_signed(13, 38));
+        assert_eq!(Some(12), strategy.test_signed(13, -12));
+        assert_eq!(Some(12), strategy.test_signed(13, -25));
+    }
+
+    #[test]
+    fn bounds_strategy_unsigned_mirror_works() {
+        let strategy = BoundsStrategy::Mirror;
+        assert_eq!(Some(1), strategy.test_unsigned(13, 1));
+        assert_eq!(Some(13), strategy.test_unsigned(13, 13));
+        assert_eq!(Some(1), strategy.test_unsigned(13, 38));
+    }
+    
+    #[test]
+    fn bounds_strategy_signed_clip_works() {
+        let strategy = BoundsStrategy::Clip;
+        assert_eq!(Some(1), strategy.test_signed(13, 1));
+        assert_eq!(Some(12), strategy.test_signed(13, 13));
+        assert_eq!(Some(12), strategy.test_signed(13, 38));
+        assert_eq!(Some(0), strategy.test_signed(13, -12));
+        assert_eq!(Some(0), strategy.test_signed(13, -25));
+    }
+    #[test]
+    fn bounds_strategy_unsigned_clip_works() {
+        let strategy = BoundsStrategy::Clip;
+        assert_eq!(Some(1), strategy.test_unsigned(13, 1));
+        assert_eq!(Some(12), strategy.test_unsigned(13, 13));
+        assert_eq!(Some(12), strategy.test_unsigned(13, 38));
     }
 }
