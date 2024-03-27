@@ -670,7 +670,7 @@ impl TranslationTable4KB {
         );
         assert!(
             Self::PERIPHERAL_BLOCKS_END <= 512,
-            "Not yet implemented peripheral handling beyonf 1 GB"
+            "Not yet implemented peripheral handling beyond 1 GB"
         );
 
         self.range_0_level_2[0] = TableDescriptor::default()

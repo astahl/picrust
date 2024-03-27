@@ -4,7 +4,7 @@ use crate::slice::slice2d::{traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}
 
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Rgba {
     pub r: u8,
     pub g: u8,
@@ -49,6 +49,7 @@ impl Rgba {
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Rgba {
         Rgba { r, g, b, a }
     }
+
     pub fn new_f(r: f32, g: f32, b: f32, a: f32) -> Rgba {
         if r > 1.0 || r.is_sign_negative() { panic!("Red value must be in [0.0..=1.0]"); }
         if g > 1.0 || g.is_sign_negative() { panic!("Green value must be in [0.0..=1.0]"); }
@@ -110,7 +111,7 @@ impl Rgba {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Bgra {
     pub b: u8,
     pub g: u8,
@@ -205,7 +206,7 @@ impl Into<u32> for Bgra {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub struct RgbF {
     pub r: f32,
     pub g: f32,
@@ -213,7 +214,7 @@ pub struct RgbF {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub struct HsvF {
     pub h: f32,
     pub s: f32,
@@ -254,14 +255,16 @@ impl From<Bgra> for RgbF {
 
 
 impl From<HsvF> for RgbF {
-    fn from(value: HsvF) -> Self {
-        let s = value.s.clamp(0.0, 1.0);
-        let v = value.v.clamp(0.0, 1.0);
+    fn from(mut value: HsvF) -> Self {
+        value = value.clamped_s_v();
+        let s = value.s;
+        let v = value.v;
         if s == 0.0 {
             // gray
             return RgbF { r: v, g: v, b: v };
         }
-        let h = (value.h % 1.0) * 6.0;
+        value = value.normalized_tint();
+        let h = value.h * 6.0;
         let h_i = h as i32;
         let f = h - h_i as f32;
 
@@ -313,6 +316,141 @@ impl From<RgbF> for HsvF {
     }
 }
 
+impl RgbF {
+    pub const BLACK: RgbF = RgbF { r: 0.0, g: 0.0, b: 0.0 };
+    pub const WHITE: RgbF = RgbF { r: 1.0, g: 1.0, b: 1.0 };
+    pub const GRAY: RgbF = RgbF { r: 0.5, g: 0.5, b: 0.5 };
+
+}
+
+impl HsvF {
+    pub const BLACK: HsvF = HsvF { h: 0.0, s: 0.0, v: 0.0 };
+    pub const WHITE: HsvF = HsvF { h: 0.0, s: 0.0, v: 1.0 };
+    pub const GRAY: HsvF = HsvF { h: 0.0, s: 0.0, v: 0.5 };
+    pub const RED: HsvF = HsvF { h: 0.0, s: 1.0, v: 1.0 };
+    pub const ORANGE: HsvF = HsvF { h: 0.083333333333333, s: 1.0, v: 1.0 };
+    pub const YELLOW: HsvF = HsvF { h: 0.166666666666667, s: 1.0, v: 1.0 };
+    pub const GREEN: HsvF = HsvF { h: 0.25, s: 1.0, v: 1.0 };
+    pub const BRIGHT_GREEN: HsvF = HsvF { h: 0.33333333333333, s: 1.0, v: 1.0 };
+    pub const SPRING_GREEN: HsvF = HsvF { h: 0.416666666666667, s: 1.0, v: 1.0 };
+    pub const CYAN: HsvF = HsvF { h: 0.5, s: 1.0, v: 1.0 };
+    pub const GREENISH_BLUE: HsvF = HsvF { h: 0.583333333333333, s: 1.0, v: 1.0 };
+    pub const BLUE: HsvF = HsvF { h: 0.666666666666667, s: 1.0, v: 1.0 };
+    pub const VIOLET: HsvF = HsvF { h: 0.75, s: 1.0, v: 1.0 };
+    pub const MAGENTA: HsvF = HsvF { h: 0.833333333333333, s: 1.0, v: 1.0 };
+    pub const BLUEISH_RED: HsvF = HsvF { h: 0.916666666666667, s: 1.0, v: 1.0 };
+    pub const RED_2: HsvF = HsvF { h: 1.0, s: 1.0, v: 1.0 };
+    pub const ORANGE_2: HsvF = HsvF { h: 1.083333333333333, s: 1.0, v: 1.0 };
+    pub const YELLOW_2: HsvF = HsvF { h: 1.166666666666667, s: 1.0, v: 1.0 };
+    pub const GREEN_2: HsvF = HsvF { h: 1.25, s: 1.0, v: 1.0 };
+    pub const BRIGHT_GREEN_2: HsvF = HsvF { h: 1.33333333333333, s: 1.0, v: 1.0 };
+    pub const SPRING_GREEN_2: HsvF = HsvF { h: 1.416666666666667, s: 1.0, v: 1.0 };
+    pub const CYAN_2: HsvF = HsvF { h: 1.5, s: 1.0, v: 1.0 };
+    pub const GREENISH_BLUE_2: HsvF = HsvF { h: 1.583333333333333, s: 1.0, v: 1.0 };
+    pub const BLUE_2: HsvF = HsvF { h: 1.666666666666667, s: 1.0, v: 1.0 };
+    pub const VIOLET_2: HsvF = HsvF { h: 1.75, s: 1.0, v: 1.0 };
+    pub const MAGENTA_2: HsvF = HsvF { h: 1.833333333333333, s: 1.0, v: 1.0 };
+    pub const BLUEISH_RED_2: HsvF = HsvF { h: 1.916666666666667, s: 1.0, v: 1.0 };
+
+    pub fn lerp(self, to: HsvF, steps: usize) -> HsvFLerp {
+        assert!(steps > 2, "Can't interpolate with less than 3 steps, since first and last are the start and endpoint");
+        HsvFLerp { from: self, to, t: 0.0, delta_t: 1.0 / (steps - 1) as f32, steps: steps }
+    }
+
+    pub fn clamped_s_v(self) -> Self {
+        Self { s: self.s.clamp(0.0, 1.0), v: self.v.clamp(0.0, 1.0), ..self }
+    }
+
+    pub fn normalized_tint(self) -> Self {
+        let mut h = self.h - (self.h as i32 as f32);
+        if h.is_sign_negative() {
+            h += 1.0;
+        }
+        Self { h, ..self }
+    }
+
+    // moves h by the given amount
+    pub fn tint_added(self, value: f32) -> Self {
+        Self { h: self.h + value, ..self }
+    }
+
+    // darkens for values < 1.0
+    pub fn dimmed_by(self, value: f32) -> Self {
+        Self { v: (self.v * value).clamp(0.0, 1.0), ..self }
+    }
+
+    // desaturates for values < 1.0
+    pub fn lifted_by(self, value: f32) -> Self {
+        Self { s: (self.s * value).clamp(0.0, 1.0), ..self }
+    }
+}
+
+pub struct HsvFLerp {
+    from: HsvF,
+    to: HsvF,
+    t: f32,
+    delta_t: f32,
+    steps: usize,
+}
+
+impl Iterator for HsvFLerp {
+    type Item = HsvF;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.steps == 0 {
+            None
+        } else if self.steps == 1 {
+            self.steps -= 1;
+            Some(self.to)
+        } else {
+            let t_rem = 1.0 - self.t;
+            let h = self.from.h * t_rem + self.to.h * self.t;
+            let s = self.from.s * t_rem + self.to.s * self.t;
+            let v = self.from.v * t_rem + self.to.v * self.t;
+            self.steps -= 1;
+            self.t += self.delta_t;
+            Some(HsvF { h, s, v })
+        }
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests_c {
+    use super::*;
+
+    #[test]
+    fn hsv_color_lerp_works() {
+        let mut iter = HsvF::BLACK.lerp(HsvF::WHITE, 3);
+        assert_eq!(HsvF::BLACK, iter.next().expect("should iter"));
+        assert_eq!(HsvF::GRAY, iter.next().expect("should iter"));
+        assert_eq!(HsvF::WHITE, iter.next().expect("should iter"));
+        assert_eq!(None, iter.next());
+
+        let mut iter = HsvF::BLACK.lerp(HsvF::WHITE, 5);
+        assert_eq!(HsvF::BLACK, iter.next().expect("should iter"));
+        assert_eq!(HsvF{ v: 0.25, ..Default::default() }, iter.next().expect("should iter"));
+        assert_eq!(HsvF{ v: 0.50, ..Default::default() }, iter.next().expect("should iter"));
+        assert_eq!(HsvF{ v: 0.75, ..Default::default() }, iter.next().expect("should iter"));
+        assert_eq!(HsvF::WHITE, iter.next().expect("should iter"));
+        assert_eq!(None, iter.next());
+    }
+
+    #[test]
+    fn hsv_to_rgb_works() {
+        assert_eq!(RgbF::BLACK, HsvF::BLACK.into());
+        assert_eq!(RgbF::WHITE, HsvF::WHITE.into());
+        assert_eq!(RgbF::GRAY, HsvF::GRAY.into());   
+    }
+
+    #[test]
+    fn rgbf_to_rgba_works() {
+        assert_eq!(Rgba::new_opaque(255, 255, 255), RgbF::WHITE.into());
+        assert_eq!(Rgba::new_opaque(128, 128, 128), RgbF::GRAY.into());
+        assert_eq!(Rgba::new_opaque(0, 0, 0), RgbF::BLACK.into());
+    }
+}
 
 
 

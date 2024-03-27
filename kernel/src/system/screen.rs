@@ -1,6 +1,6 @@
 use core::usize;
 
-use mystd::{byte_value::ByteValue, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
+use mystd::{byte_value::ByteValue, drawing::{HsvF, RgbF, Rgba}, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
 
 use super::hal::framebuffer::{self, FbDepth, Framebuffer, FramebufferDescriptor, PixelOrder};
 
@@ -163,7 +163,6 @@ impl<'a, T> Screen<'a, T> where T: Copy {
     }
 }
 
-type Color8 = mystd::drawing::Rgba;
 pub enum Palette {
     Bgra([mystd::drawing::Bgra;256]),
     Rgba([mystd::drawing::Rgba;256]),
@@ -271,6 +270,59 @@ impl Palette {
         values[13] = 0xff_ff_55_ff;
         values[14] = 0xff_ff_ff_55;
         values[15] = 0xff_ff_ff_ff;
+    
+        Self::rgba_from_u32(values)
+    }
+
+    pub fn vga() -> Self {
+        let mut values: [u32; 256] = [0; 256];
+        
+        // start with CGA palette 
+        values[0] = 0xff_00_00_00;
+        values[1] = 0xff_00_00_aa;
+        values[2] = 0xff_00_aa_00;
+        values[3] = 0xff_00_aa_aa;
+        values[4] = 0xff_aa_00_00;
+        values[5] = 0xff_aa_00_aa;
+        values[6] = 0xff_aa_55_00;
+        values[7] = 0xff_aa_aa_aa;
+        values[8] = 0xff_55_55_55;
+        values[9] = 0xff_55_55_ff;
+        values[10] = 0xff_55_ff_55;
+        values[11] = 0xff_55_ff_ff;
+        values[12] = 0xff_ff_55_55;
+        values[13] = 0xff_ff_55_ff;
+        values[14] = 0xff_ff_ff_55;
+        values[15] = 0xff_ff_ff_ff;
+
+        // 16 grayscale colors black to white
+        let mut i = 16;
+        for color in HsvF::BLACK.lerp(HsvF::WHITE, 16) {
+            let rgbf: RgbF = color.into();
+            let rgba: Rgba = rgbf.into();
+            values[i] = rgba.into();
+            i += 1;
+        }
+
+
+        // 3 x 3 x 24 colors with decreasing saturation and brightness
+        for brt in [1.0, 0.44, 0.29] {
+            for sat in [1.0, 0.52, 0.29] {
+                
+                for color in HsvF::BLUE.lerp(HsvF::BLUE_2, 24) {
+                    let rgbf: RgbF = color.lifted_by(sat).dimmed_by(brt).into();
+                    let rgba: Rgba = rgbf.into();
+                    values[i] = rgba.into();
+                    i += 1;
+                }
+            }
+        }
+
+        // fill the rest with black
+        while i < 256 {
+            values[i] = 0xff_00_00_00;
+            i += 1;
+        }
     
         Self::rgba_from_u32(values)
     }

@@ -171,14 +171,14 @@ pub fn test_screen() {
     };
     let geom = ScreenGeometry::with_size(Size { width: 320, height: 240 });
     let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, geom).expect("Creating the screen should work");
-    Palette::cga().make_current();
+    Palette::vga().make_current();
     
-    for i in 0..16 {
+    for i in 0..256 {
         for col in 0..=screen.width() {
             
             screen.draw(|slice2d| {
                 let (mut left, mut right) = slice2d.split_at_col_mut(col);
-                left.fill(((i + 1) % 16) as u8);
+                left.fill(((i + 1) % 256) as u8);
                 right.fill(i as u8)
             });
             

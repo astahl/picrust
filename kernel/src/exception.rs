@@ -1,12 +1,12 @@
-use core::fmt::Debug;
+use core::{arch::global_asm, fmt::Debug};
 
-use mystd::bitfield::BitField;
+use mystd::{bit_field, bitfield::BitField};
 
 use crate::system::peripherals::uart::UART_0;
 
 #[no_mangle]
 pub extern "C" fn exc_handler(
-    exception_type: ExceptionType,
+    exception_data: AuxExceptionData,
     syndrome: ExceptionSyndrome,
     elr: usize,
     spsr: usize,
@@ -16,7 +16,7 @@ pub extern "C" fn exc_handler(
     let mut uart = UART_0;
     uart.init();
     writeln!(&mut uart, "Exception Handler!").unwrap_or_default();
-    writeln!(&mut uart, "Exception Type: {:?}", exception_type).unwrap_or_default();
+    writeln!(&mut uart, "Exception Data: {:?}", exception_data).unwrap_or_default();
     writeln!(&mut uart, "{:#?}", syndrome).unwrap_or_default();
     writeln!(
         &mut uart,
@@ -48,14 +48,22 @@ pub extern "C" fn exc_handler(
     }
 }
 
-#[derive(Debug)]
-#[repr(C)]
-pub enum ExceptionType {
-    Synchronous = 0_isize,
-    IRQ,
-    FIQ,
-    SError,
-}
+
+bit_field!(pub AuxExceptionData (u64) {
+    3:2 => origin: enum ExceptionOrigin {
+        CurrentElSpEl0 = 0,
+        CurrentElSpElx = 1,
+        LowerElAarch64 = 2,
+        LowerElAarch32 = 3
+    },
+    1:0 => exception_type: enum ExceptionType {
+        Synchronous = 0,
+        IRQ = 1,
+        FIQ = 2,
+        SError = 3,
+    },
+});
+
 
 #[derive(Debug)]
 pub enum ExceptionClass {
@@ -160,3 +168,4 @@ impl ExceptionSyndrome {
         self.0.field(0, 13) as u32
     }
 }
+
