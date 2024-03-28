@@ -169,3 +169,166 @@ impl ExceptionSyndrome {
     }
 }
 
+
+global_asm!(
+    r#"
+    .section ".text.vector"
+.macro push_registers
+	sub 	sp, sp, #256
+	stp 	x0, x1, [sp, #16 * 0]
+	stp 	x2, x3, [sp, #16 * 1]
+	stp	x4, x5, [sp, #16 * 2]
+	stp	x6, x7, [sp, #16 * 3]
+	stp	x8, x9, [sp, #16 * 4]
+	stp	x10, x11, [sp, #16 * 5]
+	stp	x12, x13, [sp, #16 * 6]
+	stp	x14, x15, [sp, #16 * 7]
+	stp	x16, x17, [sp, #16 * 8]
+	stp	x18, x19, [sp, #16 * 9]
+	stp	x20, x21, [sp, #16 * 10]
+	stp	x22, x23, [sp, #16 * 11]
+	stp	x24, x25, [sp, #16 * 12]
+	stp	x26, x27, [sp, #16 * 13]
+	stp	x28, x29, [sp, #16 * 14]
+	str	x30, [sp, #16 * 15] 
+.endm
+
+.macro pop_registers
+	ldp	x0, x1, [sp, #16 * 0]
+	ldp	x2, x3, [sp, #16 * 1]
+	ldp	x4, x5, [sp, #16 * 2]
+	ldp	x6, x7, [sp, #16 * 3]
+	ldp	x8, x9, [sp, #16 * 4]
+	ldp	x10, x11, [sp, #16 * 5]
+	ldp	x12, x13, [sp, #16 * 6]
+	ldp	x14, x15, [sp, #16 * 7]
+	ldp	x16, x17, [sp, #16 * 8]
+	ldp	x18, x19, [sp, #16 * 9]
+	ldp	x20, x21, [sp, #16 * 10]
+	ldp	x22, x23, [sp, #16 * 11]
+	ldp	x24, x25, [sp, #16 * 12]
+	ldp	x26, x27, [sp, #16 * 13]
+	ldp	x28, x29, [sp, #16 * 14]
+	ldr	x30, [sp, #16 * 15] 
+	add	sp, sp, #256
+.endm
+    .global _vectors_el1
+    // important: code has to be properly aligned to 2^11 = 0x800 = 2048 bytes
+    _vectors_el1:
+
+    // Origin: Current Exception level with SP_EL0.
+
+    // synchronous
+    .align  7 // alignment of 128 bytes
+        push_registers
+        mov     x0, #0
+        b       _handle_and_return_el1
+    
+    // IRQ or vIRQ
+    .align  7
+        push_registers
+        mov     x0, #1
+        b       _handle_and_return_el1
+
+    // FIQ or vFIQ
+    .align  7
+        push_registers
+        mov     x0, #2
+        b       _handle_and_return_el1
+    
+    // SError or vSError
+    .align  7
+        push_registers
+        mov     x0, #3
+        b       _handle_and_return_el1
+
+
+    // Origin: Current Exception level with SP_ELx, x > 0.
+
+    // synchronous 0x200
+    .align  7 // alignment of 128 bytes
+        push_registers
+        mov     x0, #4
+        b       _handle_and_return_el1
+    
+    // IRQ or vIRQ 0x280
+    .align  7
+        push_registers
+        mov     x0, #5
+        b       _handle_and_return_el1
+
+    // FIQ or vFIQ 0x300
+    .align  7
+        push_registers
+        mov     x0, #6
+        b       _handle_and_return_el1
+    
+    // SError or vSError 0x380
+    .align  7
+        push_registers
+        mov     x0, #7
+        b       _handle_and_return_el1
+
+    
+    // Origin: Lower Exception level, where the implemented level immediately lower than the target level is using AArch64.
+
+    // synchronous 0x400
+    .align  7 // alignment of 128 bytes
+        push_registers
+        mov     x0, #8
+        b       _handle_and_return_el1
+    
+    // IRQ or vIRQ 0x480
+    .align  7
+        push_registers
+        mov     x0, #9
+        b       _handle_and_return_el1
+
+    // FIQ or vFIQ 0x500
+    .align  7
+        push_registers
+        mov     x0, #10
+        b       _handle_and_return_el1
+    
+    // SError or vSError 0x580
+    .align  7
+        push_registers
+        mov     x0, #11
+        b       _handle_and_return_el1
+
+    // Origin: Lower Exception level, where the implemented level immediately lower than the target level is using AArch64.
+
+    // synchronous 0x600
+    .align  7 // alignment of 128 bytes
+        push_registers
+        mov     x0, #12
+        b       _handle_and_return_el1
+    
+    // IRQ or vIRQ 0x680
+    .align  7
+        push_registers
+        mov     x0, #13
+        b       _handle_and_return_el1
+
+    // FIQ or vFIQ 0x700
+    .align  7
+        push_registers
+        mov     x0, #14
+        b       _handle_and_return_el1
+    
+    // SError or vSError 0x780
+    .align  7
+        push_registers
+        mov     x0, #15
+        b       _handle_and_return_el1
+
+    _handle_and_return_el1:
+        mrs     x1, esr_el1
+        mrs     x2, elr_el1
+        mrs     x3, spsr_el1
+        mrs     x4, far_el1
+        bl      exc_handler
+        pop_registers
+        eret
+    "#
+);

@@ -3,8 +3,13 @@ ENTRY(_start)
 SECTIONS
 {
 	. = 0x80000;
-	.text :	{ 
+	.text.boot : { 
 		KEEP(*(.text.boot))
+	}
+	.text.vector : ALIGN(0x800) {
+		KEEP(*(.text.vector))
+	}
+	.text : {
 		*(.text .text.* .gnu.linkonce.t*)	
 	}
 	.rodata : ALIGN(0x1000) {	
