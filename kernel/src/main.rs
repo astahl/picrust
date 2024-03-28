@@ -13,6 +13,7 @@ mod tests;
 use core::arch::asm;
 use core::arch::global_asm;
 use mystd::io::Write;
+use system::arm_core::wait_for_all_cores;
 use system::hal;
 use system::peripherals;
 use system::peripherals::uart;
@@ -31,19 +32,34 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     }
 }
 
+
 #[no_mangle]
-pub extern "C" fn main() -> ! {
-    hal::led::status_blink_twice(200);
-    system::initialize();
-    //tests::test_dma();
-    tests::test_screen();
+pub extern "C" fn main(core_id: usize) {
+    match core_id {
+        0 => {
+            system::initialize();
+        }
+        1 => hal::led::status_blink_twice(200),
+        _ => (),
+    }
+    println_log!("{core_id} Waiting.");
+    wait_for_all_cores();
+    println_log!("{core_id} Continue.");
+    match core_id {
+        3 => {
+            //tests::test_dma();
+            tests::test_screen();
+            
+            //panic!("Let's go monitor!");
+        }
+        _ => ()
+    }
+    println_log!("{core_id} Waiting.");
+    wait_for_all_cores();
+    println_log!("{core_id} Done.");
+    
     // tests::run();
     // tests::test_usb().expect("USB test should pass");
-    println_debug!("Done.");
-
-    panic!("Let's go monitor!");
-    // loop {
-    // }
 }
 
 //global_asm!(".section .font", ".incbin \"901447-10.bin\"");
@@ -53,21 +69,17 @@ global_asm!(
     .section ".text.boot"   // Make sure the linker puts this at the start of the kernel image
     .global _start          // Execution starts here
     _start:
-        // Check processor ID is zero (executing on main core), else hang
-        mrs     x1, mpidr_el1
-        and     x1, x1, #3
-        cbz     x1, 2f
-    _stop_core: 
-        // We're not on the main core, so hang in an infinite wait loop
-        // wait for event and loop
-        wfe
-        bl      _stop_core
-    2: 
-        // We're on the main core!
+        // Determine Stack Pointer for each core
+        // Put processor ID into x0
+        mrs     x0, mpidr_el1
+        and     x0, x0, #3
         // We want the stack to start below our code
-        mov     x1, #0x80000
+        ldr     x1, =_start
+        lsr     x2, x1, #2 // scale the stack size: 1. divide by 4
+        mul     x2, x2, x0 //                       2. multiply by the core id (0,1,2,3)
+        sub     x1, x1, x2 // subtract the scaled Stack Size from the top of the stack
         // Ensure we end up on Exception Level 1 (starting on EL3 or EL2)
-        bl      _enter_el1
+        b      _enter_el1
     "#
 );
 
@@ -77,10 +89,10 @@ global_asm!(
     _enter_el1:
         // we make no assumptions if we're at EL3, EL2 or EL1
         // the current EL is coded numerically in CurrentEL bits 3 and 2
-        mrs     x0, CurrentEL
-        ubfx    x0, x0, #2, #2
+        mrs     x10, CurrentEL
+        ubfx    x10, x10, #2, #2
         // are we running at EL3?
-        cmp     x0, #3
+        cmp     x10, #3
         bne     5f
         // we are on EL3
         mov     x2, #0x5b1
@@ -93,7 +105,7 @@ global_asm!(
         eret
     5:
         // are we already running at EL1?
-        cmp     x0, #1
+        cmp     x10, #1
         // yes, then jump to start_main
         beq     _start_main
         // no, we are still on EL2
@@ -180,10 +192,14 @@ global_asm!(
         // set stack pointer to __main_stack
         mov     sp, x1
         bl      _clear_bss
-        // Jump to our kernel_main() routine in rust (make sure it doesn't return)
+        // Jump to our kernel main() routine in rust (make sure it doesn't return)
         bl      main
-        // In case it does return, halt the master core too
-        b      _stop_core
+        // In case it does return, perform a reset
+        //mov     x0, #3 // 0b11
+        //msr     rmr_el1, x0
+    5:
+        wfe
+        b 5b
     "#
 );
 
