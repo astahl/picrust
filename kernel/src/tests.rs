@@ -187,6 +187,14 @@ pub fn test_screen() {
     }
 }
 
+pub fn test_irq() {
+    use crate::peripherals::interrupts;
+    interrupts::BasicIrqs::all_set().write_disable();
+    interrupts::GpuIrqs1::all_set().write_disable();
+    interrupts::GpuIrqs2::zero().uart_int().set().write_disable();
+    interrupts::irq_enable();
+}
+
 pub fn test_dma() {
     use super::peripherals::dma;
 

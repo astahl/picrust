@@ -49,6 +49,7 @@ pub extern "C" fn main(core_id: usize) {
     match core_id {
         0 => {
             system::initialize();
+            tests::test_irq();
         }
         1 => hal::led::status_blink_twice(200),
         _ => (),

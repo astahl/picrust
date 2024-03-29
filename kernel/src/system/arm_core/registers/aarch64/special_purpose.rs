@@ -5,14 +5,14 @@ use mystd::bit_field;
 /// # C5.2.2 CurrentEL, Current Exception Level
 /// Holds the current Exception level.
 pub fn current_el() -> CurrentEl {
-    let value: usize;
+    let value: u64;
     unsafe { asm!("mrs {0}, CurrentEL", out(reg) value) };
     value.into()
 }
 
 bit_field!(
     /// Holds the current Exception level.
-    pub CurrentEl(usize){
+    pub CurrentEl(u64){
 
     /// Current Exception level.
     /// * 0b00 EL0.
@@ -29,4 +29,32 @@ bit_field!(
     ///     - When the highest implemented Exception level is EL2, this field resets to 2.
     ///     - Otherwise, this field resets to 3.
     3:2 => el
+});
+
+impl Daif {
+    #[inline]
+    pub fn read_register() -> Self {
+        let value: u64;
+        unsafe { asm!("mrs {}, daif", out(reg) value); }
+        value.into()
+    }
+
+    #[inline]
+    pub fn write_register(&self) {
+        unsafe { asm!("msr daif, {}", in(reg) self.0); }
+    }
+}
+
+bit_field!(
+    /// DAIF Interrupt Mask Bits
+    pub Daif(u64) {
+        /// Process state D mask.
+        9 => debug_masked,
+        /// SError interrupt mask bit.
+        8 => serror_masked,
+        /// IRQ mask bit.
+        7 => irq_masked,
+        /// FIQ mask bit.
+        6 => fiq_masked,
+
 });

@@ -15,7 +15,7 @@ pub fn get_core_num() -> usize {
     general_sys_ctrl::mpidr_el1::read().cpu_id().value()
 }
 
-pub fn current_exception_level() -> usize {
+pub fn current_exception_level() -> u64 {
     special_purpose::current_el().el().value()
 }
 

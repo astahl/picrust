@@ -21,24 +21,36 @@ pub const UART_0: Uart = Uart::Pl011Uart(UART_BASE);
 // pub type Uart4 = Pl011Uart<0x201800>;
 // pub type Uart5 = Pl011Uart<0x201a00>;
 
-type UartDataReg = PeripheralRegister<0x00, UartData>;
-type UartReceiveStatusErrorClearReg = PeripheralRegister<0x04, u32>;
-type UartFlagReg = PeripheralRegister<0x18, UartFlags>;
-type UartIlpReg = PeripheralRegister<0x20, u32>;
-type UartIntegerBaudRateDivisorReg = PeripheralRegister<0x24, u32>;
-type UartFractionalBaudRateDivisorReg = PeripheralRegister<0x28, u32>;
-type UartLineControlReg = PeripheralRegister<0x2c, UartLineControl>;
-type UartControlReg = PeripheralRegister<0x30, UartControl>;
-type UartInterruptFIFOLevelSelectReg = PeripheralRegister<0x34, u32>;
-type UartInterruptMaskSetClearReg = PeripheralRegister<0x38, UartInterrupts>;
-type UartRawInterruptStatusReg = PeripheralRegister<0x3c, UartInterrupts>;
-type UartMaskedInterruptStatusReg = PeripheralRegister<0x40, UartInterrupts>;
-type UartInterruptClearReg = PeripheralRegister<0x44, UartInterrupts>;
-type UartDMAControlReg = PeripheralRegister<0x48, u32>;
-type UartTestControlReg = PeripheralRegister<0x80, u32>;
-type UartIntegrationTestInputReg = PeripheralRegister<0x84, u32>;
-type UartIntegrationTestOutputReg = PeripheralRegister<0x88, u32>;
-type UartTestDataReg = PeripheralRegister<0x8c, u32>;
+pub type UartDataReg = PeripheralRegister<0x00, UartData>;
+pub type UartReceiveStatusErrorClearReg = PeripheralRegister<0x04, u32>;
+pub type UartFlagReg = PeripheralRegister<0x18, UartFlags>;
+pub type UartIlpReg = PeripheralRegister<0x20, u32>;
+pub type UartIntegerBaudRateDivisorReg = PeripheralRegister<0x24, u32>;
+pub type UartFractionalBaudRateDivisorReg = PeripheralRegister<0x28, u32>;
+pub type UartLineControlReg = PeripheralRegister<0x2c, UartLineControl>;
+pub type UartControlReg = PeripheralRegister<0x30, UartControl>;
+pub type UartInterruptFIFOLevelSelectReg = PeripheralRegister<0x34, u32>;
+pub type UartInterruptMaskSetClearReg = PeripheralRegister<0x38, UartInterrupts>;
+pub type UartRawInterruptStatusReg = PeripheralRegister<0x3c, UartInterrupts>;
+pub type UartMaskedInterruptStatusReg = PeripheralRegister<0x40, UartInterrupts>;
+pub type UartInterruptClearReg = PeripheralRegister<0x44, UartInterrupts>;
+pub type UartDMAControlReg = PeripheralRegister<0x48, u32>;
+pub type UartTestControlReg = PeripheralRegister<0x80, u32>;
+pub type UartIntegrationTestInputReg = PeripheralRegister<0x84, u32>;
+pub type UartIntegrationTestOutputReg = PeripheralRegister<0x88, u32>;
+pub type UartTestDataReg = PeripheralRegister<0x8c, u32>;
+
+
+pub fn handle_interrupts() {
+    use mystd::io::Write;
+    let masked = UART_0.masked_interrupt_status_reg();
+    let interrupts = masked.read();
+    writeln!(UART_0, "{:#?}", interrupts).unwrap();
+    UART_0.interrupt_clear_reg().write(interrupts);
+    let interrupts = masked.read();
+    writeln!(UART_0, "{:#?}", interrupts).unwrap();
+    writeln!(UART_0, "MASK: {:#?}", UART_0.interrupt_mask_reg().read()).unwrap();
+}
 
 impl Uart {
     fn base_address(&self) -> usize {
@@ -59,10 +71,7 @@ impl Uart {
         // 5. Enable the UART.
 
         // disable UART
-        let base_address = match self {
-            Uart::Pl011Uart(a) => *a,
-            Uart::MiniUart(a) => *a,
-        };
+        let base_address = self.base_address();
         UartControlReg::at(base_address).write(UartControl::disabled());
 
         while UartFlagReg::at(base_address).read().busy().is_set() {
@@ -93,7 +102,8 @@ impl Uart {
                 .set(),
         );
         // mask (disable) all interrupts
-        UartInterruptMaskSetClearReg::at(base_address).write(UartInterrupts::all_set());
+        self.interrupt_mask_reg().write(UartInterrupts::zero());
+        UartInterruptClearReg::at(base_address).write(UartInterrupts::all_set());
 
         // enable UART
         UartControlReg::at(base_address).write(UartControl::enabled());
@@ -122,6 +132,25 @@ impl Uart {
 
     pub fn flags(&self) -> UartFlags {
         UartFlagReg::at(self.base_address()).read()
+    }
+
+
+    pub fn raw_interrupt_status_reg(&self) -> UartRawInterruptStatusReg {
+        UartRawInterruptStatusReg::at(self.base_address())
+    }
+
+    pub fn masked_interrupt_status_reg(&self) -> UartMaskedInterruptStatusReg {
+        UartMaskedInterruptStatusReg::at(self.base_address())
+    }
+
+    /// Write a one to clear the corresponding interrupt
+    pub fn interrupt_clear_reg(&self) -> UartInterruptClearReg {
+        UartInterruptClearReg::at(self.base_address())
+    }
+
+    /// If the mask bit is set, the interrupt is enabled, so it acts like logical AND to the raw interrupts.
+    pub fn interrupt_mask_reg(&self) -> UartInterruptMaskSetClearReg {
+        UartInterruptMaskSetClearReg::at(self.base_address())
     }
 }
 
@@ -315,7 +344,7 @@ impl UartControl {
     }
 }
 
-bit_field!(UartInterrupts(u32){
+bit_field!(pub UartInterrupts(u32){
     10 => overrun_error,
     9 => break_error,
     8 => parity_error,

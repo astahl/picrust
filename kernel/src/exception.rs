@@ -2,7 +2,7 @@ use core::{arch::global_asm, fmt::Debug};
 
 use mystd::{bit_field, bitfield::BitField};
 
-use crate::system::{arm_core, peripherals::uart::UART_0};
+use crate::{println_log, system::{arm_core, peripherals::{interrupts, uart::{self, UART_0}}}};
 
 #[no_mangle]
 pub extern "C" fn exc_handler(
@@ -12,10 +12,6 @@ pub extern "C" fn exc_handler(
     spsr: usize,
     far: usize,
 ) -> ! {
-    if exception_data.exception_handler_level().value() != 0 {
-        arm_core::reset();
-    }
-
     use mystd::io::Write;
     let mut uart = UART_0;
     uart.init();
@@ -51,6 +47,33 @@ pub extern "C" fn exc_handler(
         core::hint::spin_loop();
     }
 }
+
+
+#[no_mangle]
+pub extern "C" fn irq_handler(
+    exception_data: AuxExceptionData,
+) {
+    //println_log!("IRQ {}", exception_data);
+    let pending_base = interrupts::IrqPendingBase::read_register();
+    println_log!("Pending {:#?}", pending_base);
+    if pending_base.pend_reg_1().is_set() {
+        println_log!("Pending Gpu1 {:#?}", interrupts::GpuIrqs1::read_pending())
+    }
+    if pending_base.pend_reg_2().is_set() {
+        let gpu2 = interrupts::GpuIrqs2::read_pending();
+        println_log!("Pending Gpu2 {:#?}", gpu2);
+        if gpu2.uart_int().is_set() {
+            uart::handle_interrupts();
+        }
+    }
+    // if pending_base.is_all_clear() {
+    //     panic!("No pending IRQs?!")
+    // }
+    if pending_base.arm_timer().is_set() {
+
+    }
+}
+
 
 
 bit_field!(pub AuxExceptionData (u64) {
@@ -222,7 +245,14 @@ global_asm!(
     .align  7 // alignment of 128 bytes
         push_registers
         mov x0, \id
-        b _handle_and_return_el1
+        b _handle_exc_and_return_el1
+.endm
+
+.macro el1_push_regs_and_go_handle_irqs id
+    .align  7 // alignment of 128 bytes
+        push_registers
+        mov x0, \id
+        b _handle_irq_and_return_el1
 .endm
 
 // important: code has to be properly aligned to 2^11 = 0x800 = 2048 bytes
@@ -236,10 +266,10 @@ global_asm!(
     el1_push_regs_and_go_handle #0x00
 
     // IRQ or vIRQ
-    el1_push_regs_and_go_handle #0x01
+    el1_push_regs_and_go_handle_irqs #0x01
 
     // FIQ or vFIQ
-    el1_push_regs_and_go_handle #0x02
+    el1_push_regs_and_go_handle_irqs #0x02
     
     // SError or vSError
     el1_push_regs_and_go_handle #0x03
@@ -250,10 +280,10 @@ global_asm!(
     el1_push_regs_and_go_handle #0x04
     
     // IRQ or vIRQ 0x280
-    el1_push_regs_and_go_handle #0x05
+    el1_push_regs_and_go_handle_irqs #0x05
 
     // FIQ or vFIQ 0x300
-    el1_push_regs_and_go_handle #0x06
+    el1_push_regs_and_go_handle_irqs #0x06
     
     // SError or vSError 0x380
     el1_push_regs_and_go_handle #0x07
@@ -264,10 +294,10 @@ global_asm!(
     el1_push_regs_and_go_handle #0x08
     
     // IRQ or vIRQ 0x480
-    el1_push_regs_and_go_handle #0x09
+    el1_push_regs_and_go_handle_irqs #0x09
 
     // FIQ or vFIQ 0x500
-    el1_push_regs_and_go_handle #0x0a
+    el1_push_regs_and_go_handle_irqs #0x0a
     
     // SError or vSError 0x580
     el1_push_regs_and_go_handle #0x0b
@@ -278,10 +308,10 @@ global_asm!(
     el1_push_regs_and_go_handle #0x0c
     
     // IRQ or vIRQ 0x680
-    el1_push_regs_and_go_handle #0x0d
+    el1_push_regs_and_go_handle_irqs #0x0d
 
     // FIQ or vFIQ 0x700
-    el1_push_regs_and_go_handle #0x0e
+    el1_push_regs_and_go_handle_irqs #0x0e
     
     // SError or vSError 0x780
     el1_push_regs_and_go_handle #0x0f
@@ -355,7 +385,13 @@ global_asm!(
         // SError or vSError 0x780
         el2_escalate_to_el3 0x1f
 
-        _handle_and_return_el1:
+
+        _handle_irq_and_return_el1:
+            bl      irq_handler
+            pop_registers
+            eret
+
+        _handle_exc_and_return_el1:
             mrs     x1, esr_el1
             mrs     x2, elr_el1
             mrs     x3, spsr_el1
@@ -364,7 +400,7 @@ global_asm!(
             pop_registers
             eret
         
-        _handle_and_return_el2:
+        _handle_exc_and_return_el2:
             mrs     x1, esr_el2
             mrs     x2, elr_el2
             mrs     x3, spsr_el2
