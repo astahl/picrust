@@ -13,6 +13,7 @@ mod tests;
 use core::arch::asm;
 use core::arch::global_asm;
 use mystd::io::Write;
+use system::arm_core;
 use system::arm_core::wait_for_all_cores;
 use system::hal;
 use system::peripherals;
@@ -24,7 +25,17 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     if cfg!(feature = "serial_uart") {
         let mut uart = uart::UART_0;
         let _ = writeln!(uart, "Doki Doki! {info}");
-        monitor::Monitor::new(uart, uart).run();
+        loop {
+            let _ = writeln!(uart, "press m for monitor, r to reset");
+            match uart.get_byte() {
+                Ok(b'm') => monitor::Monitor::new(uart, uart).run(),
+                Ok(b'r') => {
+                    writeln!(uart, "Resetting...").unwrap();
+                    arm_core::reset();
+                },
+                _ => ()
+            }
+        }
     } else {
         loop {
             hal::led::status_blink_twice(1000);
@@ -46,6 +57,9 @@ pub extern "C" fn main(core_id: usize) {
     wait_for_all_cores();
     println_log!("{core_id} Continue.");
     match core_id {
+        0 => {
+            panic!("Monitor!");
+        }
         3 => {
             //tests::test_dma();
             tests::test_screen();
@@ -95,6 +109,10 @@ global_asm!(
         cmp     x10, #3
         bne     5f
         // we are on EL3
+        // set up exception handlers for EL2
+        ldr     x2, =_vectors_el2
+        msr     vbar_el2, x2
+        // prepare to leave EL3
         mov     x2, #0x5b1
         msr     scr_el3, x2
         mov     x2, #0x3c9

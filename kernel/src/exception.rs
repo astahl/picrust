@@ -2,7 +2,7 @@ use core::{arch::global_asm, fmt::Debug};
 
 use mystd::{bit_field, bitfield::BitField};
 
-use crate::system::peripherals::uart::UART_0;
+use crate::system::{arm_core, peripherals::uart::UART_0};
 
 #[no_mangle]
 pub extern "C" fn exc_handler(
@@ -12,6 +12,10 @@ pub extern "C" fn exc_handler(
     spsr: usize,
     far: usize,
 ) -> ! {
+    if exception_data.exception_handler_level().value() != 0 {
+        arm_core::reset();
+    }
+
     use mystd::io::Write;
     let mut uart = UART_0;
     uart.init();
@@ -50,6 +54,7 @@ pub extern "C" fn exc_handler(
 
 
 bit_field!(pub AuxExceptionData (u64) {
+    5:4 => exception_handler_level,
     3:2 => origin: enum ExceptionOrigin {
         CurrentElSpEl0 = 0,
         CurrentElSpElx = 1,
@@ -212,123 +217,160 @@ global_asm!(
 	ldr	x30, [sp, #16 * 15] 
 	add	sp, sp, #256
 .endm
+
+.macro el1_push_regs_and_go_handle id
+    .align  7 // alignment of 128 bytes
+        push_registers
+        mov x0, \id
+        b _handle_and_return_el1
+.endm
+
+// important: code has to be properly aligned to 2^11 = 0x800 = 2048 bytes
+    .align 11
     .global _vectors_el1
-    // important: code has to be properly aligned to 2^11 = 0x800 = 2048 bytes
     _vectors_el1:
 
     // Origin: Current Exception level with SP_EL0.
 
     // synchronous
-    .align  7 // alignment of 128 bytes
-        push_registers
-        mov     x0, #0
-        b       _handle_and_return_el1
-    
+    el1_push_regs_and_go_handle #0x00
+
     // IRQ or vIRQ
-    .align  7
-        push_registers
-        mov     x0, #1
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x01
 
     // FIQ or vFIQ
-    .align  7
-        push_registers
-        mov     x0, #2
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x02
     
     // SError or vSError
-    .align  7
-        push_registers
-        mov     x0, #3
-        b       _handle_and_return_el1
-
+    el1_push_regs_and_go_handle #0x03
 
     // Origin: Current Exception level with SP_ELx, x > 0.
 
     // synchronous 0x200
-    .align  7 // alignment of 128 bytes
-        push_registers
-        mov     x0, #4
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x04
     
     // IRQ or vIRQ 0x280
-    .align  7
-        push_registers
-        mov     x0, #5
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x05
 
     // FIQ or vFIQ 0x300
-    .align  7
-        push_registers
-        mov     x0, #6
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x06
     
     // SError or vSError 0x380
-    .align  7
-        push_registers
-        mov     x0, #7
-        b       _handle_and_return_el1
-
+    el1_push_regs_and_go_handle #0x07
     
     // Origin: Lower Exception level, where the implemented level immediately lower than the target level is using AArch64.
 
     // synchronous 0x400
-    .align  7 // alignment of 128 bytes
-        push_registers
-        mov     x0, #8
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x08
     
     // IRQ or vIRQ 0x480
-    .align  7
-        push_registers
-        mov     x0, #9
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x09
 
     // FIQ or vFIQ 0x500
-    .align  7
-        push_registers
-        mov     x0, #10
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x0a
     
     // SError or vSError 0x580
-    .align  7
-        push_registers
-        mov     x0, #11
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x0b
 
     // Origin: Lower Exception level, where the implemented level immediately lower than the target level is using AArch64.
 
     // synchronous 0x600
-    .align  7 // alignment of 128 bytes
-        push_registers
-        mov     x0, #12
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x0c
     
     // IRQ or vIRQ 0x680
-    .align  7
-        push_registers
-        mov     x0, #13
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x0d
 
     // FIQ or vFIQ 0x700
-    .align  7
-        push_registers
-        mov     x0, #14
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x0e
     
     // SError or vSError 0x780
-    .align  7
-        push_registers
-        mov     x0, #15
-        b       _handle_and_return_el1
+    el1_push_regs_and_go_handle #0x0f
 
-    _handle_and_return_el1:
-        mrs     x1, esr_el1
-        mrs     x2, elr_el1
-        mrs     x3, spsr_el1
-        mrs     x4, far_el1
-        bl      exc_handler
-        pop_registers
-        eret
+    
+//////////////////////////////////////// EL2
+.macro el2_escalate_to_el3 id
+    .align 7 
+    smc \id
+.endm
+    .align 11
+    .global _vectors_el2
+        // important: code has to be properly aligned to 2^11 = 0x800 = 2048 bytes
+        _vectors_el2:
+    
+        // Origin: Current Exception level with SP_EL1.
+    
+        // synchronous
+        el2_escalate_to_el3 0x10
+
+        // IRQ or vIRQ
+        el2_escalate_to_el3 0x11
+
+        // FIQ or vFIQ
+        el2_escalate_to_el3 0x12
+        
+        // SError or vSError
+        el2_escalate_to_el3 0x13
+
+    
+        // Origin: Current Exception level with SP_ELx, x > 0.
+    
+        // synchronous 0x200
+        el2_escalate_to_el3 0x14
+
+        // IRQ or vIRQ 0x280
+        el2_escalate_to_el3 0x15
+
+        // FIQ or vFIQ 0x300
+        el2_escalate_to_el3 0x16
+
+        // SError or vSError 0x380
+        el2_escalate_to_el3 0x17
+
+        
+        // Origin: Lower Exception level, where the implemented level immediately lower than the target level is using AArch64.
+    
+        // synchronous 0x400
+        el2_escalate_to_el3 0x18
+
+        // IRQ or vIRQ 0x480
+        el2_escalate_to_el3 0x19
+
+        // FIQ or vFIQ 0x500
+        el2_escalate_to_el3 0x1a
+
+        // SError or vSError 0x580
+        el2_escalate_to_el3 0x1b
+
+        // Origin: Lower Exception level, where the implemented level immediately lower than the target level is using AArch64.
+    
+        // synchronous 0x600
+        el2_escalate_to_el3 0x1c
+
+        // IRQ or vIRQ 0x680
+        el2_escalate_to_el3 0x1d
+
+        // FIQ or vFIQ 0x700
+        el2_escalate_to_el3 0x1e
+
+        // SError or vSError 0x780
+        el2_escalate_to_el3 0x1f
+
+        _handle_and_return_el1:
+            mrs     x1, esr_el1
+            mrs     x2, elr_el1
+            mrs     x3, spsr_el1
+            mrs     x4, far_el1
+            bl      exc_handler
+            pop_registers
+            eret
+        
+        _handle_and_return_el2:
+            mrs     x1, esr_el2
+            mrs     x2, elr_el2
+            mrs     x3, spsr_el2
+            mrs     x4, far_el2
+            bl      exc_handler
+            pop_registers
+            eret
     "#
 );

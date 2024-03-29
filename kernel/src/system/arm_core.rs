@@ -9,6 +9,8 @@ use core::usize;
 use registers::aarch64::general_sys_ctrl;
 use registers::aarch64::special_purpose;
 
+use self::registers::aarch64::general_sys_ctrl::rmr_elx::RmrElx;
+
 pub fn get_core_num() -> usize {
     general_sys_ctrl::mpidr_el1::read().cpu_id().value()
 }
@@ -35,6 +37,20 @@ pub fn wait_for_interrupt() {
 
 pub fn stop_core() -> ! {
     loop { wait_for_event() }
+}
+
+pub fn reset() -> ! {
+    let reset_req = RmrElx::zero().rr().set().aa64().set_value(general_sys_ctrl::rmr_elx::ArchSelect::AArch64);
+    match current_exception_level() {
+        1 => unsafe { asm!("hvc #0x1") },
+        2 => unsafe { asm!("smc #0x1") },
+        3 => reset_req.write_register_el3(),
+        _ => panic!("Invalid EL to reset"),
+    }
+    loop {
+        core::hint::spin_loop();
+        //wait_for_event();
+    }
 }
 
 pub fn wait_for_all_cores() {
