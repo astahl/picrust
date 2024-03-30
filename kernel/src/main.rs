@@ -68,8 +68,6 @@ pub extern "C" fn main(core_id: usize) {
         }
         1 => {
             tests::test_screen();
-            
-            //panic!("Let's go monitor!");
         }
         _ => ()
     }
