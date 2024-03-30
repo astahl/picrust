@@ -5,3 +5,4 @@ pub mod mpidr_el1;
 pub mod sctlr_el1;
 pub mod tcr_el1;
 pub mod rmr_elx;
+pub mod tpidr_elx;

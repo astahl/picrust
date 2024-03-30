@@ -13,11 +13,16 @@ mod tests;
 use core::arch::asm;
 use core::arch::global_asm;
 use mystd::io::Write;
+use mystd::sync::signal::SleepError;
+use mystd::sync::signal::SleepHandler;
+use mystd::sync::signal::WakeError;
 use system::arm_core;
 use system::arm_core::wait_for_all_cores;
 use system::hal;
 use system::peripherals;
 use system::peripherals::uart;
+
+use crate::system::hal::signal::new_signal;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
@@ -44,19 +49,19 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 
+
 #[no_mangle]
 pub extern "C" fn main(core_id: usize) {
+    static SIG: hal::signal::EventSignal = new_signal();
     match core_id {
         0 => {
             system::initialize();
+            SIG.wake_all().expect("Yup");
             tests::test_irq();
         }
-        1 => hal::led::status_blink_twice(200),
-        _ => (),
+        _ => SIG.wait().expect("Should sleep"),
     }
-    println_log!("{core_id} Waiting.");
-    wait_for_all_cores();
-    println_log!("{core_id} Continue.");
+    println_debug!("Continue.");
     match core_id {
         0 => {
             panic!("Monitor!");
@@ -69,7 +74,7 @@ pub extern "C" fn main(core_id: usize) {
         }
         _ => ()
     }
-    println_log!("{core_id} Waiting.");
+    println_debug!("{core_id} Waiting.");
     wait_for_all_cores();
     println_log!("{core_id} Done.");
     
@@ -110,6 +115,8 @@ global_asm!(
         cmp     x10, #3
         bne     5f
         // we are on EL3
+        // stick core id into the thread id register
+        msr     tpidr_el3, x0
         // set up exception handlers for EL2
         ldr     x2, =_vectors_el2
         msr     vbar_el2, x2
@@ -128,6 +135,8 @@ global_asm!(
         // yes, then jump to start_main
         beq     _start_main
         // no, we are still on EL2
+        // stick core id into the thread id register
+        msr     tpidr_el2, x0
         // set the EL1 stack pointer to __main_stack
         msr     sp_el1, x1
         // enable CNTP for EL1
@@ -208,6 +217,8 @@ global_asm!(
 global_asm!(
     r#"
     _start_main:
+        // stick core id into the thread id register
+        msr     tpidr_el1, x0
         // set stack pointer to __main_stack
         mov     sp, x1
         bl      _clear_bss

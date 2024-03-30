@@ -169,7 +169,7 @@ pub fn test_screen() {
     let slice = unsafe {
         slice::from_raw_parts_mut(ptr, ByteValue::from_mibi(16).as_bytes() as usize)
     };
-    let geom = ScreenGeometry::with_size(Size { width: 320, height: 240 });
+    let geom = ScreenGeometry::with_size(Size { width: 640, height: 480 });
     let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, geom).expect("Creating the screen should work");
     Palette::vga().make_current();
     
