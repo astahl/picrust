@@ -77,6 +77,7 @@ macro_rules! println_log {
         {
             use mystd::io::Write;
             let mut locked_out = $crate::system::output::std_out().lock();
+            write!(&mut locked_out, "[{}]LOG | ", $crate::system::hal::thread::id()).expect("write should always work!");
             writeln!(&mut locked_out, $($param)*).expect("write to stdout should always work!");
         }
     };

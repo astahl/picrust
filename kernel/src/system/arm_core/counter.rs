@@ -1,5 +1,19 @@
 use core::time::Duration;
 
+/// Returns the counter frequency in Hz
+pub fn frequency() -> u32 {
+    let value: u64;
+    unsafe {
+        core::arch::asm!(
+            "mrs {}, cntfrq_el0",
+            out(reg) value
+        );
+    }
+    // the upper 4 bytes are res0
+    value as u32
+}
+
+
 pub fn wait(duration: Duration) {
     let mut frequency: usize;
     let mut current_counter: usize;

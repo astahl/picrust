@@ -3,7 +3,10 @@ use core::marker::PhantomData;
 pub struct MMIO<const BASE: usize, const OFFSET: usize>();
 impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
     const ADDRESS: usize = crate::system::peripherals::BCM_HOST.peripheral_address + BASE + OFFSET;
-
+    pub fn address(&self) -> usize {
+        Self::ADDRESS
+    }
+    
     pub fn write(&self, data: u32) {
         unsafe { (Self::ADDRESS as *mut u32).write_volatile(data) };
     }

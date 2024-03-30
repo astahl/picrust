@@ -196,6 +196,11 @@ bit_field!(pub BasicIrqs(u32) {
 
 bit_field!(pub GpuIrqs1(u32) {
     29 => aux_int,
+    3:0 => system_timers,
+    3 => system_timer_3,
+    2 => system_timer_2,
+    1 => system_timer_1,
+    0 => system_timer_0,
 });
 
 bit_field!(pub GpuIrqs2(u32) {

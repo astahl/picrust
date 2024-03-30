@@ -57,17 +57,16 @@ pub extern "C" fn main(core_id: usize) {
         0 => {
             system::initialize();
             SIG.wake_all().expect("Yup");
-            tests::test_irq();
         }
         _ => SIG.wait().expect("Should sleep"),
     }
     println_debug!("Continue.");
     match core_id {
         0 => {
-            panic!("Monitor!");
-        }
-        3 => {
+            tests::test_irq();
             //tests::test_dma();
+        }
+        1 => {
             tests::test_screen();
             
             //panic!("Let's go monitor!");
@@ -77,7 +76,11 @@ pub extern "C" fn main(core_id: usize) {
     println_debug!("{core_id} Waiting.");
     wait_for_all_cores();
     println_log!("{core_id} Done.");
-    
+    if core_id == 0 {
+        panic!("Let's go monitor!")
+    } else {
+        loop {}
+    }
     // tests::run();
     // tests::test_usb().expect("USB test should pass");
 }

@@ -10,6 +10,7 @@ pub mod power;
 pub mod uart;
 pub mod usb;
 pub mod interrupts;
+pub mod system_timer;
 
 pub struct BcmHost {
     pub peripheral_address: usize,

@@ -1,7 +1,9 @@
 use core::slice;
+use core::time::Duration;
 
 use crate::println_debug;
 use crate::println_log;
+use crate::system::arm_core::counter::wait;
 use crate::system::hal::clocks;
 use crate::system::hal::framebuffer::Framebuffer;
 use crate::system::peripherals;
@@ -193,6 +195,14 @@ pub fn test_irq() {
     interrupts::GpuIrqs1::all_set().write_disable();
     interrupts::GpuIrqs2::zero().uart_int().set().write_disable();
     interrupts::irq_enable();
+    let frequency = 1_000_000; // increments once every microsecond is this fixed??
+    let start_lo = peripherals::system_timer::SystemTimer::counter_low();
+    peripherals::system_timer::SystemTimer::set_compare_0(start_lo + frequency);
+    println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
+    println_log!("Compare0: {}", peripherals::system_timer::SystemTimer::compare_0());
+    system::arm_core::counter::wait(Duration::from_secs(2));
+    println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
+
 }
 
 pub fn test_dma() {

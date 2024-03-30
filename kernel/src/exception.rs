@@ -1,8 +1,8 @@
-use core::{arch::global_asm, fmt::Debug};
+use core::{arch::{asm, global_asm}, fmt::Debug};
 
 use mystd::{bit_field, bitfield::BitField};
 
-use crate::{println_log, system::{arm_core, peripherals::{interrupts, uart::{self, UART_0}}}};
+use crate::{println_debug, println_log, system::{arm_core, peripherals::{interrupts, system_timer, uart::{self, UART_0}}}};
 
 #[no_mangle]
 pub extern "C" fn exc_handler(
@@ -43,9 +43,6 @@ pub extern "C" fn exc_handler(
     // Uart0::putc(b'\n');
     // Uart0::put_memory(elr as *const u8, 16);
     panic!("EXCEPTION");
-    loop {
-        core::hint::spin_loop();
-    }
 }
 
 
@@ -53,15 +50,26 @@ pub extern "C" fn exc_handler(
 pub extern "C" fn irq_handler(
     exception_data: AuxExceptionData,
 ) {
-    //println_log!("IRQ {}", exception_data);
+    println_debug!("IRQ {}", exception_data);
+
+    let elr: u64;
+    unsafe { asm!("mrs {}, elr_el1", out(reg) elr)}
+    println_debug!("ELR before {:x}", elr);
+
     let pending_base = interrupts::IrqPendingBase::read_register();
-    println_log!("Pending {:#?}", pending_base);
+    println_debug!("Pending {:#?}", pending_base);
     if pending_base.pend_reg_1().is_set() {
-        println_log!("Pending Gpu1 {:#?}", interrupts::GpuIrqs1::read_pending())
+        let pending_gpu1 = interrupts::GpuIrqs1::read_pending();
+        println_debug!("Pending Gpu1 {:#?}", pending_gpu1);
+        if pending_gpu1.system_timers().value() != 0 {
+            let matches = system_timer::SystemTimer::matches();
+            println_log!("Timer Matches {:#b}", matches.to_underlying());
+            system_timer::SystemTimer::clear_matches(matches);
+        }
     }
     if pending_base.pend_reg_2().is_set() {
         let gpu2 = interrupts::GpuIrqs2::read_pending();
-        println_log!("Pending Gpu2 {:#?}", gpu2);
+        println_debug!("Pending Gpu2 {:#?}", gpu2);
         if gpu2.uart_int().is_set() {
             uart::handle_interrupts();
         }
@@ -72,6 +80,9 @@ pub extern "C" fn irq_handler(
     if pending_base.arm_timer().is_set() {
 
     }
+    let elr: u64;
+    unsafe { asm!("mrs {}, elr_el1", out(reg) elr)}
+    println_debug!("ELR after {:x}", elr);
 }
 
 
@@ -202,23 +213,23 @@ global_asm!(
     r#"
     .section ".text.vector"
 .macro push_registers
-	sub 	sp, sp, #256
-	stp 	x0, x1, [sp, #16 * 0]
-	stp 	x2, x3, [sp, #16 * 1]
-	stp	x4, x5, [sp, #16 * 2]
-	stp	x6, x7, [sp, #16 * 3]
-	stp	x8, x9, [sp, #16 * 4]
-	stp	x10, x11, [sp, #16 * 5]
-	stp	x12, x13, [sp, #16 * 6]
-	stp	x14, x15, [sp, #16 * 7]
-	stp	x16, x17, [sp, #16 * 8]
-	stp	x18, x19, [sp, #16 * 9]
-	stp	x20, x21, [sp, #16 * 10]
-	stp	x22, x23, [sp, #16 * 11]
-	stp	x24, x25, [sp, #16 * 12]
-	stp	x26, x27, [sp, #16 * 13]
-	stp	x28, x29, [sp, #16 * 14]
-	str	x30, [sp, #16 * 15] 
+	sub 	sp, sp,     #256
+	stp 	x0, x1,     [sp, #16 * 0]
+	stp 	x2, x3,     [sp, #16 * 1]
+	stp	    x4, x5,     [sp, #16 * 2]
+	stp	    x6, x7,     [sp, #16 * 3]
+	stp	    x8, x9,     [sp, #16 * 4]
+	stp	    x10, x11,   [sp, #16 * 5]
+	stp	    x12, x13,   [sp, #16 * 6]
+	stp	    x14, x15,   [sp, #16 * 7]
+	stp	    x16, x17,   [sp, #16 * 8]
+	stp	    x18, x19,   [sp, #16 * 9]
+	stp	    x20, x21,   [sp, #16 * 10]
+	stp	    x22, x23,   [sp, #16 * 11]
+	stp	    x24, x25,   [sp, #16 * 12]
+	stp	    x26, x27,   [sp, #16 * 13]
+	stp	    x28, x29,   [sp, #16 * 14]
+	str	    x30,        [sp, #16 * 15] 
 .endm
 
 .macro pop_registers
