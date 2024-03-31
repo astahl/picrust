@@ -29,6 +29,7 @@ macro_rules! system_register_impl {
     ($reg_id:ident $type_name:ident) => {};
     ($reg_id:ident $type_name:ident r$(,$opts:tt)*) => {
         /// Reads the value from the associated system register
+        #[inline]
         pub fn read_register() -> Self {
             let value: u64;
             unsafe { asm!(concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
@@ -39,6 +40,7 @@ macro_rules! system_register_impl {
     };
     ($reg_id:ident $type_name:ident w$(,$opts:tt)*) => {
         /// Writes the value to the associated system register
+        #[inline]
         pub fn write_register(self) {
             unsafe { asm!(concat!("msr ", stringify!($reg_id), ", {}"), in(reg) self.0) };
         }
@@ -46,6 +48,7 @@ macro_rules! system_register_impl {
     };
     ($reg_id:ident $type_name:ident read_ordered$(,$opts:tt)*) => {
         /// Reads the value from the associated system register, ordering access using memory barrier instructions `dsb` and `isb`. 
+        #[inline]
         pub fn read_register_ordered() -> Self {
             let value: u64;
             unsafe { asm!(
@@ -58,6 +61,7 @@ macro_rules! system_register_impl {
     };
     ($reg_id:ident $type_name:ident read_ordered_ish$(,$opts:tt)*) => {
         /// Reads the value from the associated system register, ordering access using memory barrier instructions `dsb ish` and `isb`. 
+        #[inline]
         pub fn read_register_ordered_ish() -> Self {
             let value: u64;
             unsafe { asm!(

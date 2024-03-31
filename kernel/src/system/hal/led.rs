@@ -1,5 +1,7 @@
 use crate::{peripherals::mailbox, system};
 
+use super::thread;
+
 #[repr(u32)]
 #[derive(Copy, Clone)]
 pub enum Led {
@@ -39,7 +41,7 @@ impl Led {
     pub fn blink_pattern(&self, pattern: u8, step_duration: core::time::Duration) {
         for i in 0..8 {
             self.set((pattern << i & 0x80) != 0);
-            system::arm_core::counter::spin_wait_for(step_duration);
+            thread::spin_wait_for(step_duration);
         }
     }
 }
@@ -49,10 +51,10 @@ pub fn status_blink_twice(interval_msec: u64) {
     let duration = core::time::Duration::from_millis(interval_msec);
     let is_on = status.get();
     status.set(!is_on);
-    system::arm_core::counter::spin_wait_for(duration);
+    thread::spin_wait_for(duration);
     status.set(is_on);
-    system::arm_core::counter::spin_wait_for(duration);
+    thread::spin_wait_for(duration);
     status.set(!is_on);
-    system::arm_core::counter::spin_wait_for(duration);
+    thread::spin_wait_for(duration);
     status.set(is_on);
 }

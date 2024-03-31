@@ -1,6 +1,7 @@
 // Hardware Abstraction Layer
 
 pub mod clocks;
+pub mod counter;
 pub mod display;
 pub mod framebuffer;
 pub mod info;

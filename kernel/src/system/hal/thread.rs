@@ -9,3 +9,20 @@ pub fn id() -> u64 {
 pub fn set_id(thread_id: u64) {
     TpidrElx::write_register(thread_id)
 }
+
+pub fn spin_wait_cycles(mut count: usize) {
+    while count > 0 {
+        count -= 1;
+        core::hint::spin_loop();
+    }
+}
+
+
+pub fn spin_wait_for(duration: core::time::Duration) {
+    let now = super::counter::PointInTime::now();
+    let expire_at = now + duration;
+    while expire_at.is_in_the_future() {
+        core::hint::spin_loop();
+    }
+}
+

@@ -1,4 +1,4 @@
-use crate::peripherals::mmio::MMIO;
+use crate::{peripherals::mmio::MMIO, system::hal::{counter, thread}};
 
 pub struct Gpio();
 
@@ -165,12 +165,12 @@ impl Gpio {
         // 1. Write to GPPUD to set the required control signal (i.e. Pull-up or Pull-Down or neither to remove the current Pull-up/down)
         Self::GPPUD.write(resistor as u32);
         // 2. Wait 150 cycles – this provides the required set-up time for the control signal
-        crate::system::arm_core::counter::wait_cycles(150);
+        thread::spin_wait_cycles(150);
         // 3. Write to GPPUDCLK0/1 to clock the control signal into the GPIO pads you wish to modify – NOTE only the pads which receive a clock will be modified, all others will retain their previous state.
         Self::GPPUDCLK0.write(pins.0);
         Self::GPPUDCLK1.write(pins.1);
         // 4. Wait 150 cycles – this provides the required hold time for the control signal
-        crate::system::arm_core::counter::wait_cycles(150);
+        thread::spin_wait_cycles(150);
         // 5. Write to GPPUD to remove the control signal
         Self::GPPUD.write(Resistor::None as u32);
         // 6. Write to GPPUDCLK0/1 to remove the clock

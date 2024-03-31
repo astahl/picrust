@@ -1,21 +1,7 @@
 use core::sync::atomic;
 
+use super::{SleepError, SleepHandler, WakeError};
 
-#[derive(Debug)]
-pub enum SleepError {
-    TooManySleepers,
-}
-
-
-#[derive(Debug)]
-pub enum WakeError{
-    NoOneSleeping
-}
-
-pub trait SleepHandler {
-    fn sleep(&self) -> Result<(), SleepError>;
-    fn wake(&self) -> Result<(), WakeError>;
-}
 
 pub trait TicketCounter {
     type TicketType;

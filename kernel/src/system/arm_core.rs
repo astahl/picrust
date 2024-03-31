@@ -1,4 +1,3 @@
-pub mod counter;
 pub mod features;
 pub mod mmu;
 pub mod registers;

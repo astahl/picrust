@@ -1,6 +1,8 @@
 use core::slice;
 
 use crate::println_log;
+use crate::system::hal::counter::PointInTime;
+use crate::system::hal::thread;
 use crate::system::peripherals;
 use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
@@ -166,7 +168,8 @@ pub fn test_screen() {
     let geom = ScreenGeometry::with_size(Size { width: 640, height: 480 });
     let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, geom).expect("Creating the screen should work");
     Palette::vga().make_current();
-    
+    let mut pcount = 0;
+    let mut time = PointInTime::now();
     for i in 0..256 {
         for col in 0..=screen.width() {
             
@@ -177,6 +180,12 @@ pub fn test_screen() {
             });
             
             screen.present(SwapStrategy::Swap, PresentStrategy::Memcopy);
+            pcount += 1;
+            if pcount > 1000 {
+                println_log!("Presents / s: {:.2}", pcount as f32 / time.elapsed().as_secs_f32());
+                time = PointInTime::now();
+                pcount = 0;
+            }
         }
     }
 }
@@ -292,7 +301,7 @@ pub fn test_usb() -> Option<()> {
         println_log!("USB Power On Timeout: {} msec", timeout.as_millis());
         let turned_on = power_state.with_on().with_wait_set();
         power::PowerDevice::USBHCD.set_state(turned_on);
-        system::arm_core::counter::spin_wait_for(timeout);
+        thread::spin_wait_for(timeout);
         let power_state = power::PowerDevice::USBHCD.state()?;
         println_log!("USB Power On: {}", power_state.is_on());
     }
@@ -333,7 +342,7 @@ pub fn test_usb() -> Option<()> {
     )
     .expect("soft reset bit should clear");
 
-    system::arm_core::counter::spin_wait_for(Duration::from_millis(100));
+    thread::spin_wait_for(Duration::from_millis(100));
     // reset finished
 
     let usb_config = usb::DwHciCore::usb_config()
@@ -410,6 +419,6 @@ fn poll_await<R: Copy, G: Fn() -> R, F: Fn(R) -> bool>(
             break Err(TimeoutError());
         }
         timeout_count -= 1;
-        system::arm_core::counter::spin_wait_for(timeout_interval);
+        thread::spin_wait_for(timeout_interval);
     }
 }
