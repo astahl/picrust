@@ -50,26 +50,26 @@ pub extern "C" fn exc_handler(
 pub extern "C" fn irq_handler(
     exception_data: AuxExceptionData,
 ) {
-    println_debug!("IRQ {}", exception_data);
+    //println_debug!("IRQ {}", exception_data);
 
     let elr: u64;
     unsafe { asm!("mrs {}, elr_el1", out(reg) elr)}
-    println_debug!("ELR before {:x}", elr);
+    //println_debug!("ELR before {:x}", elr);
 
     let pending_base = interrupts::IrqPendingBase::read_register();
-    println_debug!("Pending {:#?}", pending_base);
+    //println_debug!("Pending {:#?}", pending_base);
     if pending_base.pend_reg_1().is_set() {
         let pending_gpu1 = interrupts::GpuIrqs1::read_pending();
-        println_debug!("Pending Gpu1 {:#?}", pending_gpu1);
+        //println_debug!("Pending Gpu1 {:#?}", pending_gpu1);
         if pending_gpu1.system_timers().value() != 0 {
             let matches = system_timer::SystemTimer::matches();
-            println_log!("Timer Matches {:#b}", matches.to_underlying());
+            //println_log!("Timer Matches {:#b}", matches.to_underlying());
             system_timer::SystemTimer::clear_matches(matches);
         }
     }
     if pending_base.pend_reg_2().is_set() {
         let gpu2 = interrupts::GpuIrqs2::read_pending();
-        println_debug!("Pending Gpu2 {:#?}", gpu2);
+        //println_debug!("Pending Gpu2 {:#?}", gpu2);
         if gpu2.uart_int().is_set() {
             uart::handle_interrupts();
         }
@@ -82,7 +82,7 @@ pub extern "C" fn irq_handler(
     }
     let elr: u64;
     unsafe { asm!("mrs {}, elr_el1", out(reg) elr)}
-    println_debug!("ELR after {:x}", elr);
+    //println_debug!("ELR after {:x}", elr);
 }
 
 

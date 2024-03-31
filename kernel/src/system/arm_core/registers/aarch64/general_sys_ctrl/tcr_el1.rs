@@ -2,22 +2,11 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
-use crate::system::arm_core::mmu::descriptors::{Cacheability, Shareability};
+use crate::{system::arm_core::mmu::descriptors::{Cacheability, Shareability}, system_register_impl};
 
 use super::id_aa64mmfr0_el1::PhysicalAddressRangeSupport;
 
-impl TcrEl1 {
-    pub fn load_register() -> Self {
-        let value: u64;
-        unsafe { asm!("mrs {0}, tcr_el1", out(reg) value) };
-        value.into()
-    }
-
-    pub fn write_register(self) {
-        let val = self.0;
-        unsafe { asm!("msr tcr_el1, {}", in(reg) val) };
-    }
-}
+system_register_impl!(tcr_el1 TcrEl1 (r,w));
 
 bit_field!(
 /// ## D19.2.139 TCR_EL1, Translation Control Register (EL1)

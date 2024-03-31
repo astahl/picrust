@@ -2,18 +2,10 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
-#[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
-impl CpuECtlREl1 {
-    pub fn load_register() -> Self {
-        let value: u64;
-        unsafe { asm!("mrs {0}, cpuectlr_el1", out(reg) value) };
-        value.into()
-    }
+use crate::system_register_impl;
 
-    pub fn write_register(self) {
-        unsafe { asm!("msr cpuectlr_el1, {}", in(reg) self.0) };
-    }
-}
+#[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
+system_register_impl!(cpuectlr_el1 CpuECtlREl1 (r,w));
 
 /// CPU Extended Control Register, EL1
 /// Provides additional IMPLEMENTATION DEFINED configuration and control options for the processor.

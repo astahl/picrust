@@ -9,10 +9,12 @@ use core::usize;
 use registers::aarch64::general_sys_ctrl;
 use registers::aarch64::special_purpose;
 
+use crate::system::peripherals::interrupts;
+
 use self::registers::aarch64::general_sys_ctrl::rmr_elx::RmrElx;
 
-pub fn get_core_num() -> usize {
-    general_sys_ctrl::mpidr_el1::read().cpu_id().value()
+pub fn get_core_num() -> u64 {
+    general_sys_ctrl::mpidr_el1::MpidrEl1::read_register().cpu_id().value()
 }
 
 pub fn current_exception_level() -> u64 {
@@ -69,9 +71,13 @@ pub fn wait_for_all_cores() {
             panic!()
         };
         if i == 1 {
-            send_event_local()
+            send_event()
         } else {
-            while FENCE.load(atomic::Ordering::SeqCst) != N_RESET {
+            loop {
+                if FENCE.load(atomic::Ordering::SeqCst) == N_RESET {
+                    break;
+                }
+                
                 wait_for_event()
             } 
         }

@@ -40,7 +40,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     use general_sys_ctrl::sctlr_el1::SctlrEl1;
     use general_sys_ctrl::tcr_el1::TcrEl1;
 
-    let mm_feats = memory_model_features::read();
+    let mm_feats = memory_model_features::IdAa64Mmfr0El1::read_register();
 
     if mm_feats.pa_range().value().expect("PAR should work")
         < memory_model_features::PhysicalAddressRangeSupport::_36Bits64GB
@@ -336,7 +336,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     // }
     // println_debug!("TTBR1 is set {:#x}", ttbr1_address);
 
-    let sctlr = SctlrEl1::load_register();
+    let sctlr = SctlrEl1::read_register_ordered_ish();
 
     println_debug!("SCTLR_EL1 is {:#?}", sctlr);
     let sctlr = sctlr

@@ -2,19 +2,18 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
+use crate::system_register_impl;
+
+system_register_impl!(mpidr_el1 MpidrEl1 (r));
+
+bit_field!(
 /// # MPIDR_EL1, Multiprocessor Affinity Register
 ///
 /// In a multiprocessor system, provides an additional PE identification mechanism for scheduling purposes.
 ///
 /// AArch64 System register MPIDR_EL1 bits \[31:0] are architecturally mapped to AArch32 System register MPIDR\[31:0].
 /// In a uniprocessor system, Arm recommends that each Aff<n> field of this register returns a value of 0.
-pub fn read() -> MpidrEl1 {
-    let value: usize;
-    unsafe { asm!("mrs {0}, mpidr_el1", out(reg) value) };
-    value.into()
-}
-
-bit_field!(pub MpidrEl1(usize){
+pub MpidrEl1(u64){
     // 63:40 => RES0,
     /// Affinity level 3. See the description of Aff0 for more information. Aff3 is not supported in AArch32 state.
     ///

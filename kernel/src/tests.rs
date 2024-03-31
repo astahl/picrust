@@ -1,24 +1,16 @@
 use core::slice;
-use core::time::Duration;
 
-use crate::println_debug;
 use crate::println_log;
-use crate::system::arm_core::counter::wait;
-use crate::system::hal::clocks;
-use crate::system::hal::framebuffer::Framebuffer;
 use crate::system::peripherals;
 use crate::system::peripherals::dma::DmaControlAndStatus;
 use crate::system::peripherals::dma::DmaControlBlock;
 use crate::system::peripherals::dma::DMA_0;
-use crate::system::peripherals::uart::UART_0;
 use crate::system::peripherals::usb::DwHciCoreInterrupts;
 
-use super::hal;
 use super::system;
 use mystd::arr2d;
 use mystd::byte_value::ByteValue;
 use mystd::collections::rectangular::RectangularArray;
-use mystd::io::Write;
 use mystd::slice::slice2d::traits::MutSlice2dTrait;
 use mystd::slice::slice2d::traits::Slice2dTrait;
 
@@ -198,10 +190,17 @@ pub fn test_irq() {
     let frequency = 1_000_000; // increments once every microsecond is this fixed??
     let start_lo = peripherals::system_timer::SystemTimer::counter_low();
     peripherals::system_timer::SystemTimer::set_compare_0(start_lo + frequency);
+    println_log!("Pending IRQs: {:b}", interrupts::IrqPendingBase::read_register());
     println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
     println_log!("Compare0: {}", peripherals::system_timer::SystemTimer::compare_0());
-    system::arm_core::counter::wait(Duration::from_secs(2));
+    //system::arm_core::counter::wait(Duration::from_secs(2));
     println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
+    // loop {
+    //     if peripherals::system_timer::SystemTimer::matches().match_0().is_set() {
+    //         println_log!("Set: {}", peripherals::system_timer::SystemTimer::matches());
+    //         break;
+    //     }
+    // }
 
 }
 
@@ -293,7 +292,7 @@ pub fn test_usb() -> Option<()> {
         println_log!("USB Power On Timeout: {} msec", timeout.as_millis());
         let turned_on = power_state.with_on().with_wait_set();
         power::PowerDevice::USBHCD.set_state(turned_on);
-        system::arm_core::counter::wait(timeout);
+        system::arm_core::counter::spin_wait_for(timeout);
         let power_state = power::PowerDevice::USBHCD.state()?;
         println_log!("USB Power On: {}", power_state.is_on());
     }
@@ -334,7 +333,7 @@ pub fn test_usb() -> Option<()> {
     )
     .expect("soft reset bit should clear");
 
-    system::arm_core::counter::wait(Duration::from_millis(100));
+    system::arm_core::counter::spin_wait_for(Duration::from_millis(100));
     // reset finished
 
     let usb_config = usb::DwHciCore::usb_config()
@@ -411,6 +410,6 @@ fn poll_await<R: Copy, G: Fn() -> R, F: Fn(R) -> bool>(
             break Err(TimeoutError());
         }
         timeout_count -= 1;
-        system::arm_core::counter::wait(timeout_interval);
+        system::arm_core::counter::spin_wait_for(timeout_interval);
     }
 }

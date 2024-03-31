@@ -1,20 +1,14 @@
 use core::time::Duration;
 
+use super::registers::aarch64::generic_timer;
+
 /// Returns the counter frequency in Hz
 pub fn frequency() -> u32 {
-    let value: u64;
-    unsafe {
-        core::arch::asm!(
-            "mrs {}, cntfrq_el0",
-            out(reg) value
-        );
-    }
-    // the upper 4 bytes are res0
-    value as u32
+    generic_timer::cntfrq_el0::CntFrqEl0::read_register().clock_frequency().value() as u32
 }
 
 
-pub fn wait(duration: Duration) {
+pub fn spin_wait_for(duration: Duration) {
     let mut frequency: usize;
     let mut current_counter: usize;
     unsafe {

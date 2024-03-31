@@ -2,19 +2,10 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
-impl SctlrEl1 {
-    pub fn load_register() -> Self {
-        let value: u64;
-        // Data synchronization barrier then instruction synchronization barrier to guarantee all preceding memory accesses have been finished and none of the following instructions have been performed yet.
-        unsafe { asm!("dsb ish; isb; mrs {0}, sctlr_el1", out(reg) value) };
-        value.into()
-    }
+use crate::system_register_impl;
 
-    pub fn write_register(self) {
-        let val = self.0;
-        unsafe { asm!("msr sctlr_el1, {}; isb;", in(reg) val) };
-    }
-}
+
+system_register_impl!(sctlr_el1 SctlrEl1 (read_ordered_ish,w));
 
 bit_field!(
 /// ## D19.2.124 SCTLR_EL1, System Control Register (EL1)

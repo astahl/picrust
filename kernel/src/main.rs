@@ -52,17 +52,17 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main(core_id: usize) {
-    static SIG: hal::signal::EventSignal = new_signal();
+    static INIT: hal::signal::EventSignal = new_signal();
     match core_id {
         0 => {
             system::initialize();
-            SIG.wake_all().expect("Yup");
+            INIT.wake_all().expect("Yup");
         }
-        _ => SIG.wait().expect("Should sleep"),
+        _ => INIT.wait().expect("Should sleep"),
     }
-    println_debug!("Continue.");
+    println_debug!("Continue after Init.");
     match core_id {
-        0 => {
+        2 => {
             tests::test_irq();
             //tests::test_dma();
         }
@@ -71,14 +71,13 @@ pub extern "C" fn main(core_id: usize) {
         }
         _ => ()
     }
-    println_debug!("{core_id} Waiting.");
+    println_debug!("Waiting for others to finish.");
     wait_for_all_cores();
-    println_log!("{core_id} Done.");
-    if core_id == 0 {
-        panic!("Let's go monitor!")
-    } else {
-        loop {}
-    }
+    // if core_id == 0 {
+    //     panic!("Let's go monitor!")
+    // } else {
+    loop {}
+    // }
     // tests::run();
     // tests::test_usb().expect("USB test should pass");
 }

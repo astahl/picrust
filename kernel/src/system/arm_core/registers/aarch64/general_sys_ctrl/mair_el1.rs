@@ -2,18 +2,9 @@ use core::{arch::asm, ops::Index};
 
 use mystd::bit_field;
 
-impl MairEl1 {
-    pub fn load_register() -> Self {
-        let value: u64;
-        unsafe { asm!("mrs {0}, mair_el1", out(reg) value) };
-        value.into()
-    }
+use crate::system_register_impl;
 
-    pub fn write_register(self) {
-        let val: u64 = self.into();
-        unsafe { asm!("msr mair_el1, {}", in(reg) val) };
-    }
-}
+system_register_impl!(mair_el1 MairEl1 (r,w));
 
 bit_field!(pub MairEl1(u64) {
     63:56 => attr_7 : MemoryAttributes,
