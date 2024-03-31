@@ -13,9 +13,6 @@ mod tests;
 use core::arch::asm;
 use core::arch::global_asm;
 use mystd::io::Write;
-use mystd::sync::signal::SleepError;
-use mystd::sync::signal::SleepHandler;
-use mystd::sync::signal::WakeError;
 use system::arm_core;
 use system::arm_core::wait_for_all_cores;
 use system::hal;
@@ -62,11 +59,14 @@ pub extern "C" fn main(core_id: usize) {
     }
     println_debug!("Continue after Init.");
     match core_id {
-        2 => {
-            tests::test_irq();
+        0 => {
+            tests::test_irq0();
             //tests::test_dma();
-        }
+        },
         1 => {
+            tests::test_irq1();
+        }
+        2 => {
             tests::test_screen();
         }
         _ => ()

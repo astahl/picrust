@@ -65,6 +65,7 @@ pub extern "C" fn irq_handler(
             let matches = system_timer::SystemTimer::matches();
             //println_log!("Timer Matches {:#b}", matches.to_underlying());
             system_timer::SystemTimer::clear_matches(matches);
+            let _ = crate::tests::TEST_LATCH.set();
         }
     }
     if pending_base.pend_reg_2().is_set() {

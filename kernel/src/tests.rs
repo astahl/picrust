@@ -2,6 +2,8 @@ use core::slice;
 
 use crate::println_log;
 use crate::system::hal::counter::PointInTime;
+use crate::system::hal::signal::new_latch;
+use crate::system::hal::signal::EventLatch;
 use crate::system::hal::thread;
 use crate::system::peripherals;
 use crate::system::peripherals::dma::DmaControlAndStatus;
@@ -15,6 +17,9 @@ use mystd::byte_value::ByteValue;
 use mystd::collections::rectangular::RectangularArray;
 use mystd::slice::slice2d::traits::MutSlice2dTrait;
 use mystd::slice::slice2d::traits::Slice2dTrait;
+
+
+pub static TEST_LATCH: EventLatch = new_latch(true);
 
 // pub fn run() {
 //     println_log!("{:#?}", clocks::ClockDescription::get(clocks::Clock::ARM));
@@ -190,7 +195,8 @@ pub fn test_screen() {
     }
 }
 
-pub fn test_irq() {
+
+pub fn test_irq0() {
     use crate::peripherals::interrupts;
     interrupts::BasicIrqs::all_set().write_disable();
     interrupts::GpuIrqs1::all_set().write_disable();
@@ -202,16 +208,14 @@ pub fn test_irq() {
     println_log!("Pending IRQs: {:b}", interrupts::IrqPendingBase::read_register());
     println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
     println_log!("Compare0: {}", peripherals::system_timer::SystemTimer::compare_0());
-    //system::arm_core::counter::wait(Duration::from_secs(2));
-    println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
-    // loop {
-    //     if peripherals::system_timer::SystemTimer::matches().match_0().is_set() {
-    //         println_log!("Set: {}", peripherals::system_timer::SystemTimer::matches());
-    //         break;
-    //     }
-    // }
-
 }
+
+
+pub fn test_irq1() {
+    TEST_LATCH.wait().expect("should work");
+    println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
+}
+
 
 pub fn test_dma() {
     use super::peripherals::dma;
