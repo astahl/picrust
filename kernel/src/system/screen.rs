@@ -1,6 +1,6 @@
 use core::usize;
 
-use mystd::{byte_value::ByteValue, drawing::{HsvF, RgbF, Rgba}, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
+use mystd::{byte_value::ByteValue, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
 
 use super::hal::framebuffer::{self, FbDepth, Framebuffer, FramebufferDescriptor, PixelOrder};
 
@@ -164,15 +164,15 @@ impl<'a, T> Screen<'a, T> where T: Copy {
 }
 
 pub enum Palette {
-    Bgra([mystd::drawing::Bgra;256]),
-    Rgba([mystd::drawing::Rgba;256]),
+    Bgra([mystd::drawing::color::Bgra;256]),
+    Rgba([mystd::drawing::color::Rgba;256]),
 }
 
 
 impl Palette {
 
     pub const fn rgba_from_u32(values: [u32;256]) -> Palette {
-        type Color = mystd::drawing::Rgba;
+        type Color = mystd::drawing::color::Rgba;
         let mut rgba_values: [Color;256] = [Color::zero(); 256];
         let mut i = 0;
         loop {
@@ -186,7 +186,7 @@ impl Palette {
     }
 
     pub const fn bgra_from_u32(values: [u32;256]) -> Palette {
-        type Color = mystd::drawing::Bgra;
+        type Color = mystd::drawing::color::Bgra;
         let mut bgra_values: [Color;256] = [Color::zero(); 256];
         let mut i = 0;
         loop {
@@ -275,6 +275,7 @@ impl Palette {
     }
 
     pub fn vga() -> Self {
+        use mystd::drawing::color;
         let mut values: [u32; 256] = [0; 256];
         
         // start with CGA palette 
@@ -297,9 +298,9 @@ impl Palette {
 
         // 16 grayscale colors black to white
         let mut i = 16;
-        for color in HsvF::BLACK.lerp(HsvF::WHITE, 16) {
-            let rgbf: RgbF = color.into();
-            let rgba: Rgba = rgbf.into();
+        for color in color::HsvF::BLACK.lerp(color::HsvF::WHITE, 16) {
+            let rgbf: color::RgbF = color.into();
+            let rgba: color::Rgba = rgbf.into();
             values[i] = rgba.into();
             i += 1;
         }
@@ -309,9 +310,9 @@ impl Palette {
         for brt in [1.0, 0.44, 0.29] {
             for sat in [1.0, 0.52, 0.29] {
                 
-                for color in HsvF::BLUE.lerp(HsvF::BLUE_2, 24) {
-                    let rgbf: RgbF = color.lifted_by(sat).dimmed_by(brt).into();
-                    let rgba: Rgba = rgbf.into();
+                for color in color::HsvF::BLUE.lerp(color::HsvF::BLUE_2, 24) {
+                    let rgbf: color::RgbF = color.lifted_by(sat).dimmed_by(brt).into();
+                    let rgba: color::Rgba = rgbf.into();
                     values[i] = rgba.into();
                     i += 1;
                 }
