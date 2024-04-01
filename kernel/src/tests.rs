@@ -1,6 +1,8 @@
 use core::slice;
 
 use crate::println_log;
+use crate::system::arm_core;
+use crate::system::hal::counter;
 use crate::system::hal::counter::PointInTime;
 use crate::system::hal::signal::new_latch;
 use crate::system::hal::signal::EventLatch;
@@ -198,8 +200,8 @@ pub fn test_screen() {
 
 pub fn test_irq0() {
     use crate::peripherals::interrupts;
-    interrupts::BasicIrqs::all_set().write_disable();
-    interrupts::GpuIrqs1::all_set().write_disable();
+    interrupts::BasicIrqs::all_set().write_enable();
+    interrupts::GpuIrqs1::all_set().write_enable();
     interrupts::GpuIrqs2::zero().uart_int().set().write_disable();
     interrupts::irq_enable();
     let frequency = 1_000_000; // increments once every microsecond is this fixed??
@@ -208,12 +210,20 @@ pub fn test_irq0() {
     println_log!("Pending IRQs: {:b}", interrupts::IrqPendingBase::read_register());
     println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
     println_log!("Compare0: {}", peripherals::system_timer::SystemTimer::compare_0());
+
+    counter::mask_interrupt();
+    counter::enable_interrupt();
+    let th = counter::PointInTime::now() + core::time::Duration::from_millis(500);
+    th.set_as_compare_val();
+    while th.is_in_the_future() {}
+    println_log!("timer condition: {}", counter::is_timer_condition_met());
 }
 
 
 pub fn test_irq1() {
     TEST_LATCH.wait().expect("should work");
     println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
+    println_log!("timer condition: {}", counter::is_timer_condition_met());
 }
 
 

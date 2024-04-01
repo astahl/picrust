@@ -8,6 +8,25 @@ pub struct PointInTime {
     frequency: u32
 }
 
+impl core::cmp::Eq for PointInTime {}
+
+impl core::cmp::PartialEq for PointInTime {
+    fn eq(&self, other: &Self) -> bool {
+        assert_eq!(self.frequency, other.frequency);
+        self.counter_val == other.counter_val
+    }
+}
+
+impl core::cmp::PartialOrd for PointInTime {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        if self.frequency == other.frequency {
+            self.counter_val.partial_cmp(&other.counter_val)
+        } else {
+            None
+        }
+    }
+}
+
 impl Add<core::time::Duration> for PointInTime {
     type Output = Self;
 
@@ -30,6 +49,7 @@ impl Sub for PointInTime {
 }
 
 impl PointInTime {
+
     pub fn now_ordered() -> Self {
         Self { 
             counter_val: generic_timer::cntpct_el0::CntPCtEl0::read_register_ordered().to_underlying(), 
@@ -63,8 +83,41 @@ impl PointInTime {
     }
 
     pub fn set_as_compare_val(self) {
-        generic_timer::cntp_cval_el0::CntPCValEl0::write_register(CntPCValEl0::new(self.counter_val))
+        generic_timer::cntp_cval_el0::CntPCValEl0::zero().compare_value().set_value(self.counter_val).write_register()
     }
+
+    pub fn time_since_zero(self) -> core::time::Duration {
+        let nanos = (self.counter_val * 1_000_000_000) / self.frequency as u64;
+        core::time::Duration::from_nanos(nanos)
+    }
+}
+
+pub fn enable_interrupt() {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().enable().set().write_register();
+}
+
+pub fn is_interrupt_enabled() -> bool {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().enable().is_set()
+}
+
+pub fn disable_interrupt() {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().enable().clear().write_register();
+}
+
+pub fn mask_interrupt() {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().imask().set().write_register();
+}
+
+pub fn is_interrupt_masked() -> bool {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().imask().is_set()
+}
+
+pub fn unmask_interrupt() {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().imask().clear().write_register();
+}
+
+pub fn is_timer_condition_met() -> bool {
+    generic_timer::cntp_ctl_el0::CntPCtlEl0::read_register().istatus().is_set()
 }
 
 pub fn set_timer_val(duration: core::time::Duration) {
@@ -80,3 +133,6 @@ pub fn frequency() -> u32 {
     generic_timer::cntfrq_el0::CntFrqEl0::read_register().clock_frequency().value() as u32
 }
 
+pub fn uptime() -> core::time::Duration {
+    PointInTime::now().time_since_zero()
+}
