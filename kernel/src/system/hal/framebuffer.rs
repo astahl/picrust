@@ -448,6 +448,10 @@ impl Framebuffer {
         *response.try_value_as().expect("PixelOrder should be the only response")
     }
 
+    pub fn get_physical_dimensions() -> FbDimensions {
+        mailbox::simple_single_call(tags::FB_GET_PHYSICAL_DIMENSIONS, ()).expect("couldn't get physical dimensions")
+    }
+
     pub fn as_pixels(&self) -> &[u32] {
         unsafe {
             self.raw_slice.align_to().1

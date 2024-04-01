@@ -19,6 +19,7 @@ use system::hal;
 use system::peripherals;
 use system::peripherals::uart;
 
+use crate::system::hal::led::status_blink_twice;
 use crate::system::hal::signal::new_signal;
 
 #[panic_handler]
@@ -53,6 +54,7 @@ pub extern "C" fn main(core_id: usize) {
     match core_id {
         0 => {
             system::initialize();
+            status_blink_twice(500);
             INIT.wake_all().expect("Yup");
         }
         _ => INIT.wait().expect("Should sleep"),

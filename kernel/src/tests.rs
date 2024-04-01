@@ -2,8 +2,10 @@ use core::slice;
 
 use crate::println_log;
 use crate::system::arm_core;
+use crate::system::hal;
 use crate::system::hal::counter;
 use crate::system::hal::counter::PointInTime;
+use crate::system::hal::framebuffer::Framebuffer;
 use crate::system::hal::signal::new_latch;
 use crate::system::hal::signal::EventLatch;
 use crate::system::hal::thread;
@@ -172,7 +174,15 @@ pub fn test_screen() {
     let slice = unsafe {
         slice::from_raw_parts_mut(ptr, ByteValue::from_mibi(16).as_bytes() as usize)
     };
-    let geom = ScreenGeometry::with_size(Size { width: 640, height: 480 });
+    let fb_dim = Framebuffer::get_physical_dimensions();
+    let geom = 
+    if fb_dim.width_px == 0 || fb_dim.height_px == 0 {
+        println_log!("FB Dim is zero, using default");
+        ScreenGeometry::with_size(Size { width: 640, height: 480 })
+    } else {
+        println_log!("FB Dim w {} h {}", fb_dim.width_px, fb_dim.height_px);
+        ScreenGeometry::with_size(Size { width: fb_dim.width_px as usize, height: fb_dim.height_px as usize })
+    };
     let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, geom).expect("Creating the screen should work");
     Palette::vga().make_current();
     let mut pcount = 0;
