@@ -14,12 +14,12 @@ pub fn initialize() {
         // print a memory map
         println_debug!("{:#?}", hal::info::MemoryMap());
     }
-    let status_led = hal::led::Led::Status;
-    status_led.on();
+
     if cfg!(feature = "mmu") {
-        arm_core::mmu::mmu_init().unwrap();
+        println_log!("MMU...");
+        arm_core::mmu::mmu_init().expect("MMU should be initialised");
+        println_log!("MMU initialised");
     }
-    status_led.off();
     //let _a = std_out().lock();
     //writeln!(std_out(), "System Initialized").expect("second write should work");
 }

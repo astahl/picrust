@@ -17,12 +17,14 @@ impl<S: SleepHandler> Latch<S> {
     }
 
     /// Causes the calling thread to engage with the latch, using the supplied sleep handler to wait for the latch to be set.
-    pub fn wait(&self) -> Result<(), SleepError> {
+    /// If the latch is autoresetting, the first caller will reset a set latch.
+    /// If it'S not autoresetting, and the latch is set, the caller returns immediately. 
+    pub fn wait_for_set(&self) -> Result<(), SleepError> {
         // r l => l
         // t t => f
         // f t => t
         // t f => f
-        // f t => t
+        // f f => f
         let _ = self.latch.compare_exchange(self.auto_reset, false, atomic::Ordering::SeqCst, atomic::Ordering::SeqCst);
         loop {
             if self.is_set() {

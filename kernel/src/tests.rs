@@ -169,6 +169,7 @@ pub static TEST_LATCH: EventLatch = new_latch(true);
 // }
 
 pub fn test_screen() {
+    println_log!("Testing Screen...");
     use super::system::screen::*;
     let ptr = ByteValue::from_mibi(128).as_bytes() as *mut u8;
     let slice = unsafe {
@@ -231,13 +232,14 @@ pub fn test_irq0() {
 
 
 pub fn test_irq1() {
-    TEST_LATCH.wait().expect("should work");
+    TEST_LATCH.wait_for_set().expect("should work");
     println_log!("Counter: {}", peripherals::system_timer::SystemTimer::counter());
     println_log!("timer condition: {}", counter::is_timer_condition_met());
 }
 
 
 pub fn test_dma() {
+    println_log!("Testing DMA...");
     use super::peripherals::dma;
 
     let src = [0x0f_u8;1024];

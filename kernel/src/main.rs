@@ -20,6 +20,7 @@ use system::peripherals;
 use system::peripherals::uart;
 
 use crate::system::hal::led::status_blink_twice;
+use crate::system::hal::signal::new_latch;
 use crate::system::hal::signal::new_signal;
 
 #[panic_handler]
@@ -50,26 +51,28 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main(core_id: usize) {
-    static INIT: hal::signal::EventSignal = new_signal();
+    static INIT: hal::signal::EventLatch = new_latch(false);
     match core_id {
         0 => {
             system::initialize();
             status_blink_twice(500);
-            INIT.wake_all().expect("Yup");
+            INIT.set().expect("Should not fail");
         }
-        _ => INIT.wait().expect("Should sleep"),
+        _ => {
+            INIT.wait_for_set().expect("Should not fail");
+        },
     }
     println_debug!("Continue after Init.");
     match core_id {
         0 => {
-            tests::test_irq0();
+            //tests::test_irq0();
             //tests::test_dma();
+            tests::test_screen();
         },
         1 => {
-            tests::test_irq1();
+            //tests::test_irq1();
         }
         2 => {
-            tests::test_screen();
         }
         _ => ()
     }
