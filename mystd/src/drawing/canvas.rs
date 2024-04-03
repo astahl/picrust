@@ -150,12 +150,12 @@ where
         value: T,
         range: I,
     ) -> Result<(), CanvasAccessError> {
-        let mut start_line: usize = match range.start_bound() {
+        let start_line: usize = match range.start_bound() {
             core::ops::Bound::Included(y) => *y,
             core::ops::Bound::Excluded(y) => y + 1,
             core::ops::Bound::Unbounded => 0,
         };
-        let mut end_line: usize = match range.end_bound() {
+        let end_line: usize = match range.end_bound() {
             core::ops::Bound::Included(y) => y + 1,
             core::ops::Bound::Excluded(y) => *y,
             core::ops::Bound::Unbounded => self.data.height(),

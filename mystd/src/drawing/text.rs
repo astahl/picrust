@@ -44,11 +44,11 @@ impl<'a> Iterator for AutoLineWrapper<'a> {
             None
         } else {
             let mut remaining_length = self.max_line_length;
-            let mut split_point: usize = 0;
             let mut current_word_start: Option<usize> = None;
             let mut last_ws_start: Option<usize> = None;
             let mut skip: usize = 0;
             let mut iter = self.text.char_indices().peekable();
+            let split_point: usize;
             let break_type = loop {
                 if let Some((pos, c)) = iter.next() {
                     if c == '\n' {
