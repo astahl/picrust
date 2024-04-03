@@ -12,8 +12,3 @@ pub mod io;
 pub mod sync;
 pub mod parse;
 pub mod slice;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}

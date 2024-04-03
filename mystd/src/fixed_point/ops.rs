@@ -104,7 +104,6 @@ where
 mod tests {
     use super::FixedPoint;
     type Fx = FixedPoint<16, i32>;
-    type Fx8 = FixedPoint<3, i8>;
 
     #[test]
     fn mul_works() {

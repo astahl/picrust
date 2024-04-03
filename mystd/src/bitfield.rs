@@ -1,4 +1,4 @@
-use core::fmt::{Binary, Debug, Write};
+use core::fmt::{Debug, Write};
 
 pub trait BitContainer:
     Default

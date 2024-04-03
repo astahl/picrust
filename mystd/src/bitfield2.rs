@@ -1,4 +1,4 @@
-use core::{fmt::Debug, marker::PhantomData, ops::BitAnd};
+use core::{fmt::Debug, marker::PhantomData};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BitFieldError {
