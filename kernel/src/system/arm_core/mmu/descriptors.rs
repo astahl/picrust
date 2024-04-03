@@ -1,8 +1,6 @@
-use core::ops::Add;
 
 use mystd::{bit_field, bit_field_type_definition, bitfield2::BitFieldError};
 
-use crate::system::arm_core::features::FEAT_LPA;
 
 bit_field!(pub TableDescriptor(u64) {
     /// # NSTable \[63]

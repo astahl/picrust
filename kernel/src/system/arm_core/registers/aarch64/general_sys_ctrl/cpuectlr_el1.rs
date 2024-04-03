@@ -7,11 +7,11 @@ use crate::system_register_impl;
 #[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
 system_register_impl!(cpuectlr_el1 CpuECtlREl1 (r,w));
 
-/// CPU Extended Control Register, EL1
-/// Provides additional IMPLEMENTATION DEFINED configuration and control options for the processor.
-///
-#[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
-bit_field!(pub CpuECtlREl1 (u64) {
+bit_field!(
+    /// CPU Extended Control Register, EL1
+    /// Provides additional IMPLEMENTATION DEFINED configuration and control options for the processor.
+    #[cfg(any(feature = "cortex_a72", feature = "cortex_a53"))]
+    pub CpuECtlREl1 (u64) {
 
     /// # Disable table walk descriptor access prefetch
     /// * 0

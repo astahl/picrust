@@ -346,7 +346,6 @@ pub struct FramebufferDescriptor {
 impl Framebuffer {
     pub fn new(desc: FramebufferDescriptor) -> Option<Self> {
         
-        use tags::*;
         let mut mailbox = mailbox::Mailbox::<128>::new();
         *mailbox
             .push_request(tags::FB_SET_PHYSICAL_DIMENSIONS, 8)
@@ -441,26 +440,6 @@ impl Framebuffer {
 
     pub fn get_physical_dimensions() -> FbDimensions {
         mailbox::simple_single_call(tags::FB_GET_PHYSICAL_DIMENSIONS, ()).expect("couldn't get physical dimensions")
-    }
-
-    pub fn as_pixels(&self) -> &[u32] {
-        unsafe {
-            self.raw_slice.align_to().1
-        }
-    }
-
-    fn as_mut_pixels(&mut self) -> &mut [u32] {
-        unsafe {
-            self.raw_slice.align_to_mut().1
-        }
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        self.raw_slice
-    }
-
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.raw_slice
     }
 
     // pub fn write_text(&self, text: &[u8], font: &[u64], mapping: impl Fn(u8) -> u8) {

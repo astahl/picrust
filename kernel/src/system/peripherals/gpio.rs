@@ -1,4 +1,4 @@
-use crate::{peripherals::mmio::Mmio, system::hal::{counter, thread}};
+use crate::{peripherals::mmio::Mmio, system::hal::thread};
 
 pub struct Gpio();
 

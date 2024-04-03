@@ -22,7 +22,7 @@ impl Led {
             mailbox::Tag::GetOnboardLedStatus as u32,
             *self as u32,
         ) {
-            Ok([pin, status]) => status == 1,
+            Ok([_pin, status]) => status == 1,
             Err(_) => false,
         }
     }

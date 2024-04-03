@@ -1,6 +1,5 @@
 use mystd::bit_field;
 
-use crate::println_debug;
 
 use super::mmio::Mmio;
 

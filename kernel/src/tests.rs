@@ -1,8 +1,6 @@
 use core::slice;
 
 use crate::println_log;
-use crate::system::arm_core;
-use crate::system::hal;
 use crate::system::hal::counter;
 use crate::system::hal::counter::PointInTime;
 use crate::system::hal::framebuffer::Framebuffer;
@@ -15,7 +13,6 @@ use crate::system::peripherals::dma::DmaControlBlock;
 use crate::system::peripherals::dma::DMA_0;
 use crate::system::peripherals::usb::DwHciCoreInterrupts;
 
-use super::system;
 use mystd::arr2d;
 use mystd::byte_value::ByteValue;
 use mystd::collections::rectangular::RectangularArray;

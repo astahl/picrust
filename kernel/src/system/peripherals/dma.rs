@@ -1,10 +1,9 @@
-use core::{
-    num::{NonZeroU16, NonZeroU32}, ops::Sub, usize
-};
+use core::
+    num::{NonZeroU16, NonZeroU32}
+;
 
-use mystd::{bit_field, byte_value::ByteValue, slice::slice2d::{traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d, Slice2d}};
+use mystd::{bit_field, slice::slice2d::{traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d, Slice2d}};
 
-use crate::{print_log, println_debug, println_log};
 
 use super::mmio::PeripheralRegister;
 

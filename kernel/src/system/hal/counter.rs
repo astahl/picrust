@@ -1,6 +1,6 @@
-use core::{ops::{Add, Sub}, time::Duration};
+use core::ops::{Add, Sub};
 
-use crate::system::arm_core::registers::aarch64::generic_timer::{self, cntp_cval_el0::CntPCValEl0, cntp_tval_el0::CntPTValEl0};
+use crate::system::arm_core::registers::aarch64::generic_timer::{self, cntp_tval_el0::CntPTValEl0};
 
 #[derive(Clone, Copy)]
 pub struct PointInTime {
