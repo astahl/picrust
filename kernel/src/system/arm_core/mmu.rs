@@ -684,7 +684,7 @@ impl TranslationTable4KB {
             let output_address = i * Self::L2_BLOCK_SIZE;
             let normal_block = BlockDescriptor::default()
                 .with_output_address(
-                    output_address as u64,
+                    output_address,
                     Self::ADDRESSING,
                     descriptors::BlockLevel::Level2,
                 )
@@ -703,7 +703,7 @@ impl TranslationTable4KB {
             let output_address = i * Self::L2_BLOCK_SIZE;
             let device_block = BlockDescriptor::default()
                 .with_output_address(
-                    output_address as u64,
+                    output_address,
                     Self::ADDRESSING,
                     descriptors::BlockLevel::Level2,
                 )
@@ -731,7 +731,7 @@ impl TranslationTable4KB {
         for i in 0..512 {
             let output_address = i * Self::PAGE_SIZE;
             let normal_page = PageDescriptor::default()
-                .with_output_address(output_address as u64, Self::ADDRESSING)
+                .with_output_address(output_address, Self::ADDRESSING)
                 .sh()
                 .set_value(descriptors::Shareability::OuterShareable)
                 .af()

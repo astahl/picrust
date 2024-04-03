@@ -352,10 +352,7 @@ impl Resolution {
                     horizontal: horizontal_active_pixels as usize,
                     vertical: vertical_active_lines as usize,
                     refresh_rate,
-                    interlaced: match signal_interface_type {
-                        SignalInterfaceType::Interlaced => true,
-                        _ => false,
-                    },
+                    interlaced: matches!(signal_interface_type, SignalInterfaceType::Interlaced),
                     aspect_ratio: Fract::reduced(horizontal_image_size_mm, vertical_image_size_mm),
                 })
             }
@@ -1000,13 +997,13 @@ impl RawEdidBlock {
         let red_x = (lsb_byte >> 6) as u16 & 0b11 | (self.0[27] as u16) << 2;
         let red_y = (lsb_byte >> 4) as u16 & 0b11 | (self.0[28] as u16) << 2;
         let green_x = (lsb_byte >> 2) as u16 & 0b11 | (self.0[29] as u16) << 2;
-        let green_y = (lsb_byte >> 0) as u16 & 0b11 | (self.0[30] as u16) << 2;
+        let green_y = lsb_byte as u16 & 0b11 | (self.0[30] as u16) << 2;
 
         let lsb_byte = self.0[26];
         let blue_x = (lsb_byte >> 6) as u16 & 0b11 | (self.0[31] as u16) << 2;
         let blue_y = (lsb_byte >> 4) as u16 & 0b11 | (self.0[32] as u16) << 2;
         let white_x = (lsb_byte >> 2) as u16 & 0b11 | (self.0[33] as u16) << 2;
-        let white_y = (lsb_byte >> 0) as u16 & 0b11 | (self.0[34] as u16) << 2;
+        let white_y = lsb_byte as u16 & 0b11 | (self.0[34] as u16) << 2;
 
         ChromaticityCoordinates {
             red: CIEPoint {
@@ -1055,10 +1052,10 @@ impl RawEdidBlock {
 
     pub fn standard_timing_information(&self) -> [Option<StandardTimingInformation>; 8] {
         let mut result = [None; 8];
-        for i in 0..8 {
+        for (i, item) in result.iter_mut().enumerate() {
             let byte0 = self.0[38 + i * 2];
             let byte1 = self.0[39 + i * 2];
-            result[i] = match (byte0, byte1) {
+            *item = match (byte0, byte1) {
                 (0x01, 0x01) => None,
                 _ => Some(StandardTimingInformation {
                     x_resolution: (byte0 as u16 + 31) * 8,

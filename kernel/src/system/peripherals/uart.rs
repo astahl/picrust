@@ -89,7 +89,7 @@ impl Uart {
         // Clear all pending UART interrupts
         UartInterruptClearReg::at(base_address).write(UartInterrupts::all_set());
 
-        let clock_rate = Clock::UART.rate().unwrap_or(3_000_000);
+        let clock_rate = Clock::Uart.rate().unwrap_or(3_000_000);
         let (brd_int, brd_frac) = UartBitrate::Baud1200.to_int_frac(clock_rate);
         UartIntegerBaudRateDivisorReg::at(base_address).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(base_address).write(brd_frac);

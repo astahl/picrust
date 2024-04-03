@@ -26,20 +26,18 @@ bit_field!(pub CpuECtlREl1 (u64) {
     /// Indicates the L2 instruction fetch prefetch distance. It is the number of requests by which the prefetcher is ahead of the demand request stream. It also specifies the maximum number of prefetch requests generated on a demand miss.
     36:35 => l2_instruction_fetch_prefetch_distance: enum IFetchDistance {
         /// 0 requests, disables instruction prefetch.
-        _0Requests = 0b00,
-        _1Request = 0b01,
-        _2Requests = 0b10,
-        /// 3 requests. This is the reset value.
-        _3Requests = 0b11,
-    } = IFetchDistance::_3Requests,
+        Requests0 = 0b00,
+        Request1 = 0b01,
+        Requests2 = 0b10,
+        Requests3 = 0b11,
+    } = IFetchDistance::Requests3,
 
     33:32 => l2_load_data_prefetch_distance: enum DFetchDistance {
-        _16Requests = 0b00,
-        _18Requests = 0b01,
-        _20Requests = 0b10,
-        /// 22 requests. This is the reset value.
-        _22Requests = 0b11,
-    } = DFetchDistance::_22Requests,
+        Requests16 = 0b00,
+        Requests18 = 0b01,
+        Requests20 = 0b10,
+        Requests22 = 0b11,
+    } = DFetchDistance::Requests22,
 
     /// Enables the processor to receive instruction cache and TLB maintenance operations broadcast from other processors in the cluster.
     ///

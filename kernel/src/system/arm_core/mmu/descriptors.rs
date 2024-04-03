@@ -248,9 +248,9 @@ pub enum Stage2MemoryAttr {
     },
 }
 
-impl Into<u64> for Stage2MemoryAttr {
-    fn into(self) -> u64 {
-        match self {
+impl From<Stage2MemoryAttr> for u64 {
+    fn from(val: Stage2MemoryAttr) -> u64 {
+        match val {
             Stage2MemoryAttr::Device(device_flags) => device_flags as u64,
             Stage2MemoryAttr::Normal { outer, inner } => ((outer as u64) << 2) | inner as u64,
         }

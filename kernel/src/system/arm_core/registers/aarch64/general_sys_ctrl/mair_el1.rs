@@ -138,10 +138,10 @@ impl From<MemoryAttributes> for MemoryAttributeDescriptor {
     }
 }
 
-impl Into<MemoryAttributes> for MemoryAttributeDescriptor {
-    fn into(self) -> MemoryAttributes {
+impl From<MemoryAttributeDescriptor> for MemoryAttributes {
+    fn from(val: MemoryAttributeDescriptor) -> MemoryAttributes {
         let mut result = MemoryAttributes::zero();
-        match self {
+        match val {
             MemoryAttributeDescriptor::Device {
                 memory_type,
                 #[cfg(feature = "FEAT_XS")]
@@ -186,9 +186,9 @@ pub struct NormalMemoryType {
     pub caching: Option<NormalCacheType>,
 }
 
-impl Into<NormalMemoryAttributes> for NormalMemoryType {
-    fn into(self) -> NormalMemoryAttributes {
-        match self.caching {
+impl From<NormalMemoryType> for NormalMemoryAttributes {
+    fn from(val: NormalMemoryType) -> NormalMemoryAttributes {
+        match val.caching {
             Some(NormalCacheType {
                 write_policy,
                 transience,

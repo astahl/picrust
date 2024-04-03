@@ -5,19 +5,19 @@ use mystd::bitfield::BitField;
 #[repr(u32)]
 pub enum Clock {
     Reserved = 0x00,
-    EMMC = 0x01,
-    UART = 0x02,
-    ARM = 0x03,
+    Emmc = 0x01,
+    Uart = 0x02,
+    Arm = 0x03,
     Core = 0x04,
     V3D = 0x05,
     H264 = 0x06,
-    ISP = 0x07,
-    SDRAM = 0x08,
+    Isp = 0x07,
+    Sdram = 0x08,
     Pixel = 0x09,
-    PWM = 0x0a,
-    HEVC = 0x0b,
-    EMMC2 = 0x0c,
-    M2MC = 0x0d,
+    Pwm = 0x0a,
+    Hevc = 0x0b,
+    Emmc2 = 0x0c,
+    M2Mc = 0x0d,
     PixelBVB = 0x0e,
 }
 
