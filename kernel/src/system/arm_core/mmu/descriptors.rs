@@ -200,6 +200,8 @@ impl TableDescriptor {
                 let field = self._address_48bit_gran64();
                 field.set_value(next_level_address >> field.lsb())
             }
+
+            #[cfg(any(feature = "FEAT_LPA", feature="FEAT_LPA2", feature = "FEAT_LVA"))]
             _ => unimplemented!(
                 "Currently only max 48 bit addressing supported, at 4 and 64 KB Granule"
             ),
@@ -216,6 +218,7 @@ impl TableDescriptor {
                 let field = self._address_48bit_gran64();
                 field.value() << field.lsb()
             }
+            #[cfg(any(feature = "FEAT_LPA", feature="FEAT_LPA2", feature = "FEAT_LVA"))]
             _ => unimplemented!(
                 "Currently only max 48 bit addressing supported, at 4 and 64 KB Granule"
             ),
@@ -518,6 +521,7 @@ impl BlockDescriptor {
                 field.set_value(output_address >> field.lsb())
             }
 
+            #[cfg(any(feature = "FEAT_LPA", feature="FEAT_LPA2", feature = "FEAT_LVA"))]
             _ => unimplemented!(
                 "Currently only max 48 bit addressing supported, at 4 and 64 KB Granule"
             ),
@@ -547,6 +551,7 @@ impl BlockDescriptor {
                 let field = self._address_48bit_gran64_level2();
                 field.value() << field.lsb()
             }
+            #[cfg(any(feature = "FEAT_LPA", feature="FEAT_LPA2", feature = "FEAT_LVA"))]
             _ => unimplemented!(
                 "Currently only max 48 bit addressing supported, at 4 and 64 KB Granule"
             ),
@@ -763,6 +768,7 @@ impl PageDescriptor {
                 field.set_value(output_address >> field.lsb())
             }
 
+            #[cfg(any(feature = "FEAT_LPA", feature="FEAT_LPA2", feature = "FEAT_LVA"))]
             _ => unimplemented!(
                 "Currently only max 48 bit addressing supported, at 4 and 64 KB Granule"
             ),
@@ -779,6 +785,7 @@ impl PageDescriptor {
                 let field = self._address_48bit_gran64();
                 field.value() << field.lsb()
             }
+            #[cfg(any(feature = "FEAT_LPA", feature="FEAT_LPA2", feature = "FEAT_LVA"))]
             _ => unimplemented!(
                 "Currently only max 48 bit addressing supported, at 4 and 64 KB Granule"
             ),

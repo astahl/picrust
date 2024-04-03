@@ -20,6 +20,7 @@ target=["aarch64-unknown-none"]
 runner="qemu-system-aarch64 -m 1G -M raspi3b -serial stdio -d int,mmu,unimp -kernel "
 #runner="qemu-system-aarch64 -m 2G -M raspi4b -serial stdio -d int -kernel " # supported in next qemu version
 rustflags=[
+    "-A", "dead_code",
     "-C", "force-unwind-tables=no",
     "-C", "link-arg=-Tlink64.x",
 # uncomment to strip symbols

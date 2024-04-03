@@ -337,7 +337,7 @@ const fn to_decimal_u32_skip_first_zero_unchecked(mut num: u32) -> [u8; 9] {
 
 const fn to_decimal_u64(num: u64) -> [u8; 20] {
     let low9 = (num % 1000000000) as u32;
-    let upper = (num / 1000000000);
+    let upper = num / 1000000000;
     let mid9 = (upper % 1000000000) as u32;
     let top2 = (upper / 1000000000) as u8;
 

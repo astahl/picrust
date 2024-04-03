@@ -2,7 +2,7 @@ use core::arch::asm;
 
 use mystd::bit_field;
 
-use crate::{system::arm_core::mmu::descriptors::{Cacheability, Shareability}, system_register_impl};
+use crate::{system::arm_core::mmu::descriptors::Shareability, system_register_impl};
 
 use super::id_aa64mmfr0_el1::PhysicalAddressRangeSupport;
 

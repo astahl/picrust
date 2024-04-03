@@ -3,12 +3,9 @@ pub mod mmu;
 pub mod registers;
 
 use core::arch::asm;
-use core::usize;
 
 use registers::aarch64::general_sys_ctrl;
 use registers::aarch64::special_purpose;
-
-use crate::system::peripherals::interrupts;
 
 use self::registers::aarch64::general_sys_ctrl::rmr_elx::RmrElx;
 

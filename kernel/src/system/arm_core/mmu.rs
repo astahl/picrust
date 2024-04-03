@@ -4,7 +4,6 @@ use core::arch::asm;
 
 use mystd::byte_value::ByteValue;
 
-use crate::system::arm_core::registers::aarch64::general_sys_ctrl::id_aa64mmfr0_el1::Granule4KBSupport;
 use crate::system::peripherals::BCM_HOST;
 use crate::system::{arm_core::mmu::descriptors::AddressingMode, hal::info::MemoryMap};
 

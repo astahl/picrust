@@ -1,6 +1,6 @@
 use core::fmt::{Debug, Display};
 
-use crate::{peripherals::mailbox, system::peripherals::mailbox::simple_single_call};
+use crate::system::peripherals::mailbox::simple_single_call;
 
 mod tag {
     pub const GET_EDID_BLOCK: u32 = 0x00030020;
@@ -516,9 +516,9 @@ pub enum DisplayTypeAnalog {
 #[derive(Debug)]
 pub enum DisplayTypeDigital {
     RGB444 = 0b00,
-    RGB444_YCbCr444 = 0b01,
-    RGB444_YCbCr422 = 0b10,
-    RGB444_YCbCr444_YCbCr422 = 0b11,
+    Rgb444YCbCr444 = 0b01,
+    Rgb444YCbCr422 = 0b10,
+    Rgb444YCbCr444YCbCr422 = 0b11,
 }
 
 #[derive(Debug)]
@@ -654,11 +654,11 @@ impl DescriptorText {
 
 #[derive(Debug, Clone, Copy)]
 pub enum AspectRatioPreference {
-    ar_4_3 = 0b000,
-    ar_16_9 = 0b001,
-    ar_16_10 = 0b010,
-    ar_5_4 = 0b011,
-    ar_15_9 = 0b100,
+    Ar4by3 = 0b000,
+    Ar16by9 = 0b001,
+    Ar16by10 = 0b010,
+    Ar5by4 = 0b011,
+    Ar15by9 = 0b100,
 }
 
 #[derive(Debug, Clone, Copy)]

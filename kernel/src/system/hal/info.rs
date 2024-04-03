@@ -1,5 +1,5 @@
 use core::{
-    fmt::{Debug, Display, Write},
+    fmt::{Debug, Display},
     ptr::null,
 };
 
@@ -435,41 +435,41 @@ impl MemoryBlock {
 pub struct MemoryMap();
 impl MemoryMap {
     pub fn main_stack() -> MemoryBlock {
-        unsafe { MemoryBlock::from_address_and_size(0, 0x80000) }
+        MemoryBlock::from_address_and_size(0, 0x80000)
     }
 }
 
 impl core::fmt::Debug for MemoryMap {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        unsafe {
-            let stack = Self::main_stack();
-            // let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
-            // let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
-            // let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);
-            // let font = MemoryBlock::from_symbols(&__font_start, &__font_end);
-            // let data = MemoryBlock::from_symbols(&__data_start, &__data_end);
-            // let bss = MemoryBlock::from_symbols(&__bss_start, &__bss_end);
-            // let arm_ram = self::get_arm_memory().ok_or(core::fmt::Error)?;
-            // let heap = MemoryBlock::from_symbols(&__kernel_end, &*arm_ram.1);
-            // let vc_ram = self::get_vc_memory().ok_or(core::fmt::Error)?;
-            let peripherals = MemoryBlock::from_address_and_size(
-                peripherals::BCM_HOST.peripheral_address,
-                peripherals::BCM_HOST.peripheral_size,
-            );
-            f.debug_struct("MemoryMap")
-                .field("Stack", &stack)
-                // .field("Kernel", &kernel)
-                // .field("Kernel Code", &kernel_text)
-                // .field("Read-Only Data Segment", &rodata)
-                // .field("Font", &font)
-                // .field("Data Segment", &data)
-                // .field("BSS Segment", &bss)
-                // .field("Heap", &heap)
-                // .field("ARM", &arm_ram)
-                // .field("VC", &vc_ram)
-                .field("Peripherals", &peripherals)
-                .field("Peripherals", &peripherals::PeripheralMap())
-                .finish()
-        }
+    
+        let stack = Self::main_stack();
+        // let kernel_text = MemoryBlock::from_symbols(&__kernel_txt_start, &__kernel_txt_end);
+        // let kernel = MemoryBlock::from_symbols(&__kernel_start, &__kernel_end);
+        // let rodata = MemoryBlock::from_symbols(&__rodata_start, &__rodata_end);
+        // let font = MemoryBlock::from_symbols(&__font_start, &__font_end);
+        // let data = MemoryBlock::from_symbols(&__data_start, &__data_end);
+        // let bss = MemoryBlock::from_symbols(&__bss_start, &__bss_end);
+        // let arm_ram = self::get_arm_memory().ok_or(core::fmt::Error)?;
+        // let heap = MemoryBlock::from_symbols(&__kernel_end, &*arm_ram.1);
+        // let vc_ram = self::get_vc_memory().ok_or(core::fmt::Error)?;
+        let peripherals = MemoryBlock::from_address_and_size(
+            peripherals::BCM_HOST.peripheral_address,
+            peripherals::BCM_HOST.peripheral_size,
+        );
+        f.debug_struct("MemoryMap")
+            .field("Stack", &stack)
+            // .field("Kernel", &kernel)
+            // .field("Kernel Code", &kernel_text)
+            // .field("Read-Only Data Segment", &rodata)
+            // .field("Font", &font)
+            // .field("Data Segment", &data)
+            // .field("BSS Segment", &bss)
+            // .field("Heap", &heap)
+            // .field("ARM", &arm_ram)
+            // .field("VC", &vc_ram)
+            .field("Peripherals", &peripherals)
+            .field("Peripherals", &peripherals::PeripheralMap())
+            .finish()
+        
     }
 }

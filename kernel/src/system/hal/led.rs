@@ -1,4 +1,4 @@
-use crate::{peripherals::mailbox, system};
+use crate::peripherals::mailbox;
 
 use super::thread;
 
