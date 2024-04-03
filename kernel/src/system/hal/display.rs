@@ -458,10 +458,10 @@ pub enum BitDepth {
 #[derive(Debug)]
 pub enum VideoInterface {
     Undefined,
-    DVI,
-    HDMIa,
-    HDMIb,
-    MDDI,
+    Dvi,
+    HdmiA,
+    HdmiB,
+    Mddi,
     DisplayPort,
     Unknown6,
     Unknown7,
@@ -638,7 +638,7 @@ pub struct DescriptorText([u8; 13]);
 
 impl core::fmt::Debug for DescriptorText {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.to_str())
+        f.write_str(self.as_str())
     }
 }
 
@@ -649,7 +649,7 @@ impl From<&[u8]> for DescriptorText {
 }
 
 impl DescriptorText {
-    fn to_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         // actually it's Codepage 437, but let's just assume it's ascii
         core::str::from_utf8(self.0.as_slice()).unwrap().trim_end()
     }

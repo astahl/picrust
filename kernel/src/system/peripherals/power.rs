@@ -5,15 +5,15 @@ use super::mailbox;
 #[derive(Clone, Copy, Debug)]
 #[repr(u32)]
 pub enum PowerDevice {
-    SDCard = 0x00000000,
-    UART0 = 0x00000001,
-    UART1 = 0x00000002,
-    USBHCD = 0x00000003,
+    SdCard = 0x00000000,
+    Uart0 = 0x00000001,
+    Uart1 = 0x00000002,
+    UsbHcd = 0x00000003,
     I2C0 = 0x00000004,
     I2C1 = 0x00000005,
     I2C2 = 0x00000006,
-    SPI = 0x00000007,
-    CCP2TX = 0x00000008,
+    Spi = 0x00000007,
+    Ccp2Tx = 0x00000008,
     Unknown0RPi4 = 0x00000009,
     Unknown1RPi4 = 0x0000000a,
 }

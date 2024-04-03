@@ -2,6 +2,7 @@
 rel3="build --release --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 rel4="build --release --target=aarch64-unknown-none --no-default-features --features=raspi4"
 run3="run --release --target=aarch64-unknown-none --no-default-features --features=raspi3b"
+clippy3="clippy --release --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 rundbg3="run --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -S -s"
 run="run --target=aarch64-unknown-none --no-default-features --features=raspi3b"
 #run="run --release --target=aarch64-unknown-none --no-default-features --features=raspi4" # supported in next qemu version

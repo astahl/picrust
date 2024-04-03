@@ -2,7 +2,7 @@ use mystd::bit_field;
 
 use crate::system::arm_core::registers::aarch64::special_purpose;
 
-use super::mmio::MMIO;
+use super::mmio::Mmio;
 
 const IRQ_BASE: usize = 0xB000;
 
@@ -28,16 +28,16 @@ pub fn irq_disable() {
 
 impl IrqPendingBase {
 
-    const REG: MMIO<IRQ_BASE, 0x200> = MMIO();
+    const REG: Mmio<IRQ_BASE, 0x200> = Mmio();
     pub fn read_register() -> Self {
         Self::REG.read().into()
     }
 }
 
 impl GpuIrqs1 {
-    const PENDING: MMIO<IRQ_BASE, 0x204> = MMIO();
-    const ENABLE: MMIO<IRQ_BASE, 0x210> = MMIO();
-    const DISABLE: MMIO<IRQ_BASE, 0x21c> = MMIO();
+    const PENDING: Mmio<IRQ_BASE, 0x204> = Mmio();
+    const ENABLE: Mmio<IRQ_BASE, 0x210> = Mmio();
+    const DISABLE: Mmio<IRQ_BASE, 0x21c> = Mmio();
     
     pub fn read_pending() -> Self {
         Self::PENDING.read().into()
@@ -61,9 +61,9 @@ impl GpuIrqs1 {
 }
 
 impl GpuIrqs2 {
-    const PENDING: MMIO<IRQ_BASE, 0x208> = MMIO();
-    const ENABLE: MMIO<IRQ_BASE, 0x214> = MMIO();
-    const DISABLE: MMIO<IRQ_BASE, 0x220> = MMIO();
+    const PENDING: Mmio<IRQ_BASE, 0x208> = Mmio();
+    const ENABLE: Mmio<IRQ_BASE, 0x214> = Mmio();
+    const DISABLE: Mmio<IRQ_BASE, 0x220> = Mmio();
     
     pub fn read_pending() -> Self {
         Self::PENDING.read().into()
@@ -87,9 +87,9 @@ impl GpuIrqs2 {
 }
 
 impl BasicIrqs {
-    const PENDING: MMIO<IRQ_BASE, 0x200> = MMIO();
-    const ENABLE: MMIO<IRQ_BASE, 0x218> = MMIO();
-    const DISABLE: MMIO<IRQ_BASE, 0x224> = MMIO();
+    const PENDING: Mmio<IRQ_BASE, 0x200> = Mmio();
+    const ENABLE: Mmio<IRQ_BASE, 0x218> = Mmio();
+    const DISABLE: Mmio<IRQ_BASE, 0x224> = Mmio();
     
     pub fn read_pending() -> Self {
         Self::PENDING.read().into()
@@ -113,7 +113,7 @@ impl BasicIrqs {
 }
 
 impl Fiq {
-    const REG: MMIO<IRQ_BASE, 0x20c> = MMIO();
+    const REG: Mmio<IRQ_BASE, 0x20c> = Mmio();
 
     pub fn read_register() -> Self {
         Self::REG.read().into()

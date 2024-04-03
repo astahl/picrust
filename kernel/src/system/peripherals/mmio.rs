@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
-pub struct MMIO<const BASE: usize, const OFFSET: usize>();
-impl<const BASE: usize, const OFFSET: usize> MMIO<BASE, OFFSET> {
+pub struct Mmio<const BASE: usize, const OFFSET: usize>();
+impl<const BASE: usize, const OFFSET: usize> Mmio<BASE, OFFSET> {
     const ADDRESS: usize = crate::system::peripherals::BCM_HOST.peripheral_address + BASE + OFFSET;
     pub fn address(&self) -> usize {
         Self::ADDRESS
@@ -84,11 +84,11 @@ impl<const BASE: usize, const OFFSET: usize, T> Register<BASE, OFFSET, T> {
         }
     }
 
-    pub const fn as_ptr(self) -> *const T {
+    pub const fn as_ptr(&self) -> *const T {
         (Self::ADDRESS + self.0) as *const T
     }
 
-    pub const fn as_mut_ptr(self) -> *mut T {
+    pub const fn as_mut_ptr(&self) -> *mut T {
         (Self::ADDRESS + self.0) as *mut T
     }
 }

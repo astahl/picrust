@@ -33,26 +33,26 @@ pub struct ScreenGeometry {
     pub overscan: Overscan
 }
 
-impl Into<FramebufferDescriptor> for ScreenGeometry {
-    fn into(self) -> FramebufferDescriptor {
+impl From<ScreenGeometry> for FramebufferDescriptor {
+    fn from(value: ScreenGeometry) -> Self {
         FramebufferDescriptor {
             physical_display: framebuffer::FbDimensions { 
-                width_px: self.physical_size.width as u32, 
-                height_px: self.physical_size.height as u32 
+                width_px: value.physical_size.width as u32, 
+                height_px: value.physical_size.height as u32 
             },
             virtual_buffer: framebuffer::FbDimensions { 
-                width_px: self.virtual_size.width as u32, 
-                height_px: self.virtual_size.height as u32 
+                width_px: value.virtual_size.width as u32, 
+                height_px: value.virtual_size.height as u32 
             },
             virtual_buffer_offset: framebuffer::FbOffset { 
-                x_px: self.virtual_offset.x as u32, 
-                y_px: self.virtual_offset.y as u32 
+                x_px: value.virtual_offset.x as u32, 
+                y_px: value.virtual_offset.y as u32 
             },
             overscan: framebuffer::FbOverscan { 
-                top_px: self.overscan.top as u32, 
-                bottom_px: self.overscan.bottom as u32, 
-                left_px: self.overscan.left as u32, 
-                right_px: self.overscan.right as u32 
+                top_px: value.overscan.top as u32, 
+                bottom_px: value.overscan.bottom as u32, 
+                left_px: value.overscan.left as u32, 
+                right_px: value.overscan.right as u32 
             },
             depth: FbDepth { bits_per_pixel: 0 },
             pixel_order: framebuffer::PixelOrder::Bgr,

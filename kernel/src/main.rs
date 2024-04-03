@@ -10,7 +10,6 @@ compile_error!("Can't compile for multiple Raspberry Pi Models.");
 mod exception;
 mod system;
 mod tests;
-use core::arch::asm;
 use core::arch::global_asm;
 use mystd::io::Write;
 use system::arm_core;
@@ -21,7 +20,6 @@ use system::peripherals::uart;
 
 use crate::system::hal::led::status_blink_twice;
 use crate::system::hal::signal::new_latch;
-use crate::system::hal::signal::new_signal;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
@@ -81,7 +79,9 @@ pub extern "C" fn main(core_id: usize) {
     // if core_id == 0 {
     //     panic!("Let's go monitor!")
     // } else {
-    loop {}
+    loop {
+        core::hint::spin_loop();
+    }
     // }
     // tests::run();
     // tests::test_usb().expect("USB test should pass");

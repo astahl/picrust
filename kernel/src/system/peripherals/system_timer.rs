@@ -2,7 +2,7 @@ use mystd::bit_field;
 
 use crate::println_debug;
 
-use super::mmio::MMIO;
+use super::mmio::Mmio;
 
 
 
@@ -11,13 +11,13 @@ pub struct SystemTimer{}
 const STIMER_BASE: usize = 0x3000;
 
 impl SystemTimer {
-    const CS: MMIO<STIMER_BASE, 0x0> = MMIO();
-    const CLO: MMIO<STIMER_BASE, 0x4> = MMIO();
-    const CHI: MMIO<STIMER_BASE, 0x8> = MMIO();
-    const C0: MMIO<STIMER_BASE, 0xc> = MMIO();
-    const C1: MMIO<STIMER_BASE, 0x10> = MMIO();
-    const C2: MMIO<STIMER_BASE, 0x14> = MMIO();
-    const C3: MMIO<STIMER_BASE, 0x18> = MMIO();
+    const CS: Mmio<STIMER_BASE, 0x0> = Mmio();
+    const CLO: Mmio<STIMER_BASE, 0x4> = Mmio();
+    const CHI: Mmio<STIMER_BASE, 0x8> = Mmio();
+    const C0: Mmio<STIMER_BASE, 0xc> = Mmio();
+    const C1: Mmio<STIMER_BASE, 0x10> = Mmio();
+    const C2: Mmio<STIMER_BASE, 0x14> = Mmio();
+    const C3: Mmio<STIMER_BASE, 0x18> = Mmio();
 
     pub fn counter_low() -> u32 {
         Self::CLO.read()

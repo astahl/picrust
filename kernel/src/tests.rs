@@ -318,17 +318,17 @@ pub fn test_usb() -> Option<()> {
 
     println_log!("USB Vendor-ID {:#x}", usb::DwHciCore::vendor_id());
 
-    let power_state = power::PowerDevice::USBHCD.state()?;
+    let power_state = power::PowerDevice::UsbHcd.state()?;
     println_log!("USB Exists: {}", power_state.exists());
     println_log!("USB Power On: {}", power_state.is_on());
     if !power_state.is_on() {
         let timeout =
-            core::time::Duration::from_millis(power::PowerDevice::USBHCD.timing_ms()? as u64);
+            core::time::Duration::from_millis(power::PowerDevice::UsbHcd.timing_ms()? as u64);
         println_log!("USB Power On Timeout: {} msec", timeout.as_millis());
         let turned_on = power_state.with_on().with_wait_set();
-        power::PowerDevice::USBHCD.set_state(turned_on);
+        power::PowerDevice::UsbHcd.set_state(turned_on);
         thread::spin_wait_for(timeout);
-        let power_state = power::PowerDevice::USBHCD.state()?;
+        let power_state = power::PowerDevice::UsbHcd.state()?;
         println_log!("USB Power On: {}", power_state.is_on());
     }
 
@@ -391,7 +391,7 @@ pub fn test_usb() -> Option<()> {
     usb::DwHciCore::set_usb_config(usb_config);
 
     let num_host_channels = hw_cfg2.num_host_channels_actual();
-    assert!(num_host_channels >= 4 && num_host_channels <= 16);
+    assert!((4..=16).contains(&num_host_channels));
 
     let ahb_config = usb::DwHciCore::ahb_config()
         .enable_dma()

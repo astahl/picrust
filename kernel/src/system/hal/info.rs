@@ -262,8 +262,8 @@ impl Revision {
                 memory_size: unsafe { core::mem::transmute((x >> 20) as u8 & 0x7) },
                 manufacturer: unsafe { core::mem::transmute((x >> 16) as u8 & 0xF) },
                 processor: unsafe { core::mem::transmute((x >> 12) as u8 & 0xF) },
-                model: unsafe { core::mem::transmute((x >> 4) as u8 & 0xFF) },
-                revision: unsafe { core::mem::transmute(x as u8 & 0xF) },
+                model: unsafe { core::mem::transmute((x >> 4) as u8) },
+                revision: x as u8 & 0xF,
             },
             _ => Self::Unknown(code),
         }

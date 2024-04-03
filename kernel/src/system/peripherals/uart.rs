@@ -90,14 +90,14 @@ impl Uart {
         UartInterruptClearReg::at(base_address).write(UartInterrupts::all_set());
 
         let clock_rate = Clock::UART.rate().unwrap_or(3_000_000);
-        let (brd_int, brd_frac) = UartBitrate::_1200Baud.to_int_frac(clock_rate);
+        let (brd_int, brd_frac) = UartBitrate::Baud1200.to_int_frac(clock_rate);
         UartIntegerBaudRateDivisorReg::at(base_address).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(base_address).write(brd_frac);
 
         UartLineControlReg::at(base_address).write(
             UartLineControl::zero()
                 .word_length()
-                .set_value(UartWordLength::_8Bits)
+                .set_value(UartWordLength::Bit8)
                 .fifo_enabled()
                 .set(),
         );
@@ -122,7 +122,7 @@ impl Uart {
         }
         let read = UartDataReg::at(self.base_address()).read();
         let (status, data): (UartStatus, u8) =
-            (read.status().into(), read.data().value().unwrap() as u8);
+            (read.status().into(), read.data().value().unwrap());
         if status.is_all_clear() {
             Ok(data)
         } else {
@@ -271,18 +271,19 @@ bit_field!(pub UartFlags(u32){
 });
 
 #[repr(u32)]
+#[derive(Clone, Copy)]
 pub enum UartBitrate {
-    _75Baud = 75,
-    _110Baud = 110,
-    _300Baud = 300,
-    _1200Baud = 1200,
-    _2400Baud = 2400,
-    _4800Baud = 4800,
-    _9600Baud = 9600,
-    _19200Baud = 19200,
-    _38400Baud = 38400,
-    _57600Baud = 57600,
-    _115200Baud = 115200,
+    Baud75 = 75,
+    Baud110 = 110,
+    Baud300 = 300,
+    Baud1200 = 1200,
+    Baud2400 = 2400,
+    Baud4800 = 4800,
+    Baud9600 = 9600,
+    Baud19200 = 19200,
+    Baud38400 = 38400,
+    Baud57600 = 57600,
+    Baud115200 = 115200,
 }
 
 impl UartBitrate {
@@ -306,10 +307,10 @@ impl UartBitrate {
 bit_field!(pub UartLineControl(u32){
     7 => stick_parity,
     5:6 => word_length: enum UartWordLength {
-        _5Bits = 0b00,
-        _6Bits = 0b01,
-        _7Bits = 0b10,
-        _8Bits = 0b11,
+        Bit5 = 0b00,
+        Bit6 = 0b01,
+        Bit7 = 0b10,
+        Bit8 = 0b11,
     },
     4 => fifo_enabled,
     3 => two_stop_bits,

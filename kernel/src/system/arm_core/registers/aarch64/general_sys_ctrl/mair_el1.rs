@@ -1,4 +1,4 @@
-use core::{arch::asm, ops::Index};
+use core::arch::asm;
 
 use mystd::bit_field;
 
@@ -147,7 +147,7 @@ impl Into<MemoryAttributes> for MemoryAttributeDescriptor {
                 #[cfg(feature = "FEAT_XS")]
                 xs_zero,
             } => {
-                let result = result.device().set_value(memory_type);
+                result = result.device().set_value(memory_type);
                 #[cfg(feature = "FEAT_XS")]
                 {
                     result.device_xs().set_value(xs_zero);

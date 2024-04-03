@@ -1,14 +1,5 @@
-use core::fmt::DebugStruct;
 use crate::{peripherals::mailbox, system::peripherals::mailbox::MailboxError};
 
-
-pub mod color {
-    pub const WHITE: u32 = 0xff_ff_ff_ff;
-    pub const BLACK: u32 = 0xff_00_00_00;
-    pub const RED: u32 = 0xff_00_00_ff;
-    pub const GREEN: u32 = 0xff_00_ff_00;
-    pub const BLUE: u32 = 0xff_ff_00_00;
-}
 
 mod tags {
 
@@ -469,7 +460,7 @@ impl Framebuffer {
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.raw_slice
+        self.raw_slice
     }
 
     // pub fn write_text(&self, text: &[u8], font: &[u64], mapping: impl Fn(u8) -> u8) {

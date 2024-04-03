@@ -22,8 +22,8 @@ pub enum DmaError {
 
 pub struct DmaStandardChannel(usize);
 
-pub const DMA_0: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 0 * DMA_CHANNEL_SZ);
-pub const DMA_1: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 1 * DMA_CHANNEL_SZ);
+pub const DMA_0: DmaStandardChannel = DmaStandardChannel(DMA_BASE);
+pub const DMA_1: DmaStandardChannel = DmaStandardChannel(DMA_BASE + DMA_CHANNEL_SZ);
 pub const DMA_2: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 2 * DMA_CHANNEL_SZ);
 pub const DMA_3: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 3 * DMA_CHANNEL_SZ);
 pub const DMA_4: DmaStandardChannel = DmaStandardChannel(DMA_BASE + 4 * DMA_CHANNEL_SZ);
@@ -278,7 +278,7 @@ impl DmaControlBlock {
             DmaTransferInformation::wide_copy(), 
             src.as_ptr() as u32, 
             dst.as_mut_ptr() as u32, 
-            (src.len() * core::mem::size_of::<T>()) as u32, 
+            (core::mem::size_of_val(src)) as u32, 
             0)
     }
 

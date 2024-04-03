@@ -11,13 +11,10 @@ pub enum Led {
 
 impl Led {
     pub fn set(&self, on: bool) {
-        match mailbox::simple_single_call::<[u32; 2], ()>(
+        let _ = mailbox::simple_single_call::<[u32; 2], ()>(
             mailbox::Tag::SetOnboardLedStatus as u32,
             [*self as u32, if on { 1 } else { 0 }],
-        ) {
-            Ok(_) => (),
-            Err(_) => (),
-        }
+        ).unwrap();
     }
 
     pub fn get(&self) -> bool {

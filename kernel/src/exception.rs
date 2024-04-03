@@ -1,8 +1,8 @@
-use core::{arch::{asm, global_asm}, fmt::Debug};
+use core::{arch::global_asm, fmt::Debug};
 
 use mystd::{bit_field, bitfield::BitField};
 
-use crate::{println_debug, println_log, system::{arm_core, peripherals::{interrupts, system_timer, uart::{self, UART_0}}}};
+use crate::system::peripherals::{interrupts, system_timer, uart::{self, UART_0}};
 
 #[no_mangle]
 pub extern "C" fn exc_handler(
@@ -47,15 +47,7 @@ pub extern "C" fn exc_handler(
 
 
 #[no_mangle]
-pub extern "C" fn irq_handler(
-    exception_data: AuxExceptionData,
-) {
-    //println_debug!("IRQ {}", exception_data);
-
-    let elr: u64;
-    unsafe { asm!("mrs {}, elr_el1", out(reg) elr)}
-    //println_debug!("ELR before {:x}", elr);
-
+pub extern "C" fn irq_handler() {
     let pending_base = interrupts::IrqPendingBase::read_register();
     //println_debug!("Pending {:#?}", pending_base);
     if pending_base.pend_reg_1().is_set() {
@@ -81,9 +73,6 @@ pub extern "C" fn irq_handler(
     if pending_base.arm_timer().is_set() {
 
     }
-    let elr: u64;
-    unsafe { asm!("mrs {}, elr_el1", out(reg) elr)}
-    //println_debug!("ELR after {:x}", elr);
 }
 
 

@@ -1,4 +1,4 @@
-use crate::{peripherals::mmio::MMIO, system::hal::{counter, thread}};
+use crate::{peripherals::mmio::Mmio, system::hal::{counter, thread}};
 
 pub struct Gpio();
 
@@ -81,12 +81,12 @@ pub enum PinFunction {
 
 impl Gpio {
     // Function Select Registers
-    const GPFSEL0: MMIO<GPIO_BASE, 0x00> = MMIO();
-    const GPFSEL1: MMIO<GPIO_BASE, 0x04> = MMIO();
-    const GPFSEL2: MMIO<GPIO_BASE, 0x08> = MMIO();
-    const GPFSEL3: MMIO<GPIO_BASE, 0x0c> = MMIO();
-    const GPFSEL4: MMIO<GPIO_BASE, 0x10> = MMIO();
-    const GPFSEL5: MMIO<GPIO_BASE, 0x14> = MMIO();
+    const GPFSEL0: Mmio<GPIO_BASE, 0x00> = Mmio();
+    const GPFSEL1: Mmio<GPIO_BASE, 0x04> = Mmio();
+    const GPFSEL2: Mmio<GPIO_BASE, 0x08> = Mmio();
+    const GPFSEL3: Mmio<GPIO_BASE, 0x0c> = Mmio();
+    const GPFSEL4: Mmio<GPIO_BASE, 0x10> = Mmio();
+    const GPFSEL5: Mmio<GPIO_BASE, 0x14> = Mmio();
 
     pub fn set_functions(pins: PinSet, function: PinFunction) {
         let mut state = [
@@ -154,10 +154,10 @@ pub enum Resistor {
 #[cfg(feature = "bcm2837")]
 impl Gpio {
     // Pull-up/down Register
-    const GPPUD: MMIO<GPIO_BASE, 0x94> = MMIO();
+    const GPPUD: Mmio<GPIO_BASE, 0x94> = Mmio();
     // Pull-up/down Clock Registers
-    const GPPUDCLK0: MMIO<GPIO_BASE, 0x98> = MMIO();
-    const GPPUDCLK1: MMIO<GPIO_BASE, 0x9c> = MMIO();
+    const GPPUDCLK0: Mmio<GPIO_BASE, 0x98> = Mmio();
+    const GPPUDCLK1: Mmio<GPIO_BASE, 0x9c> = Mmio();
 
     pub fn set_pull_resistors(pins: PinSet, resistor: Resistor) {
         // The GPIO Pull-up/down Clock Registers control the actuation of internal pull-downs on the respective GPIO pins. These registers must be used in conjunction with the GPPUD register to effect GPIO Pull-up/down changes.
@@ -182,10 +182,10 @@ impl Gpio {
 #[cfg(any(feature = "bcm2811", feature = "bcm2812"))]
 impl Gpio {
     // Pull-up/down Control Registers
-    const GPIO_PUP_PDN_CNTRL_REG0: MMIO<GPIO_BASE, 0xe4> = MMIO();
-    const GPIO_PUP_PDN_CNTRL_REG1: MMIO<GPIO_BASE, 0xe8> = MMIO();
-    const GPIO_PUP_PDN_CNTRL_REG2: MMIO<GPIO_BASE, 0xec> = MMIO();
-    const GPIO_PUP_PDN_CNTRL_REG3: MMIO<GPIO_BASE, 0xf0> = MMIO();
+    const GPIO_PUP_PDN_CNTRL_REG0: Mmio<GPIO_BASE, 0xe4> = Mmio();
+    const GPIO_PUP_PDN_CNTRL_REG1: Mmio<GPIO_BASE, 0xe8> = Mmio();
+    const GPIO_PUP_PDN_CNTRL_REG2: Mmio<GPIO_BASE, 0xec> = Mmio();
+    const GPIO_PUP_PDN_CNTRL_REG3: Mmio<GPIO_BASE, 0xf0> = Mmio();
 
     const fn get_pull_control_register(bank_select: usize) -> u32 {
         match bank_select {

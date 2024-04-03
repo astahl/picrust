@@ -53,7 +53,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 
     println_debug!("Checked support, everything should work! going ahead...");
     let table = unsafe {
-        let table_ptr = ((32 * 1024 * 1024) as *mut TranslationTable4KB);
+        let table_ptr = (32 * 1024 * 1024) as *mut TranslationTable4KB;
         TranslationTable4KB::init(table_ptr)
         // for ia in 0..(1024 * 1024) {
         //     let ia = ia * 1024;
@@ -680,7 +680,7 @@ impl TranslationTable4KB {
             .with_next_level_table_at(self.range_1_level_3_0.as_ptr() as u64, Self::ADDRESSING)
             .into();
 
-        for i in 1..Self::PERIPHERAL_BLOCKS_BEGIN {
+        for i in 1..512 {
             let output_address = i * Self::L2_BLOCK_SIZE;
             let normal_block = BlockDescriptor::default()
                 .with_output_address(
@@ -718,25 +718,7 @@ impl TranslationTable4KB {
             self.range_0_level_2[i as usize].block = device_block;
             self.range_1_level_2[i as usize].block = device_block;
         }
-        for i in Self::PERIPHERAL_BLOCKS_END..512 {
-            let output_address = i * Self::L2_BLOCK_SIZE;
-            let normal_block = BlockDescriptor::default()
-                .with_output_address(
-                    output_address as u64,
-                    Self::ADDRESSING,
-                    descriptors::BlockLevel::Level2,
-                )
-                .af()
-                .set()
-                .contiguous()
-                .set()
-                .sh()
-                .set_value(descriptors::Shareability::InnerShareable)
-                .stage_1_mem_attr_indx()
-                .set_value(MEMORY_ATTR_IDX_NORMAL);
-            self.range_0_level_2[i as usize].block = normal_block;
-            self.range_1_level_2[i as usize].block = normal_block;
-        }
+
     }
 
     fn initialize_level_3(&mut self) {

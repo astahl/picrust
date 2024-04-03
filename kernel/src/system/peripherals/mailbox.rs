@@ -1,10 +1,4 @@
-use core::ptr::read_volatile;
-
-use crate::exception::ExceptionSyndrome;
-use crate::peripherals::mmio;
-use crate::peripherals::mmio::MMIO;
-use crate::println_debug;
-
+use super::mmio::Mmio;
 use super::mmio::DynamicMmioField;
 
 pub const MBOX_BASE: usize = 0xB880;
@@ -96,12 +90,12 @@ pub enum Tag {
 pub const CHANNEL_PROPERTIES: u8 = 8;
 
 impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
-    const MBOX_READ: MMIO<MBOX_BASE, 0x00> = MMIO();
-    const MBOX_POLL: MMIO<MBOX_BASE, 0x10> = MMIO();
-    const MBOX_SENDER: MMIO<MBOX_BASE, 0x14> = MMIO();
-    const MBOX_STATUS: MMIO<MBOX_BASE, 0x18> = MMIO();
-    const MBOX_CONFIG: MMIO<MBOX_BASE, 0x1C> = MMIO();
-    const MBOX_WRITE: MMIO<MBOX_BASE, 0x20> = MMIO();
+    const MBOX_READ: Mmio<MBOX_BASE, 0x00> = Mmio();
+    const MBOX_POLL: Mmio<MBOX_BASE, 0x10> = Mmio();
+    const MBOX_SENDER: Mmio<MBOX_BASE, 0x14> = Mmio();
+    const MBOX_STATUS: Mmio<MBOX_BASE, 0x18> = Mmio();
+    const MBOX_CONFIG: Mmio<MBOX_BASE, 0x1C> = Mmio();
+    const MBOX_WRITE: Mmio<MBOX_BASE, 0x20> = Mmio();
 
     pub const fn new() -> Self {
         assert!(BUFFER_SIZE > 0);
@@ -156,8 +150,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
         value_buffer_byte_size: u32,
     ) -> Result<&mut [u32], MailboxError> {
         let message_u32_size =
-            ((core::mem::size_of::<MessageHeader>() + value_buffer_byte_size as usize + 3) >> 2)
-                as usize;
+            (core::mem::size_of::<MessageHeader>() + value_buffer_byte_size as usize + 3) >> 2;
         let message_byte_size = message_u32_size << 2;
         let message_start = self.buffer_end_index();
         let message_end = message_start + message_u32_size;
@@ -209,10 +202,10 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
             .map(|data| data.fill(0))
     }
 
-    pub fn submit_messages<'a>(
-        &'a mut self,
+    pub fn submit_messages(
+        &mut self,
         channel: u8,
-    ) -> Result<ResponseIterator<'a>, MailboxError> {
+    ) -> Result<ResponseIterator<'_>, MailboxError> {
 
         // for (i, v) in self.buffer.iter().enumerate() {
         //     crate::peripherals::uart::Uart0::put_uint(i as u64);
@@ -244,13 +237,13 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
 pub fn simple_single_call<Q, R: Copy>(tag: u32, request_value: Q) -> Result<R, MailboxError> {
     let byte_size = core::mem::size_of::<Q>().max(core::mem::size_of::<R>());
     let mut mbox = Mailbox::<512>::new();
-    let mut buffer = mbox.push_request_raw(tag, byte_size as u32)?;
+    let buffer = mbox.push_request_raw(tag, byte_size as u32)?;
     unsafe {
         *buffer.as_mut_ptr().cast::<Q>() = request_value;
     };
     let mut responses = mbox.submit_messages(8)?;
     responses
-        .nth(0)
+        .next()
         .ok_or(MailboxError::ResponseIterationError)??
         .try_value_as()
         .ok_or(MailboxError::ResponseReinterpretationError)
@@ -306,7 +299,7 @@ impl<'a> Iterator for ResponseIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         const HEADER_BYTE_SIZE: usize = core::mem::size_of::<MessageHeader>();
         const HEADER_U32_SIZE: usize = core::mem::size_of::<MessageHeader>() >> 2;
-        if self.buffer.len() < 1 {
+        if self.buffer.is_empty() {
             return None;
         }
         let tag_ptr: *const u32 = self.buffer.as_ptr();
