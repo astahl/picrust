@@ -1,5 +1,7 @@
 use core::fmt::{Debug, Display};
 
+use mystd::fractions::Fract;
+
 use crate::system::peripherals::mailbox::simple_single_call;
 
 mod tag {
@@ -50,56 +52,6 @@ impl<T, const CAPACITY: usize> Iterator for BufferedIterator<T, CAPACITY> {
     }
 }
 
-fn gcd<T>(mut a: T, mut b: T) -> T
-where
-    T: core::ops::Rem<T, Output = T> + PartialEq + Copy,
-{
-    let zero = a % a;
-    while b != zero {
-        let remainder = a % b;
-        a = core::mem::replace(&mut b, remainder);
-    }
-    a
-}
-
-#[derive(Copy, Clone)]
-pub struct Fract<T>(T, T);
-
-impl<T> Fract<T> {
-    pub fn inverted_copy(&self) -> Self
-    where
-        T: Copy,
-    {
-        Self(self.1, self.0)
-    }
-
-    pub fn invert(&mut self) {
-        core::mem::swap(&mut self.0, &mut self.1);
-    }
-}
-
-impl<T> Fract<T>
-where
-    T: core::ops::Rem<T, Output = T> + PartialEq + Copy + core::ops::Div<Output = T>,
-{
-    pub fn reduced(a: T, b: T) -> Self {
-        let d = gcd(a, b);
-        Self(a / d, b / d)
-    }
-
-    pub fn reduced_copy(&self) -> Self {
-        Self::reduced(self.0, self.1)
-    }
-}
-
-impl<T> Display for Fract<T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}:{}", self.0, self.1)
-    }
-}
 
 #[derive(Clone, Copy)]
 pub struct Resolution {
@@ -117,7 +69,7 @@ impl Default for Resolution {
             vertical: 720,
             refresh_rate: 60.0,
             interlaced: false,
-            aspect_ratio: Fract(16, 9),
+            aspect_ratio: Fract::new(16, 9),
         }
     }
 }
@@ -146,7 +98,7 @@ impl Resolution {
     fn from_legacy_timing(legacy_timing: CommonLegacyTimingSupport) -> BufferedIterator<Self, 17> {
         let mut result = BufferedIterator::<Self, 17>::new();
 
-        let aspect_ratio = Fract(4, 3);
+        let aspect_ratio = Fract::new(4, 3);
         let interlaced = false;
         if legacy_timing._1024_768_60 {
             result.push(Self {
@@ -199,7 +151,7 @@ impl Resolution {
                 vertical: 1024,
                 refresh_rate: 75.0,
                 interlaced,
-                aspect_ratio: Fract(5, 4),
+                aspect_ratio: Fract::new(5, 4),
             });
         }
         if legacy_timing._640_480_60 {
@@ -306,15 +258,14 @@ impl Resolution {
 
     fn from_standard_timing(standard_timing: StandardTimingInformation) -> Self {
         let aspect_ratio = match standard_timing.image_aspect_ratio {
-            StandardTimingImageAspectRatio::_16_10 => Fract(16, 10),
-            StandardTimingImageAspectRatio::_4_3 => Fract(4, 3),
-            StandardTimingImageAspectRatio::_5_4 => Fract(5, 4),
-            StandardTimingImageAspectRatio::_16_9 => Fract(16, 9),
+            StandardTimingImageAspectRatio::_16_10 => Fract::new(16, 10),
+            StandardTimingImageAspectRatio::_4_3 => Fract::new(4, 3),
+            StandardTimingImageAspectRatio::_5_4 => Fract::new(5, 4),
+            StandardTimingImageAspectRatio::_16_9 => Fract::new(16, 9),
         };
         Self {
             horizontal: standard_timing.x_resolution as usize,
-            vertical: (standard_timing.x_resolution * aspect_ratio.1) as usize
-                / aspect_ratio.0 as usize,
+            vertical: aspect_ratio.dividing(standard_timing.x_resolution)as usize,
             refresh_rate: standard_timing.vertical_frequency as f32,
             interlaced: false,
             aspect_ratio,
@@ -353,7 +304,7 @@ impl Resolution {
                     vertical: vertical_active_lines as usize,
                     refresh_rate,
                     interlaced: matches!(signal_interface_type, SignalInterfaceType::Interlaced),
-                    aspect_ratio: Fract::reduced(horizontal_image_size_mm, vertical_image_size_mm),
+                    aspect_ratio: Fract::new(horizontal_image_size_mm, vertical_image_size_mm).reduced(),
                 })
             }
             _ => None,
