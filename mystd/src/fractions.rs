@@ -47,6 +47,19 @@ impl<T> core::ops::Div for Fract<T> where T: core::ops::Mul {
     }
 }
 
+impl<T> core::ops::Add for Fract<T> 
+where T: core::ops::Mul<Output = T> + core::ops::Add<Output = T> + PartialEq + Copy {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if self.denominator == rhs.denominator {
+            Self::new(self.numerator + rhs.numerator, self.denominator)
+        } else {
+            Self::new(self.numerator * rhs.denominator + self.denominator * rhs.numerator, self.denominator * rhs.denominator)
+        }
+    }
+}
+
 impl<T> Fract<T> {
     pub fn new(numerator: T, denominator: T) -> Self {
         Self { numerator, denominator }

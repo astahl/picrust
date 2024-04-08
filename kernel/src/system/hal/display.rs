@@ -52,6 +52,8 @@ impl<T, const CAPACITY: usize> Iterator for BufferedIterator<T, CAPACITY> {
     }
 }
 
+pub mod edid;
+
 
 #[derive(Clone, Copy)]
 pub struct Resolution {
