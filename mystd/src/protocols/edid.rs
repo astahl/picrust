@@ -1,4 +1,4 @@
-use crate::bit_field;
+use crate::{bit_field, fixed_point::FixedPoint};
 
 #[repr(C, packed)]
 pub struct EdidVer14 {
@@ -115,6 +115,42 @@ pub struct ChromaticityCoordinates {
     lsb: ChromaticityCoordinatesLsb,
     msb: ChromaticityCoordinatesMsb
 }
+
+impl ChromaticityCoordinates {
+    pub fn red_x(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.red_x as u16) << 2 | self.lsb.red_x().value() as u16)
+    }
+    
+    pub fn red_y(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.red_y as u16) << 2 | self.lsb.red_y().value() as u16)
+    }
+
+    pub fn green_x(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.green_x as u16) << 2 | self.lsb.green_x().value() as u16)
+    }
+
+    pub fn green_y(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.green_y as u16) << 2 | self.lsb.green_y().value() as u16)
+    }
+
+    pub fn blue_x(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.blue_x as u16) << 2 | self.lsb.blue_x().value() as u16)
+    }
+
+    pub fn blue_y(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.blue_y as u16) << 2 | self.lsb.blue_y().value() as u16)
+    }
+
+    pub fn white_x(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.white_x as u16) << 2 | self.lsb.white_x().value() as u16)
+    }
+
+    pub fn white_y(&self) -> FixedPoint<10, u16> {
+        FixedPoint::new((self.msb.white_y as u16) << 2 | self.lsb.white_y().value() as u16)
+    }
+}
+
+
 
 #[repr(C, packed)]
 pub struct ChromaticityCoordinatesMsb {
