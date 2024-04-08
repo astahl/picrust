@@ -1,4 +1,4 @@
-use mystd::bit_field;
+use crate::bit_field;
 
 #[repr(C, packed)]
 pub struct EdidVer14 {
@@ -209,21 +209,51 @@ pub struct FieldPixels {
     msb: FieldPixelsMsb,
 }
 
-bit_field!(BlankingPixels (u32){
-    31:24 => horizontal_front_porch_lsb: u8,
-    23:16 => horizontal_sync_pulse_width_lsb: u8,
-    15:12 => vertical_front_porch_lsb: u8,
-    11:8 => vertical_sync_pulse_width_lsb: u8,
-    7:6 => horizontal_front_porch_msb: u8,
-    5:4 => horizontal_sync_pulse_width_msb: u8,
-    3:2 => vertical_front_porch_msb: u8,
-    1:0 => vertical_sync_pulse_width_msb: u8,
-});
-
 bit_field!(pub FieldPixelsMsb(u8) {
     7:4 => active_msb,
     3:0 => blanking_msb
 });
+
+impl FieldPixels {
+    pub fn active(&self) -> u16 {
+        ((self.msb.active_msb().value() as u16) << 8) | self.active_lsb as u16
+    }
+
+    pub fn blanking(&self) -> u16 {
+        ((self.msb.blanking_msb().value() as u16) << 8) | self.blanking_lsb as u16
+    }
+}
+
+bit_field!(BlankingPixels (u32){
+    31:24 => horizontal_front_porch_lsb,
+    23:16 => horizontal_sync_pulse_width_lsb,
+    15:12 => vertical_front_porch_lsb,
+    11:8 => vertical_sync_pulse_width_lsb,
+    7:6 => horizontal_front_porch_msb,
+    5:4 => horizontal_sync_pulse_width_msb,
+    3:2 => vertical_front_porch_msb,
+    1:0 => vertical_sync_pulse_width_msb,
+});
+
+
+
+impl BlankingPixels {
+    pub fn horizontal_front_porch(&self) -> u16 {
+        (self.horizontal_front_porch_msb().value() << 8) as u16 | self.horizontal_front_porch_lsb().value() as u16
+    }
+
+    pub fn horizontal_sync_pulse_width(&self) -> u16 {
+        (self.horizontal_sync_pulse_width_msb().value() << 8) as u16 | self.horizontal_sync_pulse_width_lsb().value() as u16
+    }
+
+    pub fn vertical_front_porch(&self) -> u8 {
+        (self.vertical_front_porch_msb().value() << 4) as u8 | self.vertical_front_porch_lsb().value() as u8
+    }
+
+    pub fn vertical_sync_pulse_width(&self) -> u8 {
+        (self.vertical_sync_pulse_width_msb().value() << 4) as u8 | self.vertical_sync_pulse_width_lsb().value() as u8
+    }
+}
 
 #[derive(Copy, Clone)]
 #[repr(C, packed)]
@@ -237,6 +267,17 @@ bit_field!(pub ImageSizeMsb(u8) {
     7:4 => horizontal_msb,
     3:0 => vertical_msb
 });
+
+impl ImageSize {
+    pub fn horizontal(&self) -> u16 {
+        ((self.msb.horizontal_msb().value() as u16) << 8) | self.horizontal_lsb as u16
+    }
+
+    pub fn vertical(&self) -> u16 {
+        ((self.msb.vertical_msb().value() as u16) << 8) | self.vertical_lsb as u16
+    }
+}
+
 
 
 bit_field!(pub TimingFeatures(u8) {
