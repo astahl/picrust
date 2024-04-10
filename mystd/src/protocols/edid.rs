@@ -32,15 +32,62 @@ bit_field!(pub ManufacturerId(u16) {
     4:0 => letter_2
 } );
 
+impl ManufacturerId {
+    pub fn to_ascii(&self) -> [u8;3] {
+        [
+            self.letter_0().value() as u8 + b'@',
+            self.letter_1().value() as u8 + b'@',
+            self.letter_2().value() as u8 + b'@',
+        ]
+    }
+}
+
+
 #[repr(C, packed)]
 pub struct DateOfManufacture {
     week_or_model_year_flag: u8,
-    year: u8
+    year_raw: u8
+}
+
+impl DateOfManufacture {
+    pub fn year(&self) -> u16 {
+        self.year_raw as u16 + 1990
+    }
 }
 
 pub union VideoInputParameters {
     digital: DigitalVideoInputParameters,
     analog: AnalogVideoInputParameters,
+}
+
+impl VideoInputParameters {
+    pub fn is_digital(&self) -> bool {
+        unsafe { self.digital.is_digital().is_set() } 
+    }
+
+    pub fn is_analog(&self) -> bool {
+        unsafe { self.digital.is_digital().is_clear() } 
+    }
+
+    pub fn try_as_digital(&self) -> Option<&DigitalVideoInputParameters> {
+        unsafe {
+            if self.digital.is_digital().is_set() {
+                Some(&self.digital)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn try_as_analog(&self) -> Option<&AnalogVideoInputParameters> {
+        unsafe {
+            if self.analog.is_digital().is_clear() {
+                Some(&self.analog)
+            } else {
+                None
+            }
+        }
+    }
 }
 
 bit_field!(pub DigitalVideoInputParameters (u8) {
@@ -343,9 +390,157 @@ bit_field!(pub TimingFeatures(u8) {
 
 #[derive(Copy, Clone)]
 #[repr(C, packed)]
-pub struct MonitorDescriptor {
-    _reserved_zero_0: u16,
-    _reserved_zero_1: u8,
-    descriptor_type: u8,
+pub union MonitorDescriptor {
+    _tag: ([u8;3], u8, [u8;14]),
+    // FF
+    serial_number: MonitorDescriptorText,
+    // FE
+    unspecified_text: MonitorDescriptorText,
+    // FD
+    range_limits: MonitorRangeLimits,
+    // FC
+    monitor_name: MonitorDescriptorText,
+    // FB
+   // additional_white_point: MonitorAdditionalWhitePoint,
     
 }
+
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
+struct MonitorDescriptorText {
+    _res_zero_0: [u8;3],
+    /// Must be FF, FE, or FC 
+    tag: u8,
+    _res_zero_1: [u8;1],
+    text_cp437: [u8;13]
+}
+
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
+struct MonitorRangeLimits {
+    _res_zero_0: [u8;3],
+    /// Must be FD
+    tag: u8,
+    offset_flags: MonitorRangeLimitsOffsets,
+    minimum_vertical_field_rate_hz: u8,
+    maximum_vertical_field_rate_hz: u8,
+    minimum_horizontal_line_rate_khz: u8,
+    maximum_horizontal_line_rate_khz: u8,
+    maximum_pixel_clock_rate_10mhz: u8,
+    extended_timing_information: MonitorVideoTimingParameters
+}
+
+bit_field!(pub MonitorRangeLimitsOffsets(u8){
+    7:4 => res_0,
+    3:2 => horizontal_offsets: enum MinMaxOffsetFlags {
+        None = 0b00,
+        Max = 0b10,
+        MaxAndMin = 0b11,
+    },
+    1:0 => vertical_offsets: MinMaxOffsetFlags
+});
+
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
+pub union MonitorVideoTimingParameters {
+    _tag: (u8, [u8;7]),
+    gtf: MonitorVideoTimingGtf,
+}
+
+impl MonitorVideoTimingParameters {
+    const EMPTY_PADDING: [u8;7] = [0x0a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20];
+    pub fn is_use_default_gtf(&self) -> bool {
+        debug_assert_eq!(Self::EMPTY_PADDING, unsafe {self._tag.1});
+        unsafe { self._tag.0 == 0 }
+    }
+
+    pub fn is_no_timing_information(&self) -> bool {
+        debug_assert_eq!(Self::EMPTY_PADDING, unsafe {self._tag.1});
+        unsafe { self._tag.0 == 1 }
+    }
+
+    pub fn is_secondary_gtf(&self) -> bool {
+        unsafe { self._tag.0 == 2 }
+    }
+
+    pub fn is_cvt(&self) -> bool {
+        unsafe { self._tag.0 == 4 }
+    }
+
+    pub fn try_as_secondary_gtf(&self) -> Option<&MonitorVideoTimingGtf> {
+        if self.is_secondary_gtf() {
+            unsafe { Some(&self.gtf) }
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
+pub struct MonitorVideoTimingGtf {
+    tag: u8,
+    res0: u8,
+    start_frequency_khz: FixedPoint<-1, u8>,
+    gtf_c: FixedPoint<1, u8>,
+    gtf_m_raw: [u8;2],
+    gtf_k: u8,
+    gtf_j: FixedPoint<1, u8>,
+}
+
+impl MonitorVideoTimingGtf {
+    pub const fn gtf_m(&self) -> u16 {
+        u16::from_le_bytes(self.gtf_m_raw)
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(C, packed)]
+pub struct MonitorVideoTimingCvt {
+    tag: u8,
+    version: CvtVersion,
+    parameters: CvtParams,
+    aspect_ratios: CvtAspectRatioFlags,
+    preferred: CvtPreferences,
+    scaling_support: CvtScalingSupport,
+    preferred_vertical_refresh_rate: u8
+}
+
+bit_field!(pub CvtVersion (u8){
+    7:4 => major,
+    3:0 => minor,
+});
+
+bit_field!(pub CvtParams (u16){
+    15:10 => additional_clock_precision_250khz,
+    9:0 => maximum_active_pixels_per_line,
+});
+
+bit_field!(pub CvtAspectRatioFlags (u8){
+    7 => aspect_ratio_4_3,
+    6 => aspect_ratio_16_9,
+    5 => aspect_ratio_16_10,
+    4 => aspect_ratio_5_4,
+    3 => aspect_ratio_15_9,
+});
+
+bit_field!(pub CvtPreferences (u8){
+    7:5 => aspect_ratio: enum CvtAspectRatioPreference {
+        Ar4by3 = 0b000,
+        Ar16by9 = 0b001,
+        Ar16by10 = 0b010,
+        Ar5by4 = 0b011,
+        Ar15by9 = 0b100,
+    },
+    4 => reduced_blanking,
+    3 => standard_blanking,
+});
+
+bit_field!(pub CvtScalingSupport (u8){
+    7 => horizontal_shrink,
+    6 => horizontal_stretch,
+    5 => vertical_shrink,
+    4 => vertical_stretch,
+});
+
+
