@@ -13,6 +13,14 @@ mod tests;
 use core::arch::global_asm;
 use mystd::io::Write;
 use system::arm_core;
+use system::arm_core::current_exception_level;
+use system::arm_core::get_core_num;
+use system::arm_core::registers::aarch64::general_sys_ctrl::scr_el3;
+use system::arm_core::registers::aarch64::general_sys_ctrl::vbar_elx::VbarEl2;
+use system::arm_core::registers::aarch64::special_purpose::elr_elx::ElrEl3;
+use system::arm_core::registers::aarch64::special_purpose::sp_elx;
+use system::arm_core::registers::aarch64::special_purpose::spsr_el3;
+use system::arm_core::stop_core;
 use system::arm_core::wait_for_all_cores;
 use system::hal;
 use system::peripherals;
@@ -48,7 +56,8 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 
 #[no_mangle]
-pub extern "C" fn main(core_id: usize) {
+pub extern "C" fn main() -> ! {
+    let core_id = get_core_num();
     static INIT: hal::signal::EventLatch = new_latch(false);
     match core_id {
         0 => {
@@ -89,6 +98,84 @@ pub extern "C" fn main(core_id: usize) {
 
 //global_asm!(".section .font", ".incbin \"901447-10.bin\"");
 
+extern {
+    static __stack_top: usize;
+    static mut __bss_start: u8;
+    static __bss_end: u8;
+
+    static _vectors_el1: u8;
+    static _vectors_el2: u8;
+}
+
+
+#[cfg(not(debug_assertions))]
+#[link_section = ".text.boot"]
+#[no_mangle]
+#[inline]
+pub extern "C" fn _start() -> ! {
+    let core_num = get_core_num();
+    if core_num != 0 {
+        stop_core();
+    } 
+    
+    // set up the stack we'll use in EL1
+    let stack_top = unsafe { core::ptr::addr_of!(__stack_top) };
+    sp_elx::SpEl1::new(stack_top as u64).write_register();
+
+    // clear the bss section
+    let mut bss = unsafe { core::ptr::addr_of_mut!(__bss_start) };
+    let bss_end = unsafe { core::ptr::addr_of!(__bss_end) };
+    loop {
+        if bss.cast_const() == bss_end { break; }
+        unsafe { bss.write_volatile(0) };
+        bss = bss.wrapping_add(1);
+    }
+
+    match current_exception_level() {
+        3 => leave_el3(),
+        2 => leave_el2(),
+        1 => main(),
+        _ => loop {}
+    }
+}
+
+fn leave_el3() -> ! {
+    scr_el3::ScrEl3::default()
+        // enable aarch64 in EL2
+        .rw()
+        .set() 
+        // enable hypervisor call 
+        .hce()
+        .set() 
+        // disable secure monitor call ?? todo ??
+        .smd()
+        .set() 
+        // EL below 3 is non secure ?? todo ??
+        .ns()
+        .set() 
+    .write_register();
+
+    spsr_el3::SpsrEl3::default()
+        .d().set()
+        .a().set()
+        .i().set()
+        .f().set()
+        .m().set_value(spsr_el3::ExecutionState::AArch64)
+        .aarch64_m().set_value(spsr_el3::AArch64Mode::EL2h)
+        .write_register();
+
+    exception::return_from_el3(leave_el2 as *const());
+}
+
+fn leave_el2() -> ! {
+    let exc_vector_el2: *const() = unsafe { &_vectors_el2 as *const u8 }.cast();
+    VbarEl2::new(exc_vector_el2 as u64).write_register();
+    
+    exception::return_from_el2(main as *const());
+}
+
+
+#[cfg(debug_assertions)]
 global_asm!(
     r#"
     .section ".text.boot"   // Make sure the linker puts this at the start of the kernel image
@@ -105,11 +192,7 @@ global_asm!(
         sub     x1, x1, x2 // subtract the scaled Stack Size from the top of the stack
         // Ensure we end up on Exception Level 1 (starting on EL3 or EL2)
         b      _enter_el1
-    "#
-);
 
-global_asm!(
-    r#"
     // move execution level to EL1
     _enter_el1:
         // we make no assumptions if we're at EL3, EL2 or EL1
@@ -194,12 +277,7 @@ global_asm!(
         adr     x2, _start_main
         msr     elr_el2, x2
         eret
-    "#
-);
 
-
-global_asm!(
-    r#"
     // SUBROUTINE clear bss section
     _clear_bss:
         // w3 set to the bss size (size is mult of 8 bytes, bss is 64-bit aligned)
@@ -215,12 +293,7 @@ global_asm!(
     4:
         // return to _start_main
         ret
-    "#
-);
 
-
-global_asm!(
-    r#"
     _start_main:
         // stick core id into the thread id register
         msr     tpidr_el1, x0

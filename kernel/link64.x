@@ -2,7 +2,9 @@ ENTRY(_start)
 
 SECTIONS
 {
+	__stack_bottom = .;
 	. = 0x80000;
+	__stack_top = .;
 	.text.boot : { 
 		KEEP(*(.text.boot))
 	}

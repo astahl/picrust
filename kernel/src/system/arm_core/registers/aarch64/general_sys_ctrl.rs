@@ -6,3 +6,5 @@ pub mod sctlr_el1;
 pub mod tcr_el1;
 pub mod rmr_elx;
 pub mod tpidr_elx;
+pub mod scr_el3;
+pub mod vbar_elx;

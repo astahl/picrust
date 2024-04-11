@@ -32,7 +32,7 @@ macro_rules! system_register_impl {
         #[inline]
         pub fn read_register() -> Self {
             let value: u64;
-            unsafe { asm!(concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
+            unsafe { core::arch::asm!(concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
             Self::new(value)
         }
 
@@ -42,7 +42,7 @@ macro_rules! system_register_impl {
         /// Writes the value to the associated system register
         #[inline]
         pub fn write_register(self) {
-            unsafe { asm!(concat!("msr ", stringify!($reg_id), ", {}"), in(reg) self.0) };
+            unsafe { core::arch::asm!(concat!("msr ", stringify!($reg_id), ", {}"), in(reg) self.0) };
         }
         $crate::system_register_impl!($reg_id $type_name $($opts),*);
     };
@@ -51,7 +51,7 @@ macro_rules! system_register_impl {
         #[inline]
         pub fn read_register_ordered() -> Self {
             let value: u64;
-            unsafe { asm!(
+            unsafe { core::arch::asm!(
                 "dsb",
                 "isb",
                 concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
@@ -64,7 +64,7 @@ macro_rules! system_register_impl {
         #[inline]
         pub fn read_register_ordered_ish() -> Self {
             let value: u64;
-            unsafe { asm!(
+            unsafe { core::arch::asm!(
                 "dsb ish",
                 "isb",
                 concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };

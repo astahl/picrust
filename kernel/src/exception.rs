@@ -2,7 +2,26 @@ use core::{arch::global_asm, fmt::Debug};
 
 use mystd::{bit_field, bitfield::BitField};
 
-use crate::system::peripherals::{interrupts, system_timer, uart::{self, UART_0}};
+use crate::system::{arm_core::registers::aarch64::special_purpose::elr_elx, peripherals::{interrupts, system_timer, uart::{self, UART_0}}};
+
+#[inline]
+pub fn return_from_el3(address: *const ()) -> ! {
+    elr_elx::ElrEl3::new(address as u64).write_register();
+    unsafe { core::arch::asm!("eret", options(noreturn)); }
+}
+
+#[inline]
+pub fn return_from_el2(address: *const ()) -> ! {
+    elr_elx::ElrEl2::new(address as u64).write_register();
+    unsafe { core::arch::asm!("eret", options(noreturn)); }
+}
+
+#[inline]
+pub fn return_from_el1(address: *const ()) -> ! {
+    elr_elx::ElrEl1::new(address as u64).write_register();
+    unsafe { core::arch::asm!("eret", options(noreturn)); }
+}
+
 
 #[no_mangle]
 pub extern "C" fn exc_handler(
