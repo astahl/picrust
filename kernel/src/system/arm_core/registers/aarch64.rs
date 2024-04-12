@@ -32,7 +32,7 @@ macro_rules! system_register_impl {
         #[inline]
         pub fn read_register() -> Self {
             let value: u64;
-            unsafe { core::arch::asm!(concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
+            unsafe { core::arch::asm!(concat!("mrs {}, ", stringify!($reg_id)), out(reg) value, options(nomem, nostack)) };
             Self::new(value)
         }
 
@@ -40,9 +40,9 @@ macro_rules! system_register_impl {
     };
     ($reg_id:ident $type_name:ident w$(,$opts:tt)*) => {
         /// Writes the value to the associated system register
-        #[inline]
+       #[inline]
         pub fn write_register(self) {
-            unsafe { core::arch::asm!(concat!("msr ", stringify!($reg_id), ", {}"), in(reg) self.0) };
+            unsafe { core::arch::asm!(concat!("msr ", stringify!($reg_id), ", {}"), in(reg) self.0, options(nomem, nostack)) };
         }
         $crate::system_register_impl!($reg_id $type_name $($opts),*);
     };
@@ -54,7 +54,7 @@ macro_rules! system_register_impl {
             unsafe { core::arch::asm!(
                 "dsb",
                 "isb",
-                concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
+                concat!("mrs {}, ", stringify!($reg_id)), out(reg) value, options(nostack)) };
             Self::new(value)
         }
         $crate::system_register_impl!($reg_id $type_name $($opts),*);
@@ -67,7 +67,7 @@ macro_rules! system_register_impl {
             unsafe { core::arch::asm!(
                 "dsb ish",
                 "isb",
-                concat!("mrs {}, ", stringify!($reg_id)), out(reg) value) };
+                concat!("mrs {}, ", stringify!($reg_id)), out(reg) value, options(nostack)) };
             Self::new(value)
         }
         $crate::system_register_impl!($reg_id $type_name $($opts),*);
