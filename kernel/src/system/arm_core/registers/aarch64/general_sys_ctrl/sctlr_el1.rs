@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use mystd::bit_field;
 
 use crate::system_register_impl;
@@ -48,6 +46,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_tidcp1")]
     63 => tidcp,
 
     /// ## SPINTMASK, bit \[62]
@@ -68,6 +67,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_nmi")]
     62 => spintmask,
 
     /// ## NMI, bit \[61]
@@ -92,6 +92,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_nmi")]
     61 => nmi,
 
     /// ## EnTP2, bit \[60]
@@ -113,6 +114,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0
+    #[cfg(feature = "feat_sme")]
     60 => en_tp2,
 
     // 59:58 => reserved res 0
@@ -137,6 +139,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_pan3")]
     57 => epan,
 
     /// ## EnALS, bit \[56]
@@ -158,6 +161,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_ls64")]
     56 => en_als,
 
     /// ## EnAS0, bit \[55]
@@ -180,6 +184,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_ls64_accdata")]
     55 => en_as0,
 
     /// ## EnASR, bit \[54]
@@ -201,6 +206,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_ls64_v")]
     54 => en_asr,
 
     /// ## TME, bit \[53]
@@ -220,6 +226,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_tme")]
     53 => tme,
 
     /// ## TME0, bit \[52]
@@ -242,6 +249,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_tme")]
     52 => tme0,
 
     /// ## TMT, bit \[51]
@@ -261,6 +269,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_tme")]
     51 => tmt,
 
     /// ## TMT0, bit \[50]
@@ -282,6 +291,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_tme")]
     50 => tmt0,
 
     /// ## TWEDEL, bits \[49:46]
@@ -296,6 +306,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_twed")]
     49:46 => twedel,
 
     /// ## TWEDEn, bit \[45]
@@ -315,6 +326,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_twed")]
     45 => twed_en,
 
     /// ## DSSBS, bit \[44]
@@ -334,6 +346,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_ssbs")]
     44 => dssbs,
 
     /// ## ATA, bit \[43]
@@ -356,6 +369,7 @@ pub SctlrEl1(u64) {
     ///
     /// ### Otherwise:
     /// Reserved, RES0.
+    #[cfg(feature = "feat_mte2")]
     43 => ata,
 
     /// ## ATA0, bit \[42]
@@ -382,6 +396,7 @@ pub SctlrEl1(u64) {
     ///
     /// ### Otherwise:
     /// Reserved, RES0.
+    #[cfg(feature = "feat_mte2")]
     42 => ata0,
 
     /// ## TCF, bits \[41:40]
@@ -404,6 +419,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_mte2")]
     41:40 => tcf,
 
     /// ## TCF0, bits \[39:38]
@@ -432,6 +448,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_mte2")]
     39:40 => tcf0,
 
     /// ## ITFSB, bit \[37]
@@ -450,6 +467,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_mte2")]
     37 => itfsb,
 
     /// ## BT1, bit \[36]
@@ -469,6 +487,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_bti")]
     36 => bt1,
 
     /// ## BT0, bit \[35]
@@ -491,6 +510,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_bti")]
     35 => bt0,
 
     // 34 => reserved res0,
@@ -514,6 +534,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_mops")]
     33 => msc_en,
 
     /// ## CMOW, bit \[32]
@@ -542,6 +563,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_cmow")]
     32 => cmow,
 
     /// ## EnIA, bit \[31]
@@ -564,6 +586,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_pauth")]
     31 => en_ia,
 
     /// ## EnIB, bit \[30]
@@ -586,6 +609,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_pauth")]
     30 => en_ib,
 
     /// ## LSMAOE, bit \[29]
@@ -609,7 +633,10 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES1.
+    #[cfg(feature = "feat_lsmaoc")]
     29 => lsmaoe,
+    #[cfg(not(feature = "feat_lsmaoc"))]
+    29 => lsmaoe_res1 = true,
 
     /// ## nTLSMD, bit \[28]
     ///
@@ -632,7 +659,10 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES1.
+    #[cfg(feature = "feat_lsmaoc")]
     28 => n_tlsmd,
+    #[cfg(not(feature = "feat_lsmaoc"))]
+    29 => n_tlsmd_res1 = true,
 
     /// ## EnDA, bit \[27]
     ///
@@ -654,6 +684,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_pauth")]
     27 => en_da,
 
     /// ## UCI, bit \[26]
@@ -746,7 +777,10 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES1.
+    #[cfg(feature = "feat_pan")]
     23 => span,
+    #[cfg(not(feature = "feat_pan"))]
+    23 => span_res1 = true,
 
     /// ## EIS, bit \[22]
     ///
@@ -778,7 +812,10 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES1.
+    #[cfg(feature = "feat_exs")]
     22 => eis,
+    #[cfg(not(feature = "feat_exs"))]
+    22 => eis_res1 = true,
 
     /// ## IESB, bit \[21]
     ///
@@ -800,6 +837,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_iesb")]
     21 => iesb,
 
     /// ## TSCXT, bit \[20]
@@ -823,7 +861,10 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES1.
+    #[cfg(any(feature = "feat_csv2_2", feature = "feat_csv2_1p2"))]
     20 => tscxt,
+    #[cfg(not(any(feature = "feat_csv2_2", feature = "feat_csv2_1p2")))]
+    20 => tscxt_res1 = true,
 
     /// ## WXN, bit \[19]
     ///
@@ -942,6 +983,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_pauth")]
     13 => en_db,
 
     /// ## I, bit \[12]
@@ -993,7 +1035,10 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES1.
+    #[cfg(feature = "feat_exs")]
     11 => eos,
+    #[cfg(not(feature = "feat_exs"))]
+    11 => eos_res1 = true,
 
     /// ## EnRCTX, bit \[10]
     ///
@@ -1016,6 +1061,7 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    #[cfg(feature = "feat_specres")]
     10 => en_rctx,
 
     /// ## UMA, bit \[9]
@@ -1124,6 +1170,8 @@ pub SctlrEl1(u64) {
     /// ### Otherwise:
     ///
     /// Reserved, RES0.
+    /// 
+    #[cfg(feature = "feat_lse2")]
     6 => n_aa,
 
     /// ## CP15BEN, bit \[5]

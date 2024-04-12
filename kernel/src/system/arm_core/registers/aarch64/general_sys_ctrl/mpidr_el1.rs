@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use mystd::bit_field;
 
 use crate::system_register_impl;

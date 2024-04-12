@@ -8,3 +8,5 @@ pub mod rmr_elx;
 pub mod tpidr_elx;
 pub mod scr_el3;
 pub mod vbar_elx;
+pub mod cpacr_el1;
+pub mod hcr_el2;

@@ -339,12 +339,6 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
 
     println_debug!("SCTLR_EL1 is {:#?}", sctlr);
     let sctlr = sctlr
-        .span().set()   // No FEAT_PAN -> RES1
-        .tscxt().set()  // No FEAT_CSV2_2  -> RES1
-        .lsmaoe().set() // No FEAT_LSMAOC -> RES1
-        .n_tlsmd().set()// No FEAT_LSMAOC -> RES1
-        .eos().set()    // No FEAT_ExS -> RES1
-        .eis().set()    // No FEAT_ExS -> RES1
         .ee().clear()   // little endian translation tables
         .e0e().clear()  // little endian translation tables
         .wxn().clear()

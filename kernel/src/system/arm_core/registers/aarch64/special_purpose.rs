@@ -6,7 +6,8 @@ use mystd::bit_field;
 pub mod spsr_el3;
 pub mod elr_elx;
 pub mod sp_elx;
-pub mod spsel; 
+pub mod spsel;
+pub mod spsr_el2; 
 
 /// # C5.2.2 CurrentEL, Current Exception Level
 /// Holds the current Exception level.
