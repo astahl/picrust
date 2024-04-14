@@ -150,7 +150,7 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         // swap buffers and copy the formerly back buffer to the framebuffer
         unsafe { self.front.swap_with_slice2d_unchecked(&mut self.back); }
         match present {
-            PresentStrategy::Memcopy => unsafe { self.framebuffer.copy_buf_unchecked(&self.front); },
+            PresentStrategy::Memcopy => unsafe { self.framebuffer.copy_buf_unchecked(self.front.as_ptr()); },
             PresentStrategy::Dma2d => crate::peripherals::dma::dma_copy_slice2d(&self.front.as_slice2d(), &mut self.framebuffer),
             PresentStrategy::Dma => crate::peripherals::dma::dma_copy_slice(self.front.buf_slice(), self.framebuffer.buf_mut_slice()),
         }

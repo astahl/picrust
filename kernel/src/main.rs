@@ -82,7 +82,7 @@ pub extern "C" fn main() -> ! {
     match core_id {
         0 => {
             //tests::test_irq0();
-            //tests::test_dma();
+            tests::test_dma();
             tests::test_screen();
         },
         1 => {
@@ -126,10 +126,10 @@ pub extern "C" fn _start() -> ! {
     } 
     
     // set up the stack we'll use in EL1
-    let stack_top = unsafe { core::ptr::addr_of!(__stack_top) };
-    sp_elx::SpEl1::new(stack_top as u64).write_register();
-    sp_elx::SpEl0::new(stack_top as u64).write_register();
-    unsafe { asm!("mov sp, {}", in(reg) stack_top); }
+    let stack_top = unsafe { core::ptr::addr_of!(__stack_top) } as u64;
+    //sp_elx::SpEl1::new(stack_top).write_register();
+    sp_elx::SpEl0::new(stack_top).write_register();
+    //unsafe { asm!("mov sp, {}", in(reg) stack_top); }
 
     // clear the bss section
     let mut bss = unsafe { core::ptr::addr_of_mut!(__bss_start) };

@@ -16,6 +16,68 @@ pub unsafe trait MutSlice2dIndex<T: ?Sized> : Slice2dIndex<T> {
     fn index_mut(self, slice2d: &mut T) -> &mut Self::Output;
 }
 
+pub trait Point2d {
+    type Coord;
+    fn x(&self) -> &Self::Coord;
+    fn y(&self) -> &Self::Coord;
+    fn to_xy(self) -> (Self::Coord, Self::Coord);
+}
+
+impl<T> Point2d for (T, T) {
+    type Coord = T;
+    fn x(&self) -> &T {
+        &self.0
+    }
+
+    fn y(&self) -> &T {
+        &self.1
+    }
+    
+    fn to_xy(self) -> (Self::Coord, Self::Coord) {
+        self
+    }
+}
+
+impl<T> Point2d for &(T, T) where T: Copy {
+    type Coord = T;
+    fn x(&self) -> &T {
+        &self.0
+    }
+
+    fn y(&self) -> &T {
+        &self.1
+    }
+    
+    fn to_xy(self) -> (Self::Coord, Self::Coord) {
+        *self
+    }
+}
+
+pub trait RangeBounds2d<V>  {
+    type HorizontalBounds: core::ops::RangeBounds<V>;
+    type VerticalBounds: core::ops::RangeBounds<V>;
+    fn horizontal_bounds(&self) -> &Self::HorizontalBounds;
+    fn vertical_bounds(&self) -> &Self::VerticalBounds;
+
+    fn contains<P: Point2d<Coord = V>>(&self, point: &P) -> bool where V: PartialOrd {
+        use core::ops::RangeBounds;
+        self.horizontal_bounds().contains(point.x()) && self.vertical_bounds().contains(point.y())
+    }
+}
+
+impl<T, U, V> RangeBounds2d<V> for (T, U) where T: core::ops::RangeBounds<V>, U: core::ops::RangeBounds<V> {
+    fn horizontal_bounds(&self) -> &T {
+        &self.0
+    }
+
+    fn vertical_bounds(&self) -> &U {
+        &self.1
+    }
+    
+    type HorizontalBounds = T;
+    
+    type VerticalBounds = U;
+}
 
 pub trait Slice2dTrait {
     type Element;
@@ -29,6 +91,14 @@ pub trait Slice2dTrait {
         self.width() == 0 || self.height() == 0
     }
 
+    fn is_continuous(&self) -> bool {
+        self.pitch() == self.width()
+    }
+
+    fn stride(&self) -> usize {
+        self.pitch() - self.width()
+    }
+
     fn buf_len(&self) -> usize {
         self.pitch() * self.height()
     }
@@ -37,7 +107,8 @@ pub trait Slice2dTrait {
         unsafe { core::slice::from_raw_parts(self.as_ptr(), self.buf_len())}
     }
 
-    fn index_asserted(&self, (x,y): (usize, usize)) -> usize {
+    fn index_asserted<P: Point2d<Coord = usize>>(&self, p: P) -> usize {
+        let (x,y) = p.to_xy();
         debug_assert!(x < self.width(), "Access out of bounds: width={}, x={}", self.width(), x);
         debug_assert!(y < self.height(), "Access out of bounds: height={}, y={}", self.height(), y);
         x + self.pitch() * y
@@ -63,13 +134,11 @@ pub trait Slice2dTrait {
         unsafe { Slice2d::from_raw_parts(self.as_ptr(), self.width(), self.pitch(), self.height())}
     }
 
-    fn sub_slice2d<Q,R>(&self, (col_range, line_range): (Q,R)) -> Slice2d<Self::Element> 
+    fn sub_slice2d<R>(&self, range2d: R) -> Slice2d<Self::Element> 
     where 
-        Q: core::ops::RangeBounds<usize>,
-        R: core::ops::RangeBounds<usize>, {
-        use crate::slice::slice2d;
-        let (x, width) = slice2d::range_to_offset_len(col_range, (0, self.width()));
-        let (y, height) = slice2d::range_to_offset_len(line_range, (0, self.height()));
+        R: RangeBounds2d<usize>, {
+        let (x, width) = range_to_offset_len(range2d.horizontal_bounds(), (0, self.width()));
+        let (y, height) = range_to_offset_len(range2d.vertical_bounds(), (0, self.height()));
         unsafe {
             let ptr = self.as_ptr().wrapping_add(self.index_asserted((x,y)));
             Slice2d::from_raw_parts(ptr, width, self.pitch(), height)
@@ -108,13 +177,11 @@ pub trait MutSlice2dTrait: Slice2dTrait {
         unsafe { MutSlice2d::from_raw_parts(self.as_mut_ptr(), self.width(), self.pitch(), self.height())}
     }
 
-    fn sub_mut_slice2d<Q,R>(&mut self, (col_range, line_range): (Q,R)) -> MutSlice2d<Self::Element> 
+    fn sub_mut_slice2d<R>(&mut self, range2d: R) -> MutSlice2d<Self::Element> 
     where 
-        Q: core::ops::RangeBounds<usize>,
-        R: core::ops::RangeBounds<usize>, {
-        use crate::slice::slice2d;
-        let (x, width) = slice2d::range_to_offset_len(col_range, (0, self.width()));
-        let (y, height) = slice2d::range_to_offset_len(line_range, (0, self.height()));
+        R: RangeBounds2d<usize>, {
+        let (x, width) = range_to_offset_len(range2d.horizontal_bounds(), (0, self.width()));
+        let (y, height) = range_to_offset_len(range2d.vertical_bounds(), (0, self.height()));
         unsafe {
             let ptr = self.as_mut_ptr().wrapping_add(self.index_asserted((x,y)));
             MutSlice2d::from_raw_parts(ptr, width, self.pitch(), height)
@@ -142,7 +209,7 @@ pub trait MutSlice2dTrait: Slice2dTrait {
             unsafe {
                 *self.as_mut_ptr() = *other.as_ptr(); 
             }
-        } else if self.width() == self.pitch() && other.width() == other.pitch() {
+        } else if self.is_continuous() && other.is_continuous() {
             self.buf_mut_slice().copy_from_slice(other.buf_slice());
         } else {
             for (dst, src) in self.rows_mut().zip(other.rows()) {
@@ -151,8 +218,8 @@ pub trait MutSlice2dTrait: Slice2dTrait {
         }
     }
 
-    unsafe fn copy_buf_unchecked<S: Slice2dTrait<Element = Self::Element>>(&mut self, other: &S) where Self::Element: Copy {
-        core::ptr::copy_nonoverlapping(other.as_ptr(), self.as_mut_ptr(), self.buf_len())
+    unsafe fn copy_buf_unchecked(&mut self, other: *const Self::Element) {
+        core::ptr::copy_nonoverlapping(other, self.as_mut_ptr(), self.buf_len())
     }
 
     fn enumerate_mut(&mut self) -> iter::Enumerate2dMut<Self::Element> {
@@ -186,4 +253,26 @@ pub trait PartialEqSlice2dTrait<R: Slice2dTrait> : Slice2dTrait + core::cmp::Par
         self.height() == other.height() &&
         self.rows().zip(other.rows()).all(|(l,r)| l == r)
     }
+}
+
+pub fn range_to_offset_len<R: core::ops::RangeBounds<usize>>(range: &R, mut bound: (usize, usize)) -> (usize, usize) {
+    match range.start_bound() {
+        core::ops::Bound::Included(first) => bound.0 = *first,
+        core::ops::Bound::Excluded(start) => bound.0 = *start + 1,
+        core::ops::Bound::Unbounded => {},
+    }
+
+    match range.end_bound() {
+        core::ops::Bound::Included(last) => bound.1 = *last + 1,
+        core::ops::Bound::Excluded(end) => bound.1 = *end,
+        core::ops::Bound::Unbounded => {},
+    }
+
+    if bound.0 > bound.1 {
+        (bound.0, 0)
+    } else {
+        bound.1 -= bound.0;
+        bound
+    }
+
 }

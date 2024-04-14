@@ -49,27 +49,7 @@ impl<T> traits::Slice2dTrait for Slice2d<'_, T> {
     }
 }
 
-pub fn range_to_offset_len<R: core::ops::RangeBounds<usize>>(range: R, mut bound: (usize, usize)) -> (usize, usize) {
-    match range.start_bound() {
-        core::ops::Bound::Included(first) => bound.0 = *first,
-        core::ops::Bound::Excluded(start) => bound.0 = *start + 1,
-        core::ops::Bound::Unbounded => {},
-    }
 
-    match range.end_bound() {
-        core::ops::Bound::Included(last) => bound.1 = *last + 1,
-        core::ops::Bound::Excluded(end) => bound.1 = *end,
-        core::ops::Bound::Unbounded => {},
-    }
-
-    if bound.0 > bound.1 {
-        (bound.0, 0)
-    } else {
-        bound.1 -= bound.0;
-        bound
-    }
-
-}
 
 impl<T> Slice2d<'_, T> {
     pub fn with_slice(buf: &[T], width: usize, pitch: usize, height: usize) -> Option<(Self, &[T])> {
@@ -108,15 +88,6 @@ impl<T> Slice2d<'_, T> {
             Self::from_raw_parts(self.data, col_n, self.pitch, self.height),
             Self::from_raw_parts(self.data.wrapping_add(col_n), self.width - col_n, self.pitch, self.height)
         )}
-    }
-
-    pub fn sub_slice2d<R: core::ops::RangeBounds<usize>, S: core::ops::RangeBounds<usize>>(&self, (col_range, line_range): (R, S)) -> Slice2d<T> {
-        let (x, width) = range_to_offset_len(col_range, (0, self.width));
-        let (y, height) = range_to_offset_len(line_range, (0, self.height));
-        unsafe {
-            let data = self.get_unchecked((x,y)) as *const T;
-            Slice2d::from_raw_parts(data, width, self.pitch, height)
-        }
     }
 }
 
