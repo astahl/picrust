@@ -1,6 +1,6 @@
 use core::fmt::{Debug, Display};
 
-use mystd::fractions::Fract;
+use mystd::{fractions::Fract, protocols::edid::EdidBlock};
 
 use crate::system::peripherals::mailbox::simple_single_call;
 
@@ -15,379 +15,356 @@ mod tag {
     }
 }
 
-pub struct BufferedIterator<T, const CAPACITY: usize> {
-    index: usize,
-    len: usize,
-    buffer: [core::mem::MaybeUninit<T>; CAPACITY],
+
+pub struct EdidIterator {
+    block_num: u8,
+    block_total: u8,
 }
 
-impl<T, const CAPACITY: usize> BufferedIterator<T, CAPACITY> {
+impl EdidIterator {
     pub fn new() -> Self {
         Self {
-            index: 0,
-            len: 0,
-            buffer: core::array::from_fn(|_| core::mem::MaybeUninit::<T>::uninit()),
-        }
-    }
-
-    pub fn push(&mut self, value: T) {
-        if self.len < CAPACITY {
-            self.buffer[self.len].write(value);
-            self.len += 1;
+            block_num: 0,
+            block_total: 1,
         }
     }
 }
 
-impl<T, const CAPACITY: usize> Iterator for BufferedIterator<T, CAPACITY> {
-    type Item = T;
+impl core::iter::Iterator for EdidIterator {
+    type Item = EdidBlock;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.len {
-            None
+        if self.block_num == self.block_total {
+            return None;
+        }
+
+        let response: tag::GetEdidBlock =
+            simple_single_call(tag::GET_EDID_BLOCK, self.block_num as u32).ok()?;
+
+        if response.status == 0 {
+            self.block_num += 1;
+            let block = EdidBlock::try_with_bytes(&response.data).ok()?;
+            if let Some(edid) = &block.try_as_edid() {
+                self.block_total = 1 + edid.num_of_extensions;
+            }
+            Some(block)
         } else {
-            let result = unsafe { self.buffer[self.index].assume_init_read() };
-            self.index += 1;
-            Some(result)
+            None
         }
     }
 }
 
 
-#[derive(Clone, Copy)]
-pub struct Resolution {
-    pub horizontal: usize,
-    pub vertical: usize,
-    pub refresh_rate: f32,
-    pub interlaced: bool,
-    pub aspect_ratio: Fract<u16>,
-}
+// pub struct BufferedIterator<T, const CAPACITY: usize> {
+//     index: usize,
+//     len: usize,
+//     buffer: [core::mem::MaybeUninit<T>; CAPACITY],
+// }
 
-impl Default for Resolution {
-    fn default() -> Self {
-        Self {
-            horizontal: 1280,
-            vertical: 720,
-            refresh_rate: 60.0,
-            interlaced: false,
-            aspect_ratio: Fract::new(16, 9),
-        }
-    }
-}
+// impl<T, const CAPACITY: usize> BufferedIterator<T, CAPACITY> {
+//     pub fn new() -> Self {
+//         Self {
+//             index: 0,
+//             len: 0,
+//             buffer: core::array::from_fn(|_| core::mem::MaybeUninit::<T>::uninit()),
+//         }
+//     }
 
-impl Display for Resolution {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "{}x{}{}{} {}",
-            self.horizontal,
-            self.vertical,
-            if self.interlaced { "i" } else { "p" },
-            self.refresh_rate,
-            self.aspect_ratio
-        )
-    }
-}
+//     pub fn push(&mut self, value: T) {
+//         if self.len < CAPACITY {
+//             self.buffer[self.len].write(value);
+//             self.len += 1;
+//         }
+//     }
+// }
 
-impl Debug for Resolution {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
+// impl<T, const CAPACITY: usize> Iterator for BufferedIterator<T, CAPACITY> {
+//     type Item = T;
 
-impl Resolution {
-    fn from_legacy_timing(legacy_timing: CommonLegacyTimingSupport) -> BufferedIterator<Self, 17> {
-        let mut result = BufferedIterator::<Self, 17>::new();
+//     fn next(&mut self) -> Option<Self::Item> {
+//         if self.index == self.len {
+//             None
+//         } else {
+//             let result = unsafe { self.buffer[self.index].assume_init_read() };
+//             self.index += 1;
+//             Some(result)
+//         }
+//     }
+// }
 
-        let aspect_ratio = Fract::new(4, 3);
-        let interlaced = false;
-        if legacy_timing._1024_768_60 {
-            result.push(Self {
-                horizontal: 1024,
-                vertical: 768,
-                refresh_rate: 60.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._1024_768_70 {
-            result.push(Self {
-                horizontal: 1024,
-                vertical: 768,
-                refresh_rate: 70.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._1024_768_75 {
-            result.push(Self {
-                horizontal: 1024,
-                vertical: 768,
-                refresh_rate: 75.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._1024_768_87_interlaced {
-            result.push(Self {
-                horizontal: 1024,
-                vertical: 768,
-                refresh_rate: 87.0,
-                interlaced: true,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._1152_870_75 {
-            result.push(Self {
-                horizontal: 1152,
-                vertical: 870,
-                refresh_rate: 75.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._1280_1024_75 {
-            result.push(Self {
-                horizontal: 1280,
-                vertical: 1024,
-                refresh_rate: 75.0,
-                interlaced,
-                aspect_ratio: Fract::new(5, 4),
-            });
-        }
-        if legacy_timing._640_480_60 {
-            result.push(Self {
-                horizontal: 640,
-                vertical: 480,
-                refresh_rate: 60.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._640_480_67 {
-            result.push(Self {
-                horizontal: 640,
-                vertical: 480,
-                refresh_rate: 67.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._640_480_72 {
-            result.push(Self {
-                horizontal: 640,
-                vertical: 480,
-                refresh_rate: 72.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._640_480_75 {
-            result.push(Self {
-                horizontal: 640,
-                vertical: 480,
-                refresh_rate: 75.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._720_400_70 {
-            result.push(Self {
-                horizontal: 720,
-                vertical: 400,
-                refresh_rate: 70.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._720_400_88 {
-            result.push(Self {
-                horizontal: 720,
-                vertical: 400,
-                refresh_rate: 88.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._800_600_56 {
-            result.push(Self {
-                horizontal: 800,
-                vertical: 600,
-                refresh_rate: 56.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._800_600_60 {
-            result.push(Self {
-                horizontal: 800,
-                vertical: 600,
-                refresh_rate: 60.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._800_600_72 {
-            result.push(Self {
-                horizontal: 800,
-                vertical: 600,
-                refresh_rate: 72.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._800_600_75 {
-            result.push(Self {
-                horizontal: 800,
-                vertical: 600,
-                refresh_rate: 75.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        if legacy_timing._832_624_75 {
-            result.push(Self {
-                horizontal: 832,
-                vertical: 624,
-                refresh_rate: 75.0,
-                interlaced,
-                aspect_ratio,
-            });
-        }
-        result
-    }
 
-    fn from_standard_timing(standard_timing: StandardTimingInformation) -> Self {
-        let aspect_ratio = match standard_timing.image_aspect_ratio {
-            StandardTimingImageAspectRatio::_16_10 => Fract::new(16, 10),
-            StandardTimingImageAspectRatio::_4_3 => Fract::new(4, 3),
-            StandardTimingImageAspectRatio::_5_4 => Fract::new(5, 4),
-            StandardTimingImageAspectRatio::_16_9 => Fract::new(16, 9),
-        };
-        Self {
-            horizontal: standard_timing.x_resolution as usize,
-            vertical: aspect_ratio.dividing(standard_timing.x_resolution)as usize,
-            refresh_rate: standard_timing.vertical_frequency as f32,
-            interlaced: false,
-            aspect_ratio,
-        }
-    }
+// #[derive(Clone, Copy)]
+// pub struct Resolution {
+//     pub horizontal: usize,
+//     pub vertical: usize,
+//     pub refresh_rate: f32,
+//     pub interlaced: bool,
+//     pub aspect_ratio: Fract<u16>,
+// }
 
-    fn from_descriptor(descriptor: Descriptor) -> Option<Self> {
-        match descriptor {
-            Descriptor::DetailedTiming {
-                pixel_clock_10khz,
-                horizontal_active_pixels,
-                horizontal_blanking_pixels,
-                vertical_active_lines,
-                vertical_blanking_lines,
-                horizontal_front_porch_pixels: _,
-                horizontal_sync_pulse_width_pixels: _,
-                vertical_front_porch_lines: _,
-                vertical_sync_pulse_width_lines: _,
-                horizontal_image_size_mm,
-                vertical_image_size_mm,
-                horizontal_border_pixels: _,
-                vertical_border_lines: _,
-                signal_interface_type,
-                stereo_mode: _,
-                sync: _,
-            } => {
-                let total_horizontal_pixels =
-                    (horizontal_active_pixels + horizontal_blanking_pixels) as usize;
-                let total_vertical_lines =
-                    (vertical_active_lines + vertical_blanking_lines) as usize;
-                let total_pixels = total_horizontal_pixels * total_vertical_lines;
-                let pixel_clock_hz = pixel_clock_10khz as usize * 10_000;
-                let refresh_rate = pixel_clock_hz as f32 / total_pixels as f32;
-                Some(Self {
-                    horizontal: horizontal_active_pixels as usize,
-                    vertical: vertical_active_lines as usize,
-                    refresh_rate,
-                    interlaced: matches!(signal_interface_type, SignalInterfaceType::Interlaced),
-                    aspect_ratio: Fract::new(horizontal_image_size_mm, vertical_image_size_mm).reduced(),
-                })
-            }
-            _ => None,
-        }
-    }
+// impl Default for Resolution {
+//     fn default() -> Self {
+//         Self {
+//             horizontal: 1280,
+//             vertical: 720,
+//             refresh_rate: 60.0,
+//             interlaced: false,
+//             aspect_ratio: Fract::new(16, 9),
+//         }
+//     }
+// }
 
-    pub fn supported(buffer: &mut [Self], offset: usize) -> usize {
-        let mut count = 0;
-        let mut add = |res| {
-            buffer[count + offset] = res;
-            count += 1;
-        };
-        EdidIterator::new().for_each(|edid| {
-            match &edid {
-                Edid::Edid(edid_block) => {
-                    edid_block
-                        .descriptors_iter()
-                        .filter_map(Self::from_descriptor)
-                        .for_each(&mut add);
-                    edid_block
-                        .standard_timing_information()
-                        .iter()
-                        .filter_map(|sti| sti.map(Self::from_standard_timing))
-                        .for_each(&mut add);
-                    Self::from_legacy_timing(edid_block.common_timing_support()).for_each(&mut add);
-                }
-                Edid::CtaExtensionRev3(cta_block) => {
-                    cta_block
-                        .descriptors()
-                        .filter_map(Self::from_descriptor)
-                        .for_each(&mut add);
-                }
-                Edid::Unknown => {}
-            };
-        });
-        count
-    }
+// impl Display for Resolution {
+//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//         write!(
+//             f,
+//             "{}x{}{}{} {}",
+//             self.horizontal,
+//             self.vertical,
+//             if self.interlaced { "i" } else { "p" },
+//             self.refresh_rate,
+//             self.aspect_ratio
+//         )
+//     }
+// }
 
-    pub fn preferred() -> Option<Self> {
-        EdidIterator::new().find_map(|edid| match edid {
-            Edid::Edid(edid_block) => edid_block
-                .descriptors_iter()
-                .find_map(Self::from_descriptor),
-            Edid::CtaExtensionRev3(cta_block) => {
-                cta_block.descriptors().find_map(Self::from_descriptor)
-            }
-            Edid::Unknown => None,
-        })
-    }
-}
+// impl Debug for Resolution {
+//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//         write!(f, "{}", self)
+//     }
+// }
 
-#[derive(Debug)]
-pub enum Edid {
-    Edid(RawEdidBlock),
-    CtaExtensionRev3(CtaExtensionBlock),
-    Unknown,
-}
+// impl Resolution {
+//     fn from_legacy_timing(legacy_timing: CommonLegacyTimingSupport) -> BufferedIterator<Self, 17> {
+//         let mut result = BufferedIterator::<Self, 17>::new();
 
-impl Edid {
-    pub fn from_bytes(bytes: &[u8]) -> Self {
-        match bytes {
-            [0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, ..] => {
-                Self::Edid(RawEdidBlock(bytes.try_into().unwrap()))
-            }
-            [0x02, 0x03, ..] => {
-                Self::CtaExtensionRev3(CtaExtensionBlock(bytes.try_into().unwrap()))
-            }
-            _ => Self::Unknown,
-        }
-    }
+//         let aspect_ratio = Fract::new(4, 3);
+//         let interlaced = false;
+//         if legacy_timing._1024_768_60 {
+//             result.push(Self {
+//                 horizontal: 1024,
+//                 vertical: 768,
+//                 refresh_rate: 60.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._1024_768_70 {
+//             result.push(Self {
+//                 horizontal: 1024,
+//                 vertical: 768,
+//                 refresh_rate: 70.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._1024_768_75 {
+//             result.push(Self {
+//                 horizontal: 1024,
+//                 vertical: 768,
+//                 refresh_rate: 75.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._1024_768_87_interlaced {
+//             result.push(Self {
+//                 horizontal: 1024,
+//                 vertical: 768,
+//                 refresh_rate: 87.0,
+//                 interlaced: true,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._1152_870_75 {
+//             result.push(Self {
+//                 horizontal: 1152,
+//                 vertical: 870,
+//                 refresh_rate: 75.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._1280_1024_75 {
+//             result.push(Self {
+//                 horizontal: 1280,
+//                 vertical: 1024,
+//                 refresh_rate: 75.0,
+//                 interlaced,
+//                 aspect_ratio: Fract::new(5, 4),
+//             });
+//         }
+//         if legacy_timing._640_480_60 {
+//             result.push(Self {
+//                 horizontal: 640,
+//                 vertical: 480,
+//                 refresh_rate: 60.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._640_480_67 {
+//             result.push(Self {
+//                 horizontal: 640,
+//                 vertical: 480,
+//                 refresh_rate: 67.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._640_480_72 {
+//             result.push(Self {
+//                 horizontal: 640,
+//                 vertical: 480,
+//                 refresh_rate: 72.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._640_480_75 {
+//             result.push(Self {
+//                 horizontal: 640,
+//                 vertical: 480,
+//                 refresh_rate: 75.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._720_400_70 {
+//             result.push(Self {
+//                 horizontal: 720,
+//                 vertical: 400,
+//                 refresh_rate: 70.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._720_400_88 {
+//             result.push(Self {
+//                 horizontal: 720,
+//                 vertical: 400,
+//                 refresh_rate: 88.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._800_600_56 {
+//             result.push(Self {
+//                 horizontal: 800,
+//                 vertical: 600,
+//                 refresh_rate: 56.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._800_600_60 {
+//             result.push(Self {
+//                 horizontal: 800,
+//                 vertical: 600,
+//                 refresh_rate: 60.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._800_600_72 {
+//             result.push(Self {
+//                 horizontal: 800,
+//                 vertical: 600,
+//                 refresh_rate: 72.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._800_600_75 {
+//             result.push(Self {
+//                 horizontal: 800,
+//                 vertical: 600,
+//                 refresh_rate: 75.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         if legacy_timing._832_624_75 {
+//             result.push(Self {
+//                 horizontal: 832,
+//                 vertical: 624,
+//                 refresh_rate: 75.0,
+//                 interlaced,
+//                 aspect_ratio,
+//             });
+//         }
+//         result
+//     }
 
-    pub fn bytes(&self) -> &[u8] {
-        match self {
-            Edid::Edid(b) => b.0.as_slice(),
-            Edid::CtaExtensionRev3(b) => b.0.as_slice(),
-            Edid::Unknown => &[],
-        }
-    }
+//     fn from_standard_timing(standard_timing: StandardTimingInformation) -> Self {
+//         let aspect_ratio = match standard_timing.image_aspect_ratio {
+//             StandardTimingImageAspectRatio::_16_10 => Fract::new(16, 10),
+//             StandardTimingImageAspectRatio::_4_3 => Fract::new(4, 3),
+//             StandardTimingImageAspectRatio::_5_4 => Fract::new(5, 4),
+//             StandardTimingImageAspectRatio::_16_9 => Fract::new(16, 9),
+//         };
+//         Self {
+//             horizontal: standard_timing.x_resolution as usize,
+//             vertical: aspect_ratio.dividing(standard_timing.x_resolution)as usize,
+//             refresh_rate: standard_timing.vertical_frequency as f32,
+//             interlaced: false,
+//             aspect_ratio,
+//         }
+//     }
 
-    pub fn checksum_ok(&self) -> bool {
-        self.bytes().iter().copied().reduce(u8::wrapping_add) == Some(0)
-    }
-}
+//     fn from_descriptor(descriptor: Descriptor) -> Option<Self> {
+//         match descriptor {
+//             Descriptor::DetailedTiming {
+//                 pixel_clock_10khz,
+//                 horizontal_active_pixels,
+//                 horizontal_blanking_pixels,
+//                 vertical_active_lines,
+//                 vertical_blanking_lines,
+//                 horizontal_front_porch_pixels: _,
+//                 horizontal_sync_pulse_width_pixels: _,
+//                 vertical_front_porch_lines: _,
+//                 vertical_sync_pulse_width_lines: _,
+//                 horizontal_image_size_mm,
+//                 vertical_image_size_mm,
+//                 horizontal_border_pixels: _,
+//                 vertical_border_lines: _,
+//                 signal_interface_type,
+//                 stereo_mode: _,
+//                 sync: _,
+//             } => {
+//                 let total_horizontal_pixels =
+//                     (horizontal_active_pixels + horizontal_blanking_pixels) as usize;
+//                 let total_vertical_lines =
+//                     (vertical_active_lines + vertical_blanking_lines) as usize;
+//                 let total_pixels = total_horizontal_pixels * total_vertical_lines;
+//                 let pixel_clock_hz = pixel_clock_10khz as usize * 10_000;
+//                 let refresh_rate = pixel_clock_hz as f32 / total_pixels as f32;
+//                 Some(Self {
+//                     horizontal: horizontal_active_pixels as usize,
+//                     vertical: vertical_active_lines as usize,
+//                     refresh_rate,
+//                     interlaced: matches!(signal_interface_type, SignalInterfaceType::Interlaced),
+//                     aspect_ratio: Fract::new(horizontal_image_size_mm, vertical_image_size_mm).reduced(),
+//                 })
+//             }
+//             _ => None,
+//         }
+//     }
+
+//     pub fn preferred() -> Option<Self> {
+//         EdidIterator::new().find_map(|edid| match edid {
+//             Edid::Edid(edid_block) => edid_block
+//                 .descriptors_iter()
+//                 .find_map(Self::from_descriptor),
+//             Edid::CtaExtensionRev3(cta_block) => {
+//                 cta_block.descriptors().find_map(Self::from_descriptor)
+//             }
+//             Edid::Unknown => None,
+//         })
+//     }
+// }
+
+
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -1250,22 +1227,6 @@ impl Iterator for CtaVideoIterator<'_> {
 
 pub struct CtaExtensionBlock([u8; 128]);
 impl CtaExtensionBlock {
-    pub fn test_block() -> Self {
-        let edid1: [u8; 128] = [
-            0x02, 0x03, 0x26, 0x70, 0x4e, 0x13, 0x04, 0x1f, 0x10, 0x20, 0x21, 0x22, 0x14, 0x05,
-            0x11, 0x02, 0x15, 0x06, 0x01, 0x26, 0x09, 0x07, 0x03, 0x15, 0x07, 0x50, 0x83, 0x01,
-            0x00, 0x00, 0x67, 0x03, 0x0c, 0x00, 0x20, 0x00, 0xb8, 0x2d, 0x01, 0x1d, 0x80, 0x3e,
-            0x73, 0x38, 0x2d, 0x40, 0x7e, 0x2c, 0x45, 0x80, 0x80, 0x68, 0x21, 0x00, 0x00, 0x1e,
-            0x01, 0x1d, 0x80, 0xd0, 0x72, 0x1c, 0x16, 0x20, 0x10, 0x2c, 0x25, 0x80, 0x80, 0x68,
-            0x21, 0x00, 0x00, 0x9e, 0x01, 0x1d, 0x00, 0xbc, 0x52, 0xd0, 0x1e, 0x20, 0xb8, 0x28,
-            0x55, 0x40, 0x80, 0x68, 0x21, 0x00, 0x00, 0x1e, 0x8c, 0x0a, 0xd0, 0x90, 0x20, 0x40,
-            0x31, 0x20, 0x0c, 0x40, 0x55, 0x00, 0x90, 0x2c, 0x11, 0x00, 0x00, 0x18, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x3b,
-        ];
-        Self(edid1)
-    }
-
     pub fn cta_revision(&self) -> u8 {
         self.0[1]
     }
@@ -1359,75 +1320,6 @@ impl Debug for CtaDataBlock<'_> {
             }
             Self::VideoFormat => write!(f, "VideoFormat"),
             Self::Extended => write!(f, "Extended"),
-        }
-    }
-}
-
-pub struct EdidIterator {
-    block_num: u8,
-    block_total: u8,
-}
-
-impl EdidIterator {
-    pub fn new() -> Self {
-        Self {
-            block_num: 0,
-            block_total: 1,
-        }
-    }
-}
-
-impl core::iter::Iterator for EdidIterator {
-    type Item = Edid;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.block_num == self.block_total {
-            return None;
-        }
-
-        let response: tag::GetEdidBlock =
-            simple_single_call(tag::GET_EDID_BLOCK, self.block_num as u32).ok()?;
-
-        if response.status == 0 {
-            let block = Edid::from_bytes(&response.data);
-            if let Edid::Edid(edid) = &block {
-                self.block_total = 1 + edid.extension_len();
-            }
-            self.block_num += 1;
-            Some(block)
-        } else {
-            None
-        }
-    }
-}
-
-pub struct MockEdidIterator {
-    block_num: u8,
-    block_total: u8,
-}
-
-impl MockEdidIterator {
-    pub fn new() -> Self {
-        Self {
-            block_num: 0,
-            block_total: 2,
-        }
-    }
-}
-
-impl core::iter::Iterator for MockEdidIterator {
-    type Item = Edid;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.block_num == self.block_total {
-            return None;
-        }
-
-        self.block_num += 1;
-        match self.block_num {
-            1 => Some(Edid::Edid(RawEdidBlock::test_block())),
-            2 => Some(Edid::CtaExtensionRev3(CtaExtensionBlock::test_block())),
-            _ => None,
         }
     }
 }
