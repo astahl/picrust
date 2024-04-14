@@ -10,7 +10,7 @@ pub enum EdidError {
 }
 
 #[derive(Clone, Copy)]
-#[repr(C, packed)]
+#[repr(C)]
 pub union EdidBlock {
     edid: edid_ver14::EdidVer14,
     cta: cta_rev3::CtaExtensionRev3,
@@ -77,6 +77,8 @@ pub struct VideoMode {
 
 #[cfg(test)]
 mod tests {
+    use crate::collections::ring::RingArray;
+
     use super::*;
 
     const EDID_BYTES: [u8; 128] = [
@@ -126,5 +128,13 @@ mod tests {
     fn test_cta_block() {
         let edid_block = EdidBlock::try_with_bytes(&CTA_BYTES).expect("try_with_bytes should work for CTA");
         assert!(edid_block.try_as_cta_rev3().is_some());
+    }
+
+    #[test]
+    fn test_edid_debug_fmt() {
+        use core::fmt::Write;
+        let mut buf = RingArray::<u8, 4096>::new();
+        write!(&mut buf, "{:?}", EdidBlock::try_with_bytes(&EDID_BYTES).unwrap()).expect("should work");
+        assert_eq!("", buf.to_str().unwrap());
     }
 }

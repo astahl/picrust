@@ -1,17 +1,11 @@
-use core::fmt::Debug;
+use core::fmt::{Debug, Display, Write};
 
-use crate::{bit_field, fixed_point::FixedPoint};
+use crate::{bit_field, fixed_point::{FxU16, FxU8}};
 
-#[derive(Clone, Copy, Debug)]
-#[repr(C, packed)]
+#[derive(Clone, Copy)]
+#[repr(C)]
 pub struct EdidVer14 {
-magic_number: u64,
-pub manufacturer_id: ManufacturerId,
-manufacturer_product_code: u16,
-serial_number: u32,
-date_of_manufacture: DateOfManufacture,
-edid_version: u8,
-edid_revision: u8,
+header: Header,
 // basic display parameters
 video_input_parameters: VideoInputParameters,
 screen_size: ScreenSize,
@@ -29,41 +23,110 @@ pub num_of_extensions: u8,
 checksum_parity: u8,
 }
 
+impl Debug for EdidVer14 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EdidVer14")
+            // .field("magic_number", &self.magic_number)
+            .field("header", &format_args!("{}", &self.header))
+            // .field("video_input_parameters", &self.video_input_parameters)
+            // .field("screen_size", &self.screen_size)
+            // .field("gamma", &self.gamma)
+            // .field("supported_features", &self.supported_features)
+            // .field("chromaticity_coords", &self.chromaticity_coords)
+            .field("supported_common_timings", &self.supported_common_timings)
+            // .field("standard_timings", &self.standard_timings)
+            // .field("detailed_descriptors", &self.detailed_descriptors)
+            // .field("num_of_extensions", &self.num_of_extensions)
+            // .field("checksum_parity", &self.checksum_parity)
+            .finish()
+    }
+}
+
 impl EdidVer14 {
 pub const fn check_magic_number(&self) -> bool {
-    self.magic_number == 0x00ffffffffffff00
+    self.header.magic_number == 0x00ffffffffffff00
 }
 }
 
-bit_field!(pub ManufacturerId(u16) {
-14:10 => letter_0,
-9:5 => letter_1,
-4:0 => letter_2
-} );
-
-impl ManufacturerId {
-pub fn to_ascii(&self) -> [u8;3] {
-    [
-        self.letter_0().value() as u8 + b'@',
-        self.letter_1().value() as u8 + b'@',
-        self.letter_2().value() as u8 + b'@',
-    ]
-}
+#[derive(Clone, Copy)]
+#[repr(C)]
+struct Header {
+    magic_number: u64,
+    manufacturer_id: ManufacturerId,
+    manufacturer_product_code: ManufacturerProductCode,
+    serial_number: SerialNumber,
+    date_of_manufacture: DateOfManufacture,
+    version: EdidVersion
 }
 
+impl Display for Header {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "(EDID {}) mfg: {}{} s/n: {} dom: {}", self.version, self.manufacturer_id, self.manufacturer_product_code, self.serial_number, self.date_of_manufacture)
+    }
+}
 
-#[derive(Clone, Copy, Debug)]
-#[repr(C, packed)]
+#[derive(Clone, Copy)]
+struct ManufacturerId ([u8;2]);
+
+impl Display for ManufacturerId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let value = u16::from_be_bytes(self.0);
+        f.write_char((((value >> 10) & 0b11111) as u8 + b'@') as char)?;
+        f.write_char((((value >> 5) & 0b11111) as u8 + b'@') as char)?;
+        f.write_char(((value & 0b11111) as u8 + b'@') as char)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ManufacturerProductCode ([u8;2]);
+
+impl Display for ManufacturerProductCode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let value = u16::from_le_bytes(self.0);
+        write!(f, "{:x}", value)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SerialNumber ([u8;4]);
+
+impl Display for SerialNumber {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let value = u32::from_le_bytes(self.0);
+        write!(f, "{}", value)
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct EdidVersion {
+version: u8,
+revision: u8
+}
+
+impl Display for EdidVersion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "v{}.{}", self.version, self.revision)
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
 pub struct DateOfManufacture {
 week_or_model_year_flag: u8,
 year_raw: u8
 }
 
-impl DateOfManufacture {
-pub fn year(&self) -> u16 {
-    self.year_raw as u16 + 1990
+impl Display for DateOfManufacture {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.week_or_model_year_flag == 0 {
+            write!(f, "{}", 1990 + self.year_raw as u32)
+        } else {
+            write!(f, "{}.{}", 1990 + self.year_raw as u32, self.week_or_model_year_flag)
+        }
+    }
 }
-}
+
 
 #[derive(Clone, Copy)]
 pub union VideoInputParameters {
@@ -190,36 +253,36 @@ msb: ChromaticityCoordinatesMsb
 }
 
 impl ChromaticityCoordinates {
-pub fn red_x(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.red_x as u16) << 2 | self.lsb.red_x().value() as u16)
+pub fn red_x(&self) -> FxU16<10> {
+    FxU16::new((self.msb.red_x as u16) << 2 | self.lsb.red_x().value() as u16)
 }
 
-pub fn red_y(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.red_y as u16) << 2 | self.lsb.red_y().value() as u16)
+pub fn red_y(&self) -> FxU16<10> {
+    FxU16::new((self.msb.red_y as u16) << 2 | self.lsb.red_y().value() as u16)
 }
 
-pub fn green_x(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.green_x as u16) << 2 | self.lsb.green_x().value() as u16)
+pub fn green_x(&self) -> FxU16<10> {
+    FxU16::new((self.msb.green_x as u16) << 2 | self.lsb.green_x().value() as u16)
 }
 
-pub fn green_y(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.green_y as u16) << 2 | self.lsb.green_y().value() as u16)
+pub fn green_y(&self) -> FxU16<10> {
+    FxU16::new((self.msb.green_y as u16) << 2 | self.lsb.green_y().value() as u16)
 }
 
-pub fn blue_x(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.blue_x as u16) << 2 | self.lsb.blue_x().value() as u16)
+pub fn blue_x(&self) -> FxU16<10> {
+    FxU16::new((self.msb.blue_x as u16) << 2 | self.lsb.blue_x().value() as u16)
 }
 
-pub fn blue_y(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.blue_y as u16) << 2 | self.lsb.blue_y().value() as u16)
+pub fn blue_y(&self) -> FxU16<10> {
+    FxU16::new((self.msb.blue_y as u16) << 2 | self.lsb.blue_y().value() as u16)
 }
 
-pub fn white_x(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.white_x as u16) << 2 | self.lsb.white_x().value() as u16)
+pub fn white_x(&self) -> FxU16<10> {
+    FxU16::new((self.msb.white_x as u16) << 2 | self.lsb.white_x().value() as u16)
 }
 
-pub fn white_y(&self) -> FixedPoint<10, u16> {
-    FixedPoint::new((self.msb.white_y as u16) << 2 | self.lsb.white_y().value() as u16)
+pub fn white_y(&self) -> FxU16<10> {
+    FxU16::new((self.msb.white_y as u16) << 2 | self.lsb.white_y().value() as u16)
 }
 }
 
@@ -301,7 +364,7 @@ monitor: MonitorDescriptor,
 
 impl Debug for DetailedDescriptor {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        todo!()
+        write!(f, "IMPLEMENT ME")
     }
 }
 
@@ -515,11 +578,11 @@ pub fn try_as_secondary_gtf(&self) -> Option<&MonitorVideoTimingGtf> {
 pub struct MonitorVideoTimingGtf {
 tag: u8,
 res0: u8,
-start_frequency_khz: FixedPoint<-1, u8>,
-gtf_c: FixedPoint<1, u8>,
+start_frequency_khz: FxU8<-1>,
+gtf_c: FxU8<1>,
 gtf_m_raw: [u8;2],
 gtf_k: u8,
-gtf_j: FixedPoint<1, u8>,
+gtf_j: FxU8<1>,
 }
 
 impl MonitorVideoTimingGtf {

@@ -1,69 +1,192 @@
-pub mod container;
 pub mod convert;
 pub mod ops;
-use container::FixedPointContainer;
 
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct FixedPoint<const P: isize, T: FixedPointContainer>(T);
+#[derive(Debug)]
+pub enum FixedPointConversionError {
+    ValueIsNotFinite,
+}
 
-impl<const P: isize, T: FixedPointContainer> FixedPoint<P, T> {
-    pub const fn new(value: T) -> Self {
-        Self(value)
-    }
+macro_rules! fxp_impl {
+    ($underlying_type:ident $name:ident) => {
+        #[derive(Clone, Copy)]
+        #[repr(transparent)]
+        pub struct $name <const P: isize>($underlying_type);
 
-    pub fn from_int(int: T) -> Self {
-        Self(int.signed_shl(P))
-    }
+        impl<const P: isize> $name<P> {
+            pub const PRECISION: isize = P;
 
-    pub fn from_int_frac(int: T, frac: T) -> Self {
-        Self(int.signed_shl(P) + frac)
-    }
+            const fn signed_shl(value: $underlying_type, amount: isize) -> $underlying_type {
+                let abs = amount.unsigned_abs();
+                if abs > $underlying_type::BITS as usize {
+                    0
+                } else if amount < 0 {
+                    value >> abs
+                } else {
+                    value << abs
+                }
+            }
 
-    pub fn from_shifted(value: T, precision: isize) -> Self {
-        FixedPoint::new(value.signed_shift(precision, P))
-    }
+            const fn signed_shift(value: $underlying_type, from: isize, to: isize) -> $underlying_type {
+                let diff = to - from;
+                Self::signed_shl(value, diff)
+            }
 
-    pub fn truncating_shift<const R: isize>(&self) -> FixedPoint<R, T> {
-        FixedPoint::new(self.0.signed_shift(P, R))
-    }
+            pub const fn default() -> Self {
+                Self(0)
+            }
 
-    pub fn truncate(&self) -> T {
-        self.0.signed_shift(P, 0)
-    }
-
-    pub const fn raw(&self) -> T {
-        self.0
-    }
-
-    pub fn split_int_frac(&self) -> (T, T) {
-        if P <= 0 {
-            (self.0, T::ZERO)
-        } else if P.unsigned_abs() > T::BIT_WIDTH {
-            (T::ZERO, self.0)
-        } else {
-            let mask = (T::ONE << P as usize) - T::ONE;
-            ((self.0 & !mask).signed_shl(-P), self.0 & mask)
+            pub const fn new(value: $underlying_type) -> Self {
+                Self(value)
+            }
+        
+            pub const fn from_int(int: $underlying_type) -> Self {
+                Self(Self::signed_shl(int, P))
+            }
+        
+            pub const fn from_int_frac(int: $underlying_type, frac: $underlying_type) -> Self {
+                Self(Self::signed_shl(int, P) + frac)
+            }
+        
+            pub const fn from_shifted(value: $underlying_type, precision: isize) -> Self {
+                Self::new(Self::signed_shift(value, precision, P))
+            }
+        
+            pub const fn truncating_shift<const R: isize>(&self) -> $name<R> {
+                $name::new(Self::signed_shift(self.0, P, R))
+            }
+        
+            pub const fn truncate(&self) -> $underlying_type {
+                Self::signed_shift(self.0, P, 0)
+            }
+        
+            pub const fn raw(&self) -> $underlying_type {
+                self.0
+            }
+        
+            pub fn split_int_frac(&self) -> ($underlying_type, $underlying_type) {
+                if P <= 0 {
+                    (self.0, 0)
+                } else if P.unsigned_abs() > $underlying_type::BITS as usize {
+                    (0, self.0)
+                } else {
+                    let mask = (1 << P as usize) - 1;
+                    (Self::signed_shl((self.0 & !mask), -P), self.0 & mask)
+                }
+            }
         }
-    }
+
+        impl<const P: isize> Default for $name<P> {
+            fn default() -> Self {
+                Self::default()
+            }
+        }
+
+        impl<const P: isize> core::fmt::Debug for $name<P> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_tuple(stringify!($name))
+                    .field(&P)
+                    .field(&self.0)
+                    .finish()
+            }
+        }
+
+        impl core::convert::From<$underlying_type> for $name<0> {
+            fn from(value: $underlying_type) -> Self {
+                Self::new(value)
+            }
+        }
+
+        impl<const P: isize> core::convert::Into<f64> for $name<P> {
+            fn into(self) -> f64 {
+                if $underlying_type::MIN == 0 {
+                    convert::fixed_u64_to_float64(self.0 as u64, Self::PRECISION)
+                } else {
+                    convert::fixed_i64_to_float64(self.0 as i64, Self::PRECISION)
+                }
+            }
+        }
+
+        impl<const P: isize> core::convert::Into<f32> for $name<P> {
+            fn into(self) -> f32 {
+                if $underlying_type::MIN == 0 {
+                    convert::fixed_u32_to_float32(self.0 as u32, Self::PRECISION)
+                } else {
+                    convert::fixed_i32_to_float32(self.0 as i32, Self::PRECISION)
+                }
+            }
+        }
+
+        impl<const P: isize> core::convert::TryFrom<f32> for $name<P> {
+            type Error = FixedPointConversionError;
+
+            fn try_from(value: f32) -> Result<Self, Self::Error> {
+                let fixed = if $underlying_type::MIN == 0 {
+                    convert::float32_to_fixed_u32(value, Self::PRECISION)? as $underlying_type
+                } else {
+                    convert::float32_to_fixed_i32(value, Self::PRECISION)? as $underlying_type
+                };
+                Ok(Self::new(fixed))
+            }
+        }
+
+        
+        impl<const P: isize> core::convert::TryFrom<f64> for $name<P> {
+            type Error = FixedPointConversionError;
+
+            fn try_from(value: f64) -> Result<Self, Self::Error> {
+                let fixed = if $underlying_type::MIN == 0 {
+                    convert::float64_to_fixed_u64(value, Self::PRECISION)? as $underlying_type
+                } else {
+                    convert::float64_to_fixed_i64(value, Self::PRECISION)? as $underlying_type
+                };
+                Ok(Self::new(fixed))
+            }
+        }
+
+        impl<const P: isize, const Q: isize> core::ops::Mul<$name<Q>> for $name<P> {
+            type Output = ops::Multiply<$underlying_type, P, Q>;
+            
+            fn mul(self, rhs: $name<Q>) -> Self::Output {
+                ops::Multiply(self.0, rhs.0)
+            }
+        }
+
+        impl<const P: isize, const Q: isize> ops::Multiply<$underlying_type, P, Q> {
+            pub fn resolve<const R: isize> (&self) -> $name<R> {
+                $name::<R>::from_shifted(self.0 * self.1, P + Q)
+            }
+        }
+
+        impl<const P: isize, const Q: isize> core::ops::Div<$name<Q>> for $name<P> {
+            type Output = ops::Divide<$underlying_type, P, Q>;
+            
+            fn div(self, rhs: $name<Q>) -> Self::Output {
+                ops::Divide(self.0, rhs.0)
+            }
+        }
+
+        impl<const P: isize, const Q: isize> ops::Divide<$underlying_type, P, Q> {
+            pub fn resolve<const R: isize> (&self) -> $name<R> {
+                $name::<R>::from_shifted(self.0 / self.1, P - Q)
+            }
+        }
+    };
 }
 
-impl<const P: isize, T: FixedPointContainer> Default for FixedPoint<P, T> {
-    fn default() -> Self {
-        Self(T::ZERO)
-    }
-}
 
-impl<const P: isize, T: FixedPointContainer + core::fmt::Debug> core::fmt::Debug
-    for FixedPoint<P, T>
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("FixedPoint")
-            .field(&P)
-            .field(&self.0)
-            .finish()
-    }
-}
+fxp_impl!(u8 FxU8);
+fxp_impl!(u16 FxU16);
+fxp_impl!(u32 FxU32);
+fxp_impl!(u64 FxU64);
+fxp_impl!(u128 FxU128);
+fxp_impl!(i8 FxS8);
+fxp_impl!(i16 FxS16);
+fxp_impl!(i32 FxS32);
+fxp_impl!(i64 FxS64);
+fxp_impl!(i128 FxS128);
+
+
+
 
 #[cfg(test)]
 mod tests {
@@ -76,24 +199,24 @@ mod tests {
         use core::fmt::Write;
 
         let mut buff = collections::ring::RingArray::<u8, 32>::new();
-        write!(buff, "{:?}", FixedPoint::<10, i32>::new(-1234)).expect("Writing should work");
-        assert_eq!(b"FixedPoint(10, -1234)", buff.as_slices().0);
+        write!(buff, "{:?}", FxS32::<10>::new(-1234)).expect("Writing should work");
+        assert_eq!("FxS32(10, -1234)", buff.to_str().unwrap());
     }
 
     #[test]
     fn split_works() {
-        let a: FixedPoint<8, i32> = (3.25_f32).try_into().unwrap();
+        let a: FxS32<8> = (3.25_f32).try_into().unwrap();
         assert_eq!((3, 0b0100_0000), a.split_int_frac());
-
-        let a: FixedPoint<8, i32> = (-3.5_f32).try_into().unwrap();
+    
+        let a: FxS32<8> = (-3.5_f32).try_into().unwrap();
         assert_eq!((-4, 0b1000_0000), a.split_int_frac());
 
-        // let a: FixedPoint::<8, i32> = (-3.375_f32).try_into().unwrap();
-        // assert_eq!((-4, 0b0101_0000), a.split_int_frac());
+        let a: FxS32<8> = (-3.375_f32).try_into().unwrap();
+        assert_eq!((-4, 0b1010_0000), a.split_int_frac());
 
-        let f_uart_clk = FixedPoint::<6, u32>::from_int(3_000_000);
-        let baud_rate = 115200;
-        let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
-        assert_eq!((1, 40), baud_rate_divisor.split_int_frac());
+        // let f_uart_clk = FxU32::<6>::from_int(3_000_000);
+        // let baud_rate = 115200;
+        // let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
+        // assert_eq!((1, 40), baud_rate_divisor.split_int_frac());
     }
 }

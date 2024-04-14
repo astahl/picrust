@@ -465,7 +465,7 @@ pub struct SupportedFeatures {
     preferred_timing_mode: bool,
     continuous_timings: bool,
 }
-type FxP16_10 = mystd::fixed_point::FixedPoint<10, u16>;
+type FxP16_10 = mystd::fixed_point::FxU16<10>;
 #[derive(Debug, Default)]
 pub struct CIEPoint {
     x: FxP16_10,
