@@ -1,6 +1,5 @@
 use mystd::bit_field;
-use mystd::fixed_point::FixedPoint;
-
+use mystd::fixed_point::FxU32;
 use crate::peripherals::gpio;
 use crate::system::hal::clocks::Clock;
 
@@ -297,7 +296,7 @@ impl UartBitrate {
     /// = (1 + 40 * 2^-6)
     /// ````
     pub fn to_int_frac(self, uart_clock_rate: u32) -> (u32, u32) {
-        let f_uart_clk = FixedPoint::<6, u32>::from_int(uart_clock_rate);
+        let f_uart_clk: FxU32<6> = uart_clock_rate.into();
         let baud_rate: u32 = self as u32;
         let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
         baud_rate_divisor.split_int_frac()

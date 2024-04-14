@@ -83,6 +83,7 @@ mod tests {
     use crate::fixed_point::FxS32;
 
     type Fx = FxS32<16>;
+    type Fx2 = FxS32<24>;
 
     #[test]
     fn mul_works() {
@@ -101,6 +102,33 @@ mod tests {
         let c: Fx = (a / b).resolve();
         assert_eq!(0.0, c.into());
     }
+
+    #[test]
+    fn add_assign_works() {
+        let mut a: Fx = 22.375.try_into().unwrap();
+        let b: Fx2 = 22.125.try_into().unwrap();
+        a += b;
+        assert_eq!(44.5, a.into());
+
+        let mut a: Fx2 = 22.375.try_into().unwrap();
+        let b: Fx = (-22.125).try_into().unwrap();
+        a += b;
+        assert_eq!(0.25, a.into());
+    }
+
+    #[test]
+    fn sub_assign_works() {
+        let mut a: Fx = 22.375.try_into().unwrap();
+        let b: Fx2 = 22.125.try_into().unwrap();
+        a -= b;
+        assert_eq!(0.25, a.into());
+
+        let mut a: Fx2 = 22.375.try_into().unwrap();
+        let b: Fx = (-22.125).try_into().unwrap();
+        a -= b;
+        assert_eq!(44.5, a.into());
+    }
+
 
     // #[test]
     // fn add_works() {

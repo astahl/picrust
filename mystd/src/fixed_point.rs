@@ -14,6 +14,13 @@ macro_rules! fxp_impl {
 
         impl<const P: isize> $name<P> {
             pub const PRECISION: isize = P;
+            const MASK: $underlying_type = if Self::PRECISION < 0 {
+                    0 
+                } else if Self::PRECISION as u32 > $underlying_type::BITS {
+                    $underlying_type::MAX
+                } else {
+                    (1 << Self::PRECISION) - 1
+                };
 
             const fn signed_shl(value: $underlying_type, amount: isize) -> $underlying_type {
                 let abs = amount.unsigned_abs();
@@ -63,7 +70,11 @@ macro_rules! fxp_impl {
                 self.0
             }
         
-            pub fn split_int_frac(&self) -> ($underlying_type, $underlying_type) {
+            pub const fn split(&self) -> ($underlying_type, $underlying_type) {
+                (self.0 & !Self::MASK, self.0 & Self::MASK)
+            }
+
+            pub const fn split_int_frac(&self) -> ($underlying_type, $underlying_type) {
                 if P <= 0 {
                     (self.0, 0)
                 } else if P.unsigned_abs() > $underlying_type::BITS as usize {
@@ -90,9 +101,9 @@ macro_rules! fxp_impl {
             }
         }
 
-        impl core::convert::From<$underlying_type> for $name<0> {
+        impl<const P: isize> core::convert::From<$underlying_type> for $name<P> {
             fn from(value: $underlying_type) -> Self {
-                Self::new(value)
+                Self::from_int(value)
             }
         }
 
@@ -151,6 +162,14 @@ macro_rules! fxp_impl {
             }
         }
 
+        impl<const P: isize> core::ops::Mul<$underlying_type> for $name<P> {
+            type Output = $name<P>;
+            
+            fn mul(self, rhs: $underlying_type) -> Self::Output {
+                Self::new(self.0 * rhs)
+            }
+        }
+
         impl<const P: isize, const Q: isize> ops::Multiply<$underlying_type, P, Q> {
             pub fn resolve<const R: isize> (&self) -> $name<R> {
                 $name::<R>::from_shifted(self.0 * self.1, P + Q)
@@ -161,13 +180,35 @@ macro_rules! fxp_impl {
             type Output = ops::Divide<$underlying_type, P, Q>;
             
             fn div(self, rhs: $name<Q>) -> Self::Output {
+                assert!(rhs.0 != 0, "Can't divide by zero");
                 ops::Divide(self.0, rhs.0)
+            }
+        }
+
+        impl<const P: isize> core::ops::Div<$underlying_type> for $name<P> {
+            type Output = $name<P>;
+            
+            fn div(self, rhs: $underlying_type) -> Self::Output {
+                assert!(rhs != 0, "Can't divide by zero");
+                Self::new(self.0 / rhs)
             }
         }
 
         impl<const P: isize, const Q: isize> ops::Divide<$underlying_type, P, Q> {
             pub fn resolve<const R: isize> (&self) -> $name<R> {
                 $name::<R>::from_shifted(self.0 / self.1, P - Q)
+            }
+        }
+
+        impl<const P: isize, const Q: isize> core::ops::AddAssign<$name<Q>> for $name<P> {
+            fn add_assign(&mut self, rhs: $name<Q>) {
+                self.0 += Self::signed_shift(rhs.0, Q, P);
+            }
+        }
+
+        impl<const P: isize, const Q: isize> core::ops::SubAssign<$name<Q>> for $name<P> {
+            fn sub_assign(&mut self, rhs: $name<Q>) {
+                self.0 -= Self::signed_shift(rhs.0, Q, P);
             }
         }
     };
@@ -205,18 +246,18 @@ mod tests {
 
     #[test]
     fn split_works() {
-        let a: FxS32<8> = (3.25_f32).try_into().unwrap();
-        assert_eq!((3, 0b0100_0000), a.split_int_frac());
+        let a: FxS32<8> = 3.25.try_into().unwrap();
+        assert_eq!((3 << 8, 0b0100_0000), a.split());
     
-        let a: FxS32<8> = (-3.5_f32).try_into().unwrap();
+        let a: FxS32<8> = (-3.5).try_into().unwrap();
         assert_eq!((-4, 0b1000_0000), a.split_int_frac());
 
-        let a: FxS32<8> = (-3.375_f32).try_into().unwrap();
+        let a: FxS32<8> = (-3.375).try_into().unwrap();
         assert_eq!((-4, 0b1010_0000), a.split_int_frac());
 
-        // let f_uart_clk = FxU32::<6>::from_int(3_000_000);
-        // let baud_rate = 115200;
-        // let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
-        // assert_eq!((1, 40), baud_rate_divisor.split_int_frac());
+        let f_uart_clk: FxU32<6> = 3_000_000.into();
+        let baud_rate = 115200;
+        let baud_rate_divisor = f_uart_clk / (16 * baud_rate);
+        assert_eq!((1, 40), baud_rate_divisor.split_int_frac());
     }
 }
