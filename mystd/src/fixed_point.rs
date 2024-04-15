@@ -27,6 +27,7 @@ macro_rules! fxp_impl {
                         (true, 0)
                     }
                 } else {
+                    #[allow(unused_comparisons)]
                     if (self.0 < 0 && abs < self.0.leading_ones()) || (abs < self.0.leading_zeros()) {
                         (false, self.0 << abs)
                     } else {
@@ -34,6 +35,11 @@ macro_rules! fxp_impl {
                     }
                 }
             }    
+
+            const fn overflowing_shift_from_to(self, from: i32, to: i32) -> (bool, $underlying_type) {
+                let diff = to - from;
+                self.overflowing_signed_shl(diff)
+            }  
 
             const fn zeroing_signed_shl(self, amount: i32) -> $underlying_type {
                 let abs = amount.unsigned_abs();
@@ -66,35 +72,41 @@ macro_rules! fxp_impl {
             } else {
                 (1 << Self::PRECISION) - 1
             };
-
             
-
-            
-
-            
-
-            pub const fn default() -> Self {
-                Self(SignedShifter(0))
-            }
-
             pub const fn new(value: $underlying_type) -> Self {
                 Self(SignedShifter(value))
+            }
+
+            pub const fn default() -> Self {
+                Self::new(0)
             }
         
             pub const fn from_int(int: $underlying_type) -> Self {
                 Self::new(SignedShifter(int).zeroing_signed_shl(Self::PRECISION))
             }
-        
-            pub const fn from_int_frac(int: $underlying_type, frac: $underlying_type) -> Self {
-                Self::new(SignedShifter(int).zeroing_signed_shl(Self::PRECISION) + frac)
+
+            pub const fn from_int_checked(int: $underlying_type) -> Option<Self> {
+                if let (false, value) = SignedShifter(int).overflowing_signed_shl(Self::PRECISION) {
+                    Some(Self::new(value))
+                } else {
+                    None
+                }
             }
         
             pub const fn from_shifted(value: $underlying_type, source_precision: i32) -> Self {
                 Self::new(SignedShifter(value).zeroing_shift_from_to(source_precision, Self::PRECISION))
             }
+
+            pub const fn from_shifted_checked(value: $underlying_type, source_precision: i32) -> Option<Self> {
+                if let (false, value) = SignedShifter(value).overflowing_shift_from_to(source_precision, Self::PRECISION) {
+                    Some(Self::new(value))
+                } else {
+                    None
+                }
+            }
         
             pub const fn truncating_shift<const R: i32>(&self) -> $name<R> {
-                $name::new(self.0.zeroing_shift_from_to(P, R))
+                $name::from_shifted(self.raw(), P)
             }
         
             pub const fn truncate(&self) -> $underlying_type {
@@ -248,7 +260,6 @@ macro_rules! fxp_impl {
         }
     };
 }
-
 
 fxp_impl!(u8 FxU8);
 fxp_impl!(u16 FxU16);
