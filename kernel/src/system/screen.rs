@@ -134,6 +134,7 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         
         let mut fbdesc: FramebufferDescriptor = geom.into();
         fbdesc.depth.bits_per_pixel = Self::BITS_PER_PIXEL as u32;
+        fbdesc.pixel_order = PixelOrder::Rgb;
         let fb = Framebuffer::new(fbdesc).ok_or(ScreenError::CouldNotCreateFramebuffer)?;
         
         let framebuffer = unsafe {
