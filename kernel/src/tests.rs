@@ -176,7 +176,7 @@ pub fn test_screen() {
     let geom = 
     if fb_dim.width_px == 0 || fb_dim.height_px == 0 {
         println_log!("FB Dim is zero, using default");
-        ScreenGeometry::with_size(Size { width: 640, height: 480 })
+        ScreenGeometry::with_size(Size { width: 1280, height: 720 })
     } else {
         println_log!("FB Dim w {} h {}", fb_dim.width_px, fb_dim.height_px);
         ScreenGeometry::with_size(Size { width: fb_dim.width_px as usize, height: fb_dim.height_px as usize })
