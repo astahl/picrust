@@ -66,24 +66,28 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
+    status_blink_twice(1000);
     let core_id = get_core_num();
-    static INIT: hal::signal::EventLatch = new_latch(false);
+   // static INIT: hal::signal::EventLatch = new_latch(false);
     match core_id {
         0 => {
+            status_blink_twice(1000);
             system::initialize();
             status_blink_twice(500);
-            INIT.set().expect("Should not fail");
+     //       INIT.set().expect("Should not fail");
+            status_blink_twice(500);
         }
         _ => {
-            INIT.wait_for_set().expect("Should not fail");
+        //    INIT.wait_for_set().expect("Should not fail");
         },
     }
+    status_blink_twice(1500);
     println_debug!("Continue after Init.");
     match core_id {
         0 => {
             //tests::test_irq0();
-            tests::test_dma();
             tests::test_screen();
+            tests::test_dma();
         },
         1 => {
             //tests::test_irq1();
@@ -129,16 +133,16 @@ pub extern "C" fn _start() -> ! {
     let stack_top = unsafe { core::ptr::addr_of!(__stack_top) } as u64;
     //sp_elx::SpEl1::new(stack_top).write_register();
     sp_elx::SpEl0::new(stack_top).write_register();
-    //unsafe { asm!("mov sp, {}", in(reg) stack_top); }
+    unsafe { asm!("mov sp, {}", in(reg) stack_top); }
 
     // clear the bss section
     let mut bss = unsafe { core::ptr::addr_of_mut!(__bss_start) };
     let bss_end = unsafe { core::ptr::addr_of!(__bss_end) };
-    loop {
-        if bss.cast_const() == bss_end { break; }
-        unsafe { bss.write_volatile(0) };
-        bss = bss.wrapping_add(1);
-    }
+    // loop {
+    //     if bss.cast_const() == bss_end { break; }
+    //     unsafe { bss.write_volatile(0) };
+    //     bss = bss.wrapping_add(1);
+    // }
 
     match current_exception_level() {
         3 => leave_el3(),
@@ -191,6 +195,7 @@ fn leave_el2() -> ! {
     HcrEl2::default().rw().set().write_register();
     // no vm, mmu or caching
     SctlrEl1::default()
+        .a().set()
         .write_register();
 
     spsr_el2::SpsrEl2::default()

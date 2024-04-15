@@ -167,6 +167,9 @@ pub static TEST_LATCH: EventLatch = new_latch(true);
 
 pub fn test_screen() {
     println_log!("Testing Screen...");
+    crate::system::hal::led::status_blink_twice(100);
+    crate::system::hal::led::status_blink_twice(100);
+    crate::system::hal::led::status_blink_twice(100);
     use super::system::screen::*;
     let ptr = ByteValue::from_mibi(128).as_bytes() as *mut u8;
     let slice = unsafe {
@@ -198,6 +201,7 @@ pub fn test_screen() {
             pcount += 1;
             if pcount > 1000 {
                 println_log!("Presents / s: {:.2}", pcount as f32 / time.elapsed().as_secs_f32());
+                crate::system::hal::led::status_blink_twice(100);
                 time = PointInTime::now();
                 pcount = 0;
             }

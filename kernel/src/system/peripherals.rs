@@ -35,6 +35,12 @@ pub const BCM_HOST: BcmHost = BcmHost {
 pub struct PeripheralMap();
 
 impl core::fmt::Debug for PeripheralMap {
+
+    #[cfg(feature = "bcm2711")]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "Peripheral Map for BCM2711 not available")
+    }
+
     #[cfg(any(feature = "bcm2837"))]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Peripherals")

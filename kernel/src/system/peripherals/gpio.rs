@@ -141,7 +141,7 @@ pub enum Resistor {
     Reserved = 0b11,
 }
 
-#[cfg(any(feature = "bcm2811", feature = "bcm2812"))]
+#[cfg(any(feature = "bcm2711", feature = "bcm2712"))]
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum Resistor {
@@ -179,7 +179,7 @@ impl Gpio {
     }
 }
 
-#[cfg(any(feature = "bcm2811", feature = "bcm2812"))]
+#[cfg(any(feature = "bcm2711", feature = "bcm2712"))]
 impl Gpio {
     // Pull-up/down Control Registers
     const GPIO_PUP_PDN_CNTRL_REG0: Mmio<GPIO_BASE, 0xe4> = Mmio();
@@ -187,27 +187,29 @@ impl Gpio {
     const GPIO_PUP_PDN_CNTRL_REG2: Mmio<GPIO_BASE, 0xec> = Mmio();
     const GPIO_PUP_PDN_CNTRL_REG3: Mmio<GPIO_BASE, 0xf0> = Mmio();
 
-    const fn get_pull_control_register(bank_select: usize) -> u32 {
+    fn get_pull_control_register(bank_select: usize) -> u32 {
         match bank_select {
             0 => Self::GPIO_PUP_PDN_CNTRL_REG0.read(),
             1 => Self::GPIO_PUP_PDN_CNTRL_REG1.read(),
             2 => Self::GPIO_PUP_PDN_CNTRL_REG2.read(),
             3 => Self::GPIO_PUP_PDN_CNTRL_REG3.read(),
+            _ => panic!("Unknown Bank select value")
         }
     }
 
-    const fn set_pull_control_register(bank_select: usize, value: u32) {
+    fn set_pull_control_register(bank_select: usize, value: u32) {
         match bank_select {
             0 => Self::GPIO_PUP_PDN_CNTRL_REG0.write(value),
             1 => Self::GPIO_PUP_PDN_CNTRL_REG1.write(value),
             2 => Self::GPIO_PUP_PDN_CNTRL_REG2.write(value),
             3 => Self::GPIO_PUP_PDN_CNTRL_REG3.write(value),
+            _ => panic!("Unknown Bank select value")
         }
     }
 
     pub fn set_pull_resistor(pin: u8, resistor: Resistor) {
         let offset = (pin << 1) & 0x1f; // (pin * 2) % 32
-        let bank_select = pin >> 4; // (pin * 2) / 32
+        let bank_select = pin as usize >> 4 ; // (pin * 2) / 32
         let old_state = Self::get_pull_control_register(bank_select);
         let mask = 0b11_u32 << offset;
         let new_value = (resistor as u32) << offset;
@@ -227,7 +229,7 @@ impl Gpio {
         let mut updated = [false, false, false, false];
         for pin in pins {
             let offset = (pin << 1) & 0x1f; // (pin * 2) % 32
-            let bank_select = pin >> 4; // (pin * 2) / 32
+            let bank_select = pin as usize >> 4; // (pin * 2) / 32
             let old_state = state[bank_select];
             let mask = 0b11_u32 << offset;
             let new_value = (resistor as u32) << offset;
