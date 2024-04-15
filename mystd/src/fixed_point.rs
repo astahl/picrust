@@ -6,128 +6,163 @@ pub enum FixedPointConversionError {
     ValueIsNotFinite,
 }
 
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+struct SignedShifter<T>(T);
+
 macro_rules! fxp_impl {
     ($underlying_type:ident $name:ident) => {
-        #[derive(Clone, Copy)]
-        #[repr(transparent)]
-        pub struct $name <const P: isize>($underlying_type);
 
-        impl<const P: isize> $name<P> {
-            pub const PRECISION: isize = P;
-            const MASK: $underlying_type = if Self::PRECISION < 0 {
-                    0 
-                } else if Self::PRECISION as u32 > $underlying_type::BITS {
-                    $underlying_type::MAX
-                } else {
-                    (1 << Self::PRECISION) - 1
-                };
-
-            const fn signed_shl(value: $underlying_type, amount: isize) -> $underlying_type {
+        impl SignedShifter<$underlying_type> {
+            const fn overflowing_signed_shl(self, amount: i32) -> (bool, $underlying_type) {
+                if amount == 0 || self.0 == 0 {
+                    return (false, self.0);
+                } 
+            
                 let abs = amount.unsigned_abs();
-                if abs > $underlying_type::BITS as usize {
+                if amount < 0 {
+                    if abs < self.0.trailing_zeros() {
+                        (false, self.0 >> abs)
+                    } else {
+                        (true, 0)
+                    }
+                } else {
+                    if (self.0 < 0 && abs < self.0.leading_ones()) || (abs < self.0.leading_zeros()) {
+                        (false, self.0 << abs)
+                    } else {
+                        (true, 0)
+                    }
+                }
+            }    
+
+            const fn zeroing_signed_shl(self, amount: i32) -> $underlying_type {
+                let abs = amount.unsigned_abs();
+                if abs > $underlying_type::BITS {
                     0
                 } else if amount < 0 {
-                    value >> abs
+                    self.0 >> abs
                 } else {
-                    value << abs
+                    self.0 << abs
                 }
-            }
+            }   
 
-            const fn signed_shift(value: $underlying_type, from: isize, to: isize) -> $underlying_type {
+            const fn zeroing_shift_from_to(self, from: i32, to: i32) -> $underlying_type {
                 let diff = to - from;
-                Self::signed_shl(value, diff)
-            }
+                self.zeroing_signed_shl(diff)
+            }     
+        }
+
+
+        #[derive(Clone, Copy)]
+        #[repr(transparent)]
+        pub struct $name <const P: i32>(SignedShifter<$underlying_type>);
+
+        impl<const P: i32> $name<P> {
+            pub const PRECISION: i32 = P;
+            const MASK: $underlying_type = if Self::PRECISION < 0 {
+                0 
+            } else if Self::PRECISION as u32 > $underlying_type::BITS {
+                $underlying_type::MAX
+            } else {
+                (1 << Self::PRECISION) - 1
+            };
+
+            
+
+            
+
+            
 
             pub const fn default() -> Self {
-                Self(0)
+                Self(SignedShifter(0))
             }
 
             pub const fn new(value: $underlying_type) -> Self {
-                Self(value)
+                Self(SignedShifter(value))
             }
         
             pub const fn from_int(int: $underlying_type) -> Self {
-                Self(Self::signed_shl(int, P))
+                Self::new(SignedShifter(int).zeroing_signed_shl(Self::PRECISION))
             }
         
             pub const fn from_int_frac(int: $underlying_type, frac: $underlying_type) -> Self {
-                Self(Self::signed_shl(int, P) + frac)
+                Self::new(SignedShifter(int).zeroing_signed_shl(Self::PRECISION) + frac)
             }
         
-            pub const fn from_shifted(value: $underlying_type, precision: isize) -> Self {
-                Self::new(Self::signed_shift(value, precision, P))
+            pub const fn from_shifted(value: $underlying_type, source_precision: i32) -> Self {
+                Self::new(SignedShifter(value).zeroing_shift_from_to(source_precision, Self::PRECISION))
             }
         
-            pub const fn truncating_shift<const R: isize>(&self) -> $name<R> {
-                $name::new(Self::signed_shift(self.0, P, R))
+            pub const fn truncating_shift<const R: i32>(&self) -> $name<R> {
+                $name::new(self.0.zeroing_shift_from_to(P, R))
             }
         
             pub const fn truncate(&self) -> $underlying_type {
-                Self::signed_shift(self.0, P, 0)
+                self.0.zeroing_shift_from_to(P, 0)
             }
         
             pub const fn raw(&self) -> $underlying_type {
-                self.0
+                self.0.0
             }
         
             pub const fn split(&self) -> ($underlying_type, $underlying_type) {
-                (self.0 & !Self::MASK, self.0 & Self::MASK)
+                (self.raw() & !Self::MASK, self.raw() & Self::MASK)
             }
 
             pub const fn split_int_frac(&self) -> ($underlying_type, $underlying_type) {
                 if P <= 0 {
-                    (self.0, 0)
-                } else if P.unsigned_abs() > $underlying_type::BITS as usize {
-                    (0, self.0)
+                    (self.raw(), 0)
+                } else if P.unsigned_abs() > $underlying_type::BITS {
+                    (0, self.raw())
                 } else {
-                    let mask = (1 << P as usize) - 1;
-                    (Self::signed_shl((self.0 & !mask), -P), self.0 & mask)
+                    
+                    (self.0.zeroing_signed_shl(-P), self.raw() & Self::MASK)
                 }
             }
         }
 
-        impl<const P: isize> Default for $name<P> {
+        impl<const P: i32> Default for $name<P> {
             fn default() -> Self {
                 Self::default()
             }
         }
 
-        impl<const P: isize> core::fmt::Debug for $name<P> {
+        impl<const P: i32> core::fmt::Debug for $name<P> {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 f.debug_tuple(stringify!($name))
                     .field(&P)
-                    .field(&self.0)
+                    .field(&self.raw())
                     .finish()
             }
         }
 
-        impl<const P: isize> core::convert::From<$underlying_type> for $name<P> {
+        impl<const P: i32> core::convert::From<$underlying_type> for $name<P> {
             fn from(value: $underlying_type) -> Self {
                 Self::from_int(value)
             }
         }
 
-        impl<const P: isize> core::convert::Into<f64> for $name<P> {
+        impl<const P: i32> core::convert::Into<f64> for $name<P> {
             fn into(self) -> f64 {
                 if $underlying_type::MIN == 0 {
-                    convert::fixed_u64_to_float64(self.0 as u64, Self::PRECISION)
+                    convert::fixed_u64_to_float64(self.raw() as u64, Self::PRECISION)
                 } else {
-                    convert::fixed_i64_to_float64(self.0 as i64, Self::PRECISION)
+                    convert::fixed_i64_to_float64(self.raw() as i64, Self::PRECISION)
                 }
             }
         }
 
-        impl<const P: isize> core::convert::Into<f32> for $name<P> {
+        impl<const P: i32> core::convert::Into<f32> for $name<P> {
             fn into(self) -> f32 {
                 if $underlying_type::MIN == 0 {
-                    convert::fixed_u32_to_float32(self.0 as u32, Self::PRECISION)
+                    convert::fixed_u32_to_float32(self.raw() as u32, Self::PRECISION)
                 } else {
-                    convert::fixed_i32_to_float32(self.0 as i32, Self::PRECISION)
+                    convert::fixed_i32_to_float32(self.raw() as i32, Self::PRECISION)
                 }
             }
         }
 
-        impl<const P: isize> core::convert::TryFrom<f32> for $name<P> {
+        impl<const P: i32> core::convert::TryFrom<f32> for $name<P> {
             type Error = FixedPointConversionError;
 
             fn try_from(value: f32) -> Result<Self, Self::Error> {
@@ -141,7 +176,7 @@ macro_rules! fxp_impl {
         }
 
         
-        impl<const P: isize> core::convert::TryFrom<f64> for $name<P> {
+        impl<const P: i32> core::convert::TryFrom<f64> for $name<P> {
             type Error = FixedPointConversionError;
 
             fn try_from(value: f64) -> Result<Self, Self::Error> {
@@ -154,61 +189,61 @@ macro_rules! fxp_impl {
             }
         }
 
-        impl<const P: isize, const Q: isize> core::ops::Mul<$name<Q>> for $name<P> {
+        impl<const P: i32, const Q: i32> core::ops::Mul<$name<Q>> for $name<P> {
             type Output = ops::Multiply<$underlying_type, P, Q>;
             
             fn mul(self, rhs: $name<Q>) -> Self::Output {
-                ops::Multiply(self.0, rhs.0)
+                ops::Multiply(self.raw(), rhs.raw())
             }
         }
 
-        impl<const P: isize> core::ops::Mul<$underlying_type> for $name<P> {
+        impl<const P: i32> core::ops::Mul<$underlying_type> for $name<P> {
             type Output = $name<P>;
             
             fn mul(self, rhs: $underlying_type) -> Self::Output {
-                Self::new(self.0 * rhs)
+                Self::new(self.raw() * rhs)
             }
         }
 
-        impl<const P: isize, const Q: isize> ops::Multiply<$underlying_type, P, Q> {
-            pub fn resolve<const R: isize> (&self) -> $name<R> {
+        impl<const P: i32, const Q: i32> ops::Multiply<$underlying_type, P, Q> {
+            pub fn resolve<const R: i32> (&self) -> $name<R> {
                 $name::<R>::from_shifted(self.0 * self.1, P + Q)
             }
         }
 
-        impl<const P: isize, const Q: isize> core::ops::Div<$name<Q>> for $name<P> {
+        impl<const P: i32, const Q: i32> core::ops::Div<$name<Q>> for $name<P> {
             type Output = ops::Divide<$underlying_type, P, Q>;
             
             fn div(self, rhs: $name<Q>) -> Self::Output {
-                assert!(rhs.0 != 0, "Can't divide by zero");
-                ops::Divide(self.0, rhs.0)
+                assert!(rhs.raw() != 0, "Can't divide by zero");
+                ops::Divide(self.raw(), rhs.raw())
             }
         }
 
-        impl<const P: isize> core::ops::Div<$underlying_type> for $name<P> {
+        impl<const P: i32> core::ops::Div<$underlying_type> for $name<P> {
             type Output = $name<P>;
             
             fn div(self, rhs: $underlying_type) -> Self::Output {
                 assert!(rhs != 0, "Can't divide by zero");
-                Self::new(self.0 / rhs)
+                Self::new(self.raw() / rhs)
             }
         }
 
-        impl<const P: isize, const Q: isize> ops::Divide<$underlying_type, P, Q> {
-            pub fn resolve<const R: isize> (&self) -> $name<R> {
+        impl<const P: i32, const Q: i32> ops::Divide<$underlying_type, P, Q> {
+            pub fn resolve<const R: i32> (&self) -> $name<R> {
                 $name::<R>::from_shifted(self.0 / self.1, P - Q)
             }
         }
 
-        impl<const P: isize, const Q: isize> core::ops::AddAssign<$name<Q>> for $name<P> {
+        impl<const P: i32, const Q: i32> core::ops::AddAssign<$name<Q>> for $name<P> {
             fn add_assign(&mut self, rhs: $name<Q>) {
-                self.0 += Self::signed_shift(rhs.0, Q, P);
+                self.0.0 += rhs.0.zeroing_shift_from_to(Q, P);
             }
         }
 
-        impl<const P: isize, const Q: isize> core::ops::SubAssign<$name<Q>> for $name<P> {
+        impl<const P: i32, const Q: i32> core::ops::SubAssign<$name<Q>> for $name<P> {
             fn sub_assign(&mut self, rhs: $name<Q>) {
-                self.0 -= Self::signed_shift(rhs.0, Q, P);
+                self.0.0 -= rhs.0.zeroing_shift_from_to(Q, P);
             }
         }
     };
@@ -225,8 +260,6 @@ fxp_impl!(i16 FxS16);
 fxp_impl!(i32 FxS32);
 fxp_impl!(i64 FxS64);
 fxp_impl!(i128 FxS128);
-
-
 
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 
-pub struct Multiply<T, const P: isize, const Q: isize>(pub T, pub T);
-pub struct Divide<T, const P: isize, const Q: isize>(pub T, pub T);
+pub struct Multiply<T, const P: i32, const Q: i32>(pub T, pub T);
+pub struct Divide<T, const P: i32, const Q: i32>(pub T, pub T);
 
 // pub struct DividedFixedPoint<const P: isize, const R: isize, T>(T, T)
 // where
