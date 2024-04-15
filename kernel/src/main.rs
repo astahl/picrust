@@ -67,35 +67,15 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     status_blink_twice(1000);
-    let core_id = get_core_num();
-    //static INIT: hal::signal::EventLatch = new_latch(false);
-    match core_id {
-        0 => {
-            system::initialize();
-            status_blink_twice(500);
-      //      INIT.set().expect("Should not fail");
-        }
-        _ => {
-        //    INIT.wait_for_set().expect("Should not fail");
-        },
-    }
-    status_blink_twice(500);
+    assert_eq!(0, get_core_num());
+    system::initialize();
+    status_blink_twice(50);
+    status_blink_twice(50);
+    status_blink_twice(50);
     println_debug!("Continue after Init.");
-    match core_id {
-        0 => {
-            //tests::test_irq0();
-            tests::test_screen();
-            tests::test_dma();
-        },
-        1 => {
-            //tests::test_irq1();
-        }
-        2 => {
-        }
-        _ => ()
-    }
-    println_debug!("Waiting for others to finish.");
-    wait_for_all_cores();
+
+    tests::test_screen();
+    tests::test_dma();
     // if core_id == 0 {
     //     panic!("Let's go monitor!")
     // } else {
@@ -109,10 +89,13 @@ pub extern "C" fn main() -> ! {
 
 //global_asm!(".section .font", ".incbin \"901447-10.bin\"");
 
-extern {
+extern "C" {
     static __stack_top: usize;
-    static mut __bss_start: u64;
-    static __bss_size: u64;
+    static mut __bss_start: u8;
+    static __bss_end: u8;
+
+    static mut __kernel_start: u64;
+    static __kernel_size: u64;
 
     static _vectors_el1: u8;
     static _vectors_el2: u8;
@@ -134,12 +117,15 @@ pub extern "C" fn _start() -> ! {
     unsafe { asm!("mov sp, {}", in(reg) stack_top); }
 
     // clear the bss section
-    // let bss: *mut u64 = unsafe { core::ptr::addr_of_mut!(__bss_start) };
-    // let mut bss_size = unsafe { __bss_size };
-    // while bss_size > 0 {
-    //     unsafe { bss.wrapping_add(bss_size as usize).write_volatile(0) }
-    //     bss_size -= 1;
-    // } 
+    unsafe {
+        let bss_start: *mut u8 = core::ptr::addr_of_mut!(__bss_start);
+        let bss_end: *const u8 = core::ptr::addr_of!(__bss_end);
+        let bss_size = bss_end.offset_from(bss_start);
+        for i in 0..bss_size {
+            bss_start.offset(i).write_volatile(0);
+        }
+    
+    }
 
     match current_exception_level() {
         3 => leave_el3(),
@@ -149,6 +135,7 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
+#[link_section = ".text.boot"]
 fn leave_el3() -> ! {
     scr_el3::ScrEl3::default()
         // enable aarch64 in EL2
@@ -179,6 +166,7 @@ fn leave_el3() -> ! {
     exception::return_from_el3(leave_el2 as *const());
 }
 
+#[link_section = ".text.boot"]
 fn leave_el2() -> ! {
 
     // enable Physical Counter Access for EL1

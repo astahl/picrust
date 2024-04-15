@@ -5,13 +5,14 @@ SECTIONS
 	__stack_bottom = .;
 	. = 0x80000;
 	__stack_top = .;
+	__kernel_start = .;
 	.text.boot : { 
 		KEEP(*(.text.boot))
 	}
 	.text.vector : ALIGN(0x800) {
 		KEEP(*(.text.vector))
 	}
-	.text : {
+	.text : ALIGN(0x1000) {
 		*(.text .text.* .gnu.linkonce.t*)	
 	}
 	.rodata : ALIGN(0x1000) {	
@@ -26,6 +27,8 @@ SECTIONS
 		*(COMMON)
 		__bss_end = .;
 	}
+	. = ALIGN(0x1000);
+	__kernel_end = .;
 	/DISCARD/ : { 
 		*(.comment) 
 		*(.gnu*) 
@@ -35,4 +38,4 @@ SECTIONS
 	}
 }
 
-__bss_size = (__bss_end - __bss_start) / 8;
+__kernel_size = (__kernel_end - __kernel_start) / 8;

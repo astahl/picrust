@@ -35,8 +35,9 @@ bcm2837=[]
 arm_feat_lpa=[]
 arm_feat_lpa2=[]
 arm_feat_etmv4=[]
-cortex_a53=["arm_feat_etmv4"]
-cortex_a72=["arm_feat_etmv4"]
+arm_feat_pmu=[]
+cortex_a53=["arm_feat_etmv4", "arm_feat_pmu"]
+cortex_a72=["arm_feat_etmv4", "arm_feat_pmu"]
 raspi3b=[
     "bcm2837", 
     "mmu", 
@@ -47,6 +48,7 @@ raspi3b=[
 raspi4=[
     "bcm2711", 
     "status_led",
+   # "mmu", 
    # "serial_uart", 
    # "framebuffer", 
     "cortex_a72"] 
