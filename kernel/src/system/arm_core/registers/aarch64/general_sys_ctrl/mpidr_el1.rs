@@ -51,5 +51,20 @@ pub MpidrEl1(u64){
     /// * `0x0`, `0x1`, or `0x2` in a cluster with three processors.
     /// * `0x0`, `0x1`, `0x2`, or `0x3` in a cluster with four processors.
     //#[cfg(feature = "cortex_a72")]
-    1:0 => cpu_id
+    1:0 => cpu_id: enum CoreId {
+        Core0 = 0,
+        Core1 = 1,
+        Core2 = 2,
+        Core3 = 3,
+    }
 });
+
+impl CoreId {
+    pub fn num(self) -> u64 {
+        self.into()
+    }
+
+    pub fn is_main(self) -> bool {
+        matches!(self, CoreId::Core0)
+    }
+}

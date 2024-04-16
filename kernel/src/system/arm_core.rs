@@ -8,13 +8,15 @@ use registers::aarch64::general_sys_ctrl;
 use registers::aarch64::special_purpose;
 
 use self::registers::aarch64::general_sys_ctrl::rmr_elx::RmrElx;
+pub use self::registers::aarch64::special_purpose::ExceptionLevel as ExceptionLevel;
+pub use self::registers::aarch64::general_sys_ctrl::mpidr_el1::CoreId as CoreId;
 
-pub fn get_core_num() -> u64 {
-    general_sys_ctrl::mpidr_el1::MpidrEl1::read_register().cpu_id().value()
+pub fn get_core_num() -> CoreId {
+    unsafe { general_sys_ctrl::mpidr_el1::MpidrEl1::read_register().cpu_id().value().unwrap_unchecked() }
 }
 
-pub fn current_exception_level() -> u64 {
-    special_purpose::current_el().el().value()
+pub fn current_exception_level() -> ExceptionLevel {
+    unsafe { special_purpose::current_el().el().value().unwrap_unchecked() }
 }
 
 pub fn wait_for_event() {
@@ -40,10 +42,10 @@ pub fn stop_core() -> ! {
 pub fn reset() -> ! {
     let reset_req = RmrElx::zero().rr().set().aa64().set_value(general_sys_ctrl::rmr_elx::ArchSelect::AArch64);
     match current_exception_level() {
-        1 => unsafe { asm!("hvc #0x1") },
-        2 => unsafe { asm!("smc #0x1") },
-        3 => reset_req.write_register_el3(),
-        _ => panic!("Invalid EL to reset"),
+        ExceptionLevel::EL0 => panic!("Invalid EL to reset"),
+        ExceptionLevel::EL1 => unsafe { asm!("hvc #0x1") },
+        ExceptionLevel::EL2 => unsafe { asm!("smc #0x1") },
+        ExceptionLevel::EL3 => reset_req.write_register_el3(),
     }
     loop {
         core::hint::spin_loop();
@@ -78,4 +80,28 @@ pub fn wait_for_all_cores() {
             } 
         }
     }
+}
+
+/// tries to wake up the secondary cores if they were not yet released by the firmware
+pub fn wake_up_secondary_cores() {
+    // try to wake up all other cores
+    let start_fn = crate::_start as *const ();
+    for core_i in 1..4 {
+        if cfg!(feature = "raspi3b") {
+            // https://forums.raspberrypi.com/viewtopic.php?t=209190
+            let mbox_old_ptr = (0x4000008C + core_i * 0x10) as *mut u32;
+            unsafe { mbox_old_ptr.write_volatile(start_fn as u32) };
+        }
+
+        // let mbox_ptr = (0x4c000008c_usize + core_i * 0x10) as *mut u32;
+        // unsafe { mbox_ptr.write_volatile(start_fn as u32) };
+
+        if cfg!(feature = "raspi4") {
+            // https://forums.raspberrypi.com/viewtopic.php?t=273010
+            let jmp_address_ptr = (0xe0 + (core_i - 1) * 0x8) as *mut u64;
+            unsafe { jmp_address_ptr.write_volatile(start_fn as u64) };
+        }
+    }
+    unsafe { core::arch::asm!("dsb ish", "isb") };
+    send_event();
 }

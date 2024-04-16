@@ -1,27 +1,29 @@
 use core::arch::asm;
 
-use crate::system::arm_core::registers::aarch64::special_purpose;
+use special_purpose::ExceptionLevel;
+
+use crate::system::arm_core::{self, registers::aarch64::special_purpose};
 
 pub struct TpidrElx {}
 
 
 impl TpidrElx {
     pub fn read_register() -> u64 {
-        match special_purpose::current_el().el().value() {
-            0 => Self::read_register_el0(),
-            1 => Self::read_register_el1(),
-            2 => Self::read_register_el2(),
-            3 => Self::read_register_el3(),
-            _ => unreachable!()
+        match arm_core::current_exception_level() {
+            ExceptionLevel::EL0 => Self::read_register_el0(),
+            ExceptionLevel::EL1 => Self::read_register_el1(),
+            ExceptionLevel::EL2 => Self::read_register_el2(),
+            ExceptionLevel::EL3 => Self::read_register_el3(),
+            //_ => unreachable!()
         }
     }
 
     pub fn write_register(thread_id: u64) {
-        match special_purpose::current_el().el().value() {
-            0 => Self::write_register_el0(thread_id),
-            1 => Self::write_register_el1(thread_id),
-            2 => Self::write_register_el2(thread_id),
-            3 => Self::write_register_el3(thread_id),
+        match arm_core::current_exception_level() {
+            ExceptionLevel::EL0 => Self::write_register_el0(thread_id),
+            ExceptionLevel::EL1 => Self::write_register_el1(thread_id),
+            ExceptionLevel::EL2 => Self::write_register_el2(thread_id),
+            ExceptionLevel::EL3 => Self::write_register_el3(thread_id),
             _ => unreachable!()
         };
     }

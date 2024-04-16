@@ -5,11 +5,12 @@ use mystd::{
     io::SplitWriter,
     sync::mutex::{Mutex, MutexGuard},
 };
-use super::peripherals::uart;
+use super::{hal::console, peripherals::uart};
 
 use super::peripherals::uart::Uart;
+use super::hal::console::Console;
 
-pub type CombinedWriter = mystd::io::SplitWriter<Uart, Uart>;
+pub type CombinedWriter = mystd::io::SplitWriter<Uart, Console<'static>>;
 
 pub struct Stdout {
     inner: &'static Mutex<RefCell<CombinedWriter>>,
@@ -64,11 +65,19 @@ pub fn std_out() -> Stdout {
 }
 
 pub fn init_serial_uart() {
+    uart::UART_0.init();
     let locked_out = unsafe { OUT_WRITER.lock() };
     let mut writer = locked_out.borrow_mut();
-    uart::UART_0.init();
     writer.replace_first(uart::UART_0);
 }
+
+pub fn init_fb_console(base_ptr: *mut u8) {
+    let console_writer = console::Console::new(base_ptr);
+    let locked_out = unsafe { OUT_WRITER.lock() };
+    let mut writer = locked_out.borrow_mut();
+    writer.replace_second(console_writer);
+}
+
 
 #[macro_export]
 macro_rules! println_log {

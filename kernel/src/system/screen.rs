@@ -1,6 +1,6 @@
-use core::usize;
+use core::{cell::RefCell, usize};
 
-use mystd::{byte_value::ByteValue, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}};
+use mystd::{byte_value::ByteValue, slice::slice2d::{self, traits::{MutSlice2dTrait, Slice2dTrait}, MutSlice2d}, sync::mutex::{Mutex, MutexGuard}};
 
 use super::hal::framebuffer::{self, FbDepth, Framebuffer, FramebufferDescriptor, PixelOrder};
 
@@ -99,15 +99,51 @@ pub enum PresentStrategy {
     Dma2d,
 }
 
+type ScreenType<'a> = Screen<'a, u8>;
+static SCREEN: Mutex<RefCell<Option<Screen<u8>>>> = Mutex::new(RefCell::new(None));
+
+
+pub fn create_screen(base_ptr: *mut u8) {
+    let screen_geometry = ScreenGeometry::with_size(Size{ width: 640, height: 480 });
+    let bytes_required = ScreenType::required_size_bytes(&screen_geometry);
+    let slice = unsafe { core::slice::from_raw_parts_mut(base_ptr, bytes_required) };
+    if let Some(screen_lock) = SCREEN.try_lock() {
+        screen_lock.replace(Screen::try_create_in_raw_slice(slice, screen_geometry).ok());
+        Palette::vga().make_current();
+    }
+}
+
+pub struct ScreenLock<'a> {
+    inner: MutexGuard<'a, RefCell<Option<Screen<'a, u8>>>>,
+}
+
+impl<'a> ScreenLock<'a> {
+    pub fn with_screen_mut<F: Fn(&mut ScreenType) -> R, R>(&mut self, f: F) -> Option<R> {
+        Some(f(self.inner.get_mut().as_mut()?))
+    }
+}
+
+pub struct SharedScreen {
+    inner: &'static Mutex<RefCell<Option<Screen<'static, u8>>>>
+}
+
+pub fn shared() -> SharedScreen {
+    SharedScreen { inner: &SCREEN }
+}
+
+impl SharedScreen {
+    pub fn lock(&self) -> ScreenLock<'static> {
+        ScreenLock { inner: unsafe { self.inner.lock() } }
+    }
+}
 
 pub struct Screen<'a, T> where T: Copy {
     front: MutSlice2d<'a, T>,
     back: MutSlice2d<'a, T>,
     framebuffer: MutSlice2d<'a, T>
-    //framebuffer_vc: MutSlice2d<'a, T>,
 }
 
-impl<'a, T> Screen<'a, T> where T: Copy {
+impl<'a, T> Screen<'a, T> where T: Copy + 'a {
     pub const BYTES_PER_PIXEL: usize = core::mem::size_of::<T>();
     pub const BITS_PER_PIXEL: usize = core::mem::size_of::<T>() * 8;
 
@@ -119,8 +155,12 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         self.back.height()
     }
 
-    pub fn try_create_in_slice(slice: &mut [u8], geom: ScreenGeometry) -> Result<Self, ScreenError> {
-        let required_size_bytes = 2 * geom.pixel_count() * Self::BYTES_PER_PIXEL;
+    pub fn required_size_bytes(geom: &ScreenGeometry) -> usize {
+        2 * geom.pixel_count() * Self::BYTES_PER_PIXEL
+    }
+
+    pub fn try_create_in_raw_slice(slice: &mut [u8], geom: ScreenGeometry) -> Result<Self, ScreenError> {
+        let required_size_bytes = Self::required_size_bytes(&geom);
         let memory: &mut [T] = unsafe {
             slice.align_to_mut().1
         };
@@ -129,9 +169,8 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         }
         let width = geom.physical_size.width;
         let height = geom.physical_size.height;
-        let (front, remaining_memory) = slice2d::MutSlice2d::with_mut_slice(memory, width, width, height).ok_or(ScreenError::CouldNotCreateVRam)?;
-        let (back, _) = slice2d::MutSlice2d::with_mut_slice(remaining_memory, width, width, height).ok_or(ScreenError::CouldNotCreateVRam)?;
         
+        // try to create the framebuffer
         let mut fbdesc: FramebufferDescriptor = geom.into();
         fbdesc.depth.bits_per_pixel = Self::BITS_PER_PIXEL as u32;
         fbdesc.pixel_order = PixelOrder::Rgb;
@@ -140,6 +179,10 @@ impl<'a, T> Screen<'a, T> where T: Copy {
         let framebuffer = unsafe {
             slice2d::MutSlice2d::from_raw_parts(fb.raw_slice.as_mut_ptr().cast(), fb.width_px as usize, fb.pitch_bytes as usize / Self::BYTES_PER_PIXEL, fb.height_px as usize)
         };
+
+        // allocate front and back buffer
+        let (front, remaining_memory) = slice2d::MutSlice2d::with_mut_slice(memory, width, width, height).ok_or(ScreenError::CouldNotCreateVRam)?;
+        let (back, _) = slice2d::MutSlice2d::with_mut_slice(remaining_memory, width, width, height).ok_or(ScreenError::CouldNotCreateVRam)?;
         Ok(Screen { front, back, framebuffer })
     }
 

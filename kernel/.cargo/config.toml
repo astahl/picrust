@@ -10,7 +10,8 @@ img3="objcopy --release --target=aarch64-unknown-none --no-default-features --fe
 img4="objcopy --release --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -O binary out/kernel_bcm2711.img"
 inspect3="objdump --release --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -h -f -s -S -C -d"
 inspect4="objdump --release --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -h -f -s -S -C -d"
-inspectdbg3="objdump --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -h -f -s -S -C -d"
+inspectdev3="objdump --target=aarch64-unknown-none --no-default-features --features=raspi3b -- -h -f -s -S -C -d"
+inspectdev4="objdump --target=aarch64-unknown-none --no-default-features --features=raspi4 -- -h -f -s -S -C -d"
 
 [build]
 target=["aarch64-unknown-none"]

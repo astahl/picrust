@@ -8,3 +8,4 @@ pub mod info;
 pub mod led;
 pub mod signal;
 pub mod thread;
+pub mod console;

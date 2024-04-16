@@ -35,7 +35,12 @@ bit_field!(
     ///     - When the highest implemented Exception level is EL1, this field resets to 1.
     ///     - When the highest implemented Exception level is EL2, this field resets to 2.
     ///     - Otherwise, this field resets to 3.
-    3:2 => el
+    3:2 => el: enum ExceptionLevel {
+        EL0 = 0b00,
+        EL1 = 0b01,
+        EL2 = 0b10,
+        EL3 = 0b11,
+    },
 });
 
 impl Daif {

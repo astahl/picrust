@@ -38,13 +38,14 @@ use system::hal::thread;
 use system::peripherals;
 use system::peripherals::uart;
 
+use crate::system::arm_core::CoreId;
 use crate::system::hal::led::status_blink_twice;
 use crate::system::hal::signal::new_latch;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
-    if cfg!(feature = "serial_uart") {
+    if cfg!(any(feature = "serial_uart", feature = "qemu")) {
         let mut uart = uart::UART_0;
         let _ = writeln!(uart, "Doki Doki! {info}");
         loop {
@@ -60,7 +61,7 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
         }
     } else {
         loop {
-            hal::led::status_blink_twice(1000);
+            hal::led::status_blink_twice(2000);
         }
     }
 }
@@ -71,7 +72,7 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 pub extern "C" fn main() -> ! {
     // status_blink_twice(1000);
    // assert_eq!(0, get_core_num());
-    //system::initialize();
+    system::initialize();
     // status_blink_twice(50);
     // status_blink_twice(50);
     // status_blink_twice(50);
@@ -83,16 +84,12 @@ pub extern "C" fn main() -> ! {
     //     panic!("Let's go monitor!")
     // } else {
 
-    //status_blink_twice(100);
-    status_blink_twice(1000);
-    for core_i in 1..4 {
-        // https://forums.raspberrypi.com/viewtopic.php?t=209190
-        //let mbox_ptr = (0x4000008C + core_i * 0x10) as *mut u32;
-        let mbox_ptr = (0x4c000008c_usize + core_i * 0x10) as *mut u32;
-        unsafe { mbox_ptr.write_volatile(0x80000) };
-    }
-    send_event();
+    // status_blink_twice(1000);
+    
+    arm_core::wake_up_secondary_cores();
     loop {
+        print_log!("a");
+        status_blink_twice(100);
         core::hint::spin_loop();
     }
     // }
@@ -102,12 +99,12 @@ pub extern "C" fn main() -> ! {
 
 #[no_mangle]
 pub extern "C" fn secondary() -> ! {
-    let core_num = get_core_num();
+    // let core_num = get_core_num();
     // thread::spin_wait_for(Duration::from_secs(core_num * 3));
     loop {
-        if core_num == 1 {
-            status_blink_twice(100);
-        }
+        // if matches!(core_num, CoreId::Core1) {
+        //     status_blink_twice(100);
+        // }
         core::hint::spin_loop();
     }
 }
@@ -130,30 +127,27 @@ extern "C" {
 #[link_section = ".text.boot"]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    let core_num = get_core_num();
-    if core_num > 3 {
-        stop_core();
-    } 
+    let core_id = get_core_num();
     
     // set up the stacks we'll use
     // every core gets 1 / 4 of the first 0x80000 -> 512k / 4 -> 128 kbyte
     let stack_top = unsafe { core::ptr::addr_of!(__stack_top) } as u64;
     let core_stack_total_size = stack_top / 4;
-    let core_stack_el3_size = 0x2000;
-    let core_stack_el2_size = 0x2000;
-    let core_stack_el0_size = 0x4000;
-    let core_stack_el1_size = core_stack_total_size - core_stack_el3_size - core_stack_el2_size - core_stack_el0_size;
-    let core_stack_base = core_stack_total_size * (3 - core_num);
     // EL 2 and EL 3 get two pages (8kb) of stack each
-    let core_stack_el3 = core_stack_base + core_stack_el3_size;
-    let core_stack_el2 = core_stack_el3 + core_stack_el2_size;
-    // EL 1 gets 24 pages (96 kb) of stack 
-    let core_stack_el1 = core_stack_el2 + core_stack_el1_size;
+    const CORE_STACK_EL3_SIZE: u64 = 0x2000;
+    const CORE_STACK_EL2_SIZE: u64 = 0x2000;
     // EL 0 gets 4 pages (16 kb) of stack
-    let core_stack_el0 = core_stack_el1 + core_stack_el0_size;
+    const CORE_STACK_EL0_SIZE: u64 = 0x4000;
+    // EL 1 gets the remaining 24 pages (96 kb) of stack 
+    let core_stack_el1_size = core_stack_total_size.wrapping_sub(CORE_STACK_EL3_SIZE + CORE_STACK_EL2_SIZE + CORE_STACK_EL0_SIZE);
+    let core_stack_base = core_stack_total_size * (3 - core_id.num());
+    let core_stack_el3 = core_stack_base + CORE_STACK_EL3_SIZE;
+    let core_stack_el2 = core_stack_el3 + CORE_STACK_EL2_SIZE;
+    let core_stack_el1 = core_stack_el2 + core_stack_el1_size;
+    let core_stack_el0 = core_stack_el1 + CORE_STACK_EL0_SIZE;
 
     // clear the bss section
-    if core_num == 0 {
+    if core_id.is_main() {
         unsafe {
             let bss_start: *mut u8 = core::ptr::addr_of_mut!(__bss_start);
             let bss_end: *const u8 = core::ptr::addr_of!(__bss_end);
@@ -165,28 +159,29 @@ pub extern "C" fn _start() -> ! {
     }
 
     match current_exception_level() {
-        3 => {
+        arm_core::ExceptionLevel::EL3 => {
             unsafe { asm!("mov sp, {}", in(reg) core_stack_el3); }
             sp_elx::SpEl2::new(core_stack_el2).write_register();
             sp_elx::SpEl1::new(core_stack_el1).write_register();
             sp_elx::SpEl0::new(core_stack_el0).write_register();
             leave_el3()
         }
-        2 => {
+        arm_core::ExceptionLevel::EL2 => {
             unsafe { asm!("mov sp, {}", in(reg) core_stack_el2); }
             sp_elx::SpEl1::new(core_stack_el1).write_register();
             sp_elx::SpEl0::new(core_stack_el0).write_register();
             leave_el2()
         }
-        1 => {
+        arm_core::ExceptionLevel::EL1 => {
             unsafe { asm!("mov sp, {}", in(reg) core_stack_el1); }
             sp_elx::SpEl0::new(core_stack_el0).write_register();
-            match core_num {
-                0 => main(),
-                _ => secondary(),
+            if core_id.is_main() {
+                main()
+            } else {
+                secondary()
             }
         }
-        _ => loop {}
+        arm_core::ExceptionLevel::EL0 => stop_core()
     }
 }
 
@@ -250,9 +245,10 @@ fn leave_el2() -> ! {
     let exc_vector_el1: *const() = unsafe { &_vectors_el1 as *const u8 }.cast();
     vbar_elx::VbarEl1::new(exc_vector_el1 as u64).write_register();
 
-    match get_core_num() {
-        0 => exception::return_from_el2(main as *const()),
-        _ => exception::return_from_el2(secondary as *const()),
+    if get_core_num().is_main() {
+        exception::return_from_el2(main as *const())
+    } else {
+        exception::return_from_el2(secondary as *const())
     }
 }
 

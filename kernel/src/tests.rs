@@ -167,7 +167,6 @@ pub static TEST_LATCH: EventLatch = new_latch(true);
 
 pub fn test_screen() {
     println_log!("Testing Screen...");
-    crate::system::hal::led::status_blink_twice(100);
     use super::system::screen::*;
     let ptr = ByteValue::from_mibi(128).as_bytes() as *mut u8;
     let slice = unsafe {
@@ -180,10 +179,10 @@ pub fn test_screen() {
         ScreenGeometry::with_size(Size { width: 320, height: 240 })
     } else {
         println_log!("FB Dim w {} h {}", fb_dim.width_px, fb_dim.height_px);
-        //ScreenGeometry::with_size(Size { width: fb_dim.width_px as usize, height: fb_dim.height_px as usize})
-        ScreenGeometry::with_size(Size { width: 320, height: 240 })
+        ScreenGeometry::with_size(Size { width: fb_dim.width_px as usize, height: fb_dim.height_px as usize})
+        //ScreenGeometry::with_size(Size { width: 320, height: 240 })
     };
-    let mut screen: Screen<u8> = Screen::try_create_in_slice(slice, geom).expect("Creating the screen should work");
+    let mut screen: Screen<u8> = Screen::try_create_in_raw_slice(slice, geom).expect("Creating the screen should work");
     Palette::vga().make_current();
     let mut pcount = 0;
     let mut time = PointInTime::now();
@@ -204,8 +203,6 @@ pub fn test_screen() {
                 pcount = 0;
             }
         }
-
-        crate::system::hal::led::status_blink_twice(100);
     }
 }
 
