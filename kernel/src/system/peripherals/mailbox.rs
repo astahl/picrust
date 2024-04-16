@@ -236,7 +236,7 @@ impl<const BUFFER_SIZE: usize> Mailbox<BUFFER_SIZE> {
 
 pub fn simple_single_call<Q, R: Copy>(tag: u32, request_value: Q) -> Result<R, MailboxError> {
     let byte_size = core::mem::size_of::<Q>().max(core::mem::size_of::<R>());
-    let mut mbox = Mailbox::<512>::new();
+    let mut mbox = Mailbox::<252>::new();
     let buffer = mbox.push_request_raw(tag, byte_size as u32)?;
     unsafe {
         *buffer.as_mut_ptr().cast::<Q>() = request_value;

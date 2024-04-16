@@ -12,6 +12,7 @@ mod system;
 mod tests;
 use core::arch::asm;
 use core::arch::global_asm;
+use core::time::Duration;
 use mystd::io::Write;
 use system::arm_core;
 use system::arm_core::current_exception_level;
@@ -29,9 +30,11 @@ use system::arm_core::registers::aarch64::special_purpose::elr_elx::ElrEl3;
 use system::arm_core::registers::aarch64::special_purpose::sp_elx;
 use system::arm_core::registers::aarch64::special_purpose::spsr_el2;
 use system::arm_core::registers::aarch64::special_purpose::spsr_el3;
+use system::arm_core::send_event;
 use system::arm_core::stop_core;
 use system::arm_core::wait_for_all_cores;
 use system::hal;
+use system::hal::thread;
 use system::peripherals;
 use system::peripherals::uart;
 
@@ -66,25 +69,47 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    status_blink_twice(1000);
-    assert_eq!(0, get_core_num());
-    system::initialize();
-    status_blink_twice(50);
-    status_blink_twice(50);
-    status_blink_twice(50);
-    println_debug!("Continue after Init.");
+    // status_blink_twice(1000);
+   // assert_eq!(0, get_core_num());
+    //system::initialize();
+    // status_blink_twice(50);
+    // status_blink_twice(50);
+    // status_blink_twice(50);
+    // println_debug!("Continue after Init.");
 
-    tests::test_screen();
-    tests::test_dma();
+    //tests::test_screen();
+    // tests::test_dma();
     // if core_id == 0 {
     //     panic!("Let's go monitor!")
     // } else {
+
+    //status_blink_twice(100);
+    status_blink_twice(1000);
+    for core_i in 1..4 {
+        // https://forums.raspberrypi.com/viewtopic.php?t=209190
+        //let mbox_ptr = (0x4000008C + core_i * 0x10) as *mut u32;
+        let mbox_ptr = (0x4c000008c_usize + core_i * 0x10) as *mut u32;
+        unsafe { mbox_ptr.write_volatile(0x80000) };
+    }
+    send_event();
     loop {
         core::hint::spin_loop();
     }
     // }
     // tests::run();
     // tests::test_usb().expect("USB test should pass");
+}
+
+#[no_mangle]
+pub extern "C" fn secondary() -> ! {
+    let core_num = get_core_num();
+    // thread::spin_wait_for(Duration::from_secs(core_num * 3));
+    loop {
+        if core_num == 1 {
+            status_blink_twice(100);
+        }
+        core::hint::spin_loop();
+    }
 }
 
 //global_asm!(".section .font", ".incbin \"901447-10.bin\"");
@@ -106,31 +131,61 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     let core_num = get_core_num();
-    if core_num != 0 {
+    if core_num > 3 {
         stop_core();
     } 
     
-    // set up the stack we'll use in EL1
+    // set up the stacks we'll use
+    // every core gets 1 / 4 of the first 0x80000 -> 512k / 4 -> 128 kbyte
     let stack_top = unsafe { core::ptr::addr_of!(__stack_top) } as u64;
-    //sp_elx::SpEl1::new(stack_top).write_register();
-    sp_elx::SpEl0::new(stack_top).write_register();
-    unsafe { asm!("mov sp, {}", in(reg) stack_top); }
+    let core_stack_total_size = stack_top / 4;
+    let core_stack_el3_size = 0x2000;
+    let core_stack_el2_size = 0x2000;
+    let core_stack_el0_size = 0x4000;
+    let core_stack_el1_size = core_stack_total_size - core_stack_el3_size - core_stack_el2_size - core_stack_el0_size;
+    let core_stack_base = core_stack_total_size * (3 - core_num);
+    // EL 2 and EL 3 get two pages (8kb) of stack each
+    let core_stack_el3 = core_stack_base + core_stack_el3_size;
+    let core_stack_el2 = core_stack_el3 + core_stack_el2_size;
+    // EL 1 gets 24 pages (96 kb) of stack 
+    let core_stack_el1 = core_stack_el2 + core_stack_el1_size;
+    // EL 0 gets 4 pages (16 kb) of stack
+    let core_stack_el0 = core_stack_el1 + core_stack_el0_size;
 
     // clear the bss section
-    unsafe {
-        let bss_start: *mut u8 = core::ptr::addr_of_mut!(__bss_start);
-        let bss_end: *const u8 = core::ptr::addr_of!(__bss_end);
-        let bss_size = bss_end.offset_from(bss_start);
-        for i in 0..bss_size {
-            bss_start.offset(i).write_volatile(0);
+    if core_num == 0 {
+        unsafe {
+            let bss_start: *mut u8 = core::ptr::addr_of_mut!(__bss_start);
+            let bss_end: *const u8 = core::ptr::addr_of!(__bss_end);
+            let bss_size = bss_end.offset_from(bss_start);
+            for i in 0..bss_size {
+                bss_start.offset(i).write_volatile(0);
+            }
         }
-    
     }
 
     match current_exception_level() {
-        3 => leave_el3(),
-        2 => leave_el2(),
-        1 => main(),
+        3 => {
+            unsafe { asm!("mov sp, {}", in(reg) core_stack_el3); }
+            sp_elx::SpEl2::new(core_stack_el2).write_register();
+            sp_elx::SpEl1::new(core_stack_el1).write_register();
+            sp_elx::SpEl0::new(core_stack_el0).write_register();
+            leave_el3()
+        }
+        2 => {
+            unsafe { asm!("mov sp, {}", in(reg) core_stack_el2); }
+            sp_elx::SpEl1::new(core_stack_el1).write_register();
+            sp_elx::SpEl0::new(core_stack_el0).write_register();
+            leave_el2()
+        }
+        1 => {
+            unsafe { asm!("mov sp, {}", in(reg) core_stack_el1); }
+            sp_elx::SpEl0::new(core_stack_el0).write_register();
+            match core_num {
+                0 => main(),
+                _ => secondary(),
+            }
+        }
         _ => loop {}
     }
 }
@@ -189,13 +244,16 @@ fn leave_el2() -> ! {
         .i().set()
         .f().set()
         .m().set_value(spsr_el2::ExecutionState::AArch64)
-        .aarch64_m().set_value(spsr_el2::AArch64Mode::EL1t)
+        .aarch64_m().set_value(spsr_el2::AArch64Mode::EL1h)
         .write_register();
 
     let exc_vector_el1: *const() = unsafe { &_vectors_el1 as *const u8 }.cast();
     vbar_elx::VbarEl1::new(exc_vector_el1 as u64).write_register();
 
-    exception::return_from_el2(main as *const());
+    match get_core_num() {
+        0 => exception::return_from_el2(main as *const()),
+        _ => exception::return_from_el2(secondary as *const()),
+    }
 }
 
 

@@ -21,8 +21,11 @@ pub fn spin_wait_cycles(mut count: usize) {
 pub fn spin_wait_for(duration: core::time::Duration) {
     let now = super::counter::PointInTime::now();
     let expire_at = now + duration;
-    while expire_at.is_in_the_future() {
+    loop {
         core::hint::spin_loop();
+        if !expire_at.is_in_the_future() {
+            break;
+        }
     }
 }
 

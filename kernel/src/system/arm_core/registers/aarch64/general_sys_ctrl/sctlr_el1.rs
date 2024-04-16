@@ -1245,10 +1245,10 @@ pub SctlrEl1(u64) {
     ///
     /// Alignment check enable. This is the enable bit for Alignment fault checking at EL1 and EL0.
     ///
-    /// 0b0
+    /// * 0b0
     ///     - Alignment fault checking disabled when executing at EL1 or EL0.
     ///     - Instructions that load or store one or more registers, other than load/store exclusive and load-acquire/store-release, do not check that the address being accessed is aligned to the size of the data element(s) being accessed.
-    /// 0b1
+    /// * 0b1
     ///     - Alignment fault checking enabled when executing at EL1 or EL0.
     ///     - All instructions that load or store one or more registers have an alignment check that the address being accessed is aligned to the size of the data element(s) being accessed. If this check fails it causes an Alignment fault, which is taken as a Data Abort exception.
     ///

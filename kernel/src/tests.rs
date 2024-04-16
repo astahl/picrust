@@ -200,11 +200,12 @@ pub fn test_screen() {
             pcount += 1;
             if pcount > 1000 {
                 println_log!("Presents / s: {:.2}", pcount as f32 / time.elapsed().as_secs_f32());
-                crate::system::hal::led::status_blink_twice(100);
                 time = PointInTime::now();
                 pcount = 0;
             }
         }
+
+        crate::system::hal::led::status_blink_twice(100);
     }
 }
 
