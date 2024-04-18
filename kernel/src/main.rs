@@ -70,7 +70,7 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    // status_blink_twice(1000);
+    status_blink_twice(1000);
    // assert_eq!(0, get_core_num());
     system::initialize();
     // status_blink_twice(50);

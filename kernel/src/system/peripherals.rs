@@ -15,6 +15,7 @@ pub mod system_timer;
 pub struct BcmHost {
     pub peripheral_address: usize,
     pub peripheral_size: usize,
+    pub peripheral_range_inclusive: (usize, usize),
     pub sdram_address: usize,
 }
 
@@ -22,6 +23,7 @@ pub struct BcmHost {
 pub const BCM_HOST: BcmHost = BcmHost {
     peripheral_address: 0xFE00_0000,
     peripheral_size: 0x0180_0000,
+    peripheral_range_inclusive: (0xFE00_0000, 0xFFFF_FFFF),
     sdram_address: 0xC000_0000,
 };
 
@@ -29,6 +31,7 @@ pub const BCM_HOST: BcmHost = BcmHost {
 pub const BCM_HOST: BcmHost = BcmHost {
     peripheral_address: 0x3F00_0000,
     peripheral_size: 0x0100_0000,
+    peripheral_range_inclusive: (0x3F00_0000, 0x3FFF_FFFF),
     sdram_address: 0xC000_0000,
 };
 
