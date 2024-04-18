@@ -1,4 +1,5 @@
 use super::BufferError;
+use super::MutSliceable;
 use super::Sliceable;
 use core::marker::PhantomData;
 
@@ -20,7 +21,9 @@ impl<T, S: Sliceable<T>, const N: usize> Bunch<T, S, N> {
             _phantom: PhantomData {},
         }
     }
+}
 
+impl<T, S: MutSliceable<T>, const N: usize> Bunch<T, S, N> {
     pub fn put(&mut self, value: T) -> Result<usize, BufferError> {
         let index = self.insert_index;
         if index == N {

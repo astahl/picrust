@@ -1,4 +1,4 @@
-use crate::collections::Sliceable;
+use crate::collections::{MutSliceable, Sliceable};
 
 /// ITU Morse Code https://en.wikipedia.org/wiki/Morse_code 
 /// http://www.itu.int/rec/R-REC-M.1677-1-200910-I/
@@ -54,6 +54,19 @@ impl<S: Sliceable<MorseSymbol>> MorseText<S> {
     pub fn reset(&mut self) {
         self.len = 0;
     }
+
+    pub fn to_bools<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
+        self.buffer.as_slice()[..self.len]
+            .iter()
+            .flat_map(|s| 
+                core::iter::repeat(!s.is_separator())
+                    .take(s.unit_len() as usize))
+    }
+
+}
+
+
+impl<S: MutSliceable<MorseSymbol>> MorseText<S> {
 
     fn append_symbol(&mut self, symbol: MorseSymbol) {
         self.buffer.as_mut_slice()[self.len] = symbol;
@@ -158,20 +171,23 @@ impl<S: Sliceable<MorseSymbol>> MorseText<S> {
         }
     }
 
-    pub fn to_bools<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
-        self.buffer.as_slice()[..self.len]
-            .iter()
-            .flat_map(|s| 
-                core::iter::repeat(!s.is_separator())
-                    .take(s.unit_len() as usize))
-    }
 }
 
 pub type MorseTextArray<const N: usize> = MorseText<[MorseSymbol;N]>; 
+pub type MorseTextSlice<'a> = MorseText<&'a [MorseSymbol]>; 
+pub type MorseTextMutSlice<'a> = MorseText<&'a mut [MorseSymbol]>; 
 
 impl<const N: usize> MorseTextArray<N> {
     pub fn new() -> Self {
         Self::adapting([MorseSymbol::WordSep; N])
+    }
+
+    pub fn as_slice(&self) -> MorseTextSlice {
+        MorseText::adapting(&self.buffer)
+    }
+
+    pub fn as_mut_slice(&mut self) -> MorseTextMutSlice {
+        MorseText::adapting(&mut self.buffer)
     }
 }
 

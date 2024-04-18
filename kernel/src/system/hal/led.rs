@@ -1,3 +1,5 @@
+use mystd::morse::MorseTextArray;
+
 use crate::peripherals::mailbox;
 
 use super::thread;
@@ -38,6 +40,13 @@ impl Led {
     pub fn blink_pattern(&self, pattern: u8, step_duration: core::time::Duration) {
         for i in 0..8 {
             self.set((pattern << i & 0x80) != 0);
+            thread::spin_wait_for(step_duration);
+        }
+    }
+
+    pub fn morse(&self, s: &mystd::morse::MorseTextSlice, step_duration: core::time::Duration) {
+        for val in s.to_bools() {
+            self.set(val);
             thread::spin_wait_for(step_duration);
         }
     }

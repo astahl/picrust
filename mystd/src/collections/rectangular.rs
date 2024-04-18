@@ -1,7 +1,7 @@
 
 use crate::slice::slice2d::traits::{self, DebugSlice2dTrait, MutSlice2dTrait, Slice2dTrait};
 
-use super::Sliceable;
+use super::{MutSliceable, Sliceable};
 
 
 pub struct Rectangular<T, S, const W: usize, const P: usize, const H: usize> 
@@ -33,6 +33,11 @@ where S: Sliceable<T> {
         self.data.as_slice().get_unchecked(x + y * P)
     }
 
+    
+}
+impl<T, S, const W: usize, const P: usize, const H: usize> 
+Rectangular<T, S, W, P, H> 
+where S: MutSliceable<T> {
     pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut T> {
         if x < W && y < H {
             Some(unsafe { self.get_unchecked_mut(x, y) })
@@ -72,7 +77,7 @@ for Rectangular<T, S, W, P, H> {
     }
 }
 
-impl<T, S: Sliceable<T>, const W: usize, const P: usize, const H: usize> MutSlice2dTrait 
+impl<T, S: MutSliceable<T>, const W: usize, const P: usize, const H: usize> MutSlice2dTrait 
 for Rectangular<T, S, W, P, H> {
     fn as_mut_ptr(&mut self) -> *mut Self::Element {
         self.data.as_mut_slice().as_mut_ptr()
@@ -124,7 +129,8 @@ impl<T, const M: usize, const N: usize> Sliceable<T> for [[T; M]; N] {
     fn as_slice(&self) -> &[T] {
         unsafe { core::slice::from_raw_parts(self.as_ptr().cast(), M * N) }
     }
-
+}
+impl<T, const M: usize, const N: usize> MutSliceable<T> for [[T; M]; N] {
     fn as_mut_slice(&mut self) -> &mut [T] {
         unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr().cast(), M * N) }
     }

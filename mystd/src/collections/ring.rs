@@ -1,4 +1,5 @@
 use super::BufferError;
+use super::MutSliceable;
 use super::Sliceable;
 use core::fmt::Write;
 use core::marker::PhantomData;
@@ -102,6 +103,42 @@ impl<T, S: Sliceable<T>, const N: usize> Ring<T, S, N> {
         a + b
     }
 
+    pub fn peek(&self) -> Option<&T> {
+        if !self.is_empty() {
+            Some(&self.data.as_slice()[self.read.value()])
+        } else {
+            None
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<&T> {
+        if !self.is_empty() {
+            let result = Some(&self.data.as_slice()[self.read.value()]);
+            self.read.increment();
+            result
+        } else {
+            None
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.read = self.write;
+    }
+
+    pub fn as_slices(&self) -> (&[T], &[T]) {
+        let slice = self.data.as_slice();
+        let read = self.read.value();
+        let write = self.write.value();
+        if read <= write {
+            (&slice[read..write], &[])
+        } else {
+            (&slice[read..], &slice[..write])
+        }
+    }
+
+}
+
+impl<T, S: MutSliceable<T>, const N: usize> Ring<T, S, N> {
     pub fn put(&mut self, value: T) -> Result<(), BufferError> {
         if self.is_full() {
             Err(BufferError::Overflow {
@@ -158,38 +195,6 @@ impl<T, S: Sliceable<T>, const N: usize> Ring<T, S, N> {
         Ok(())
     }
 
-    pub fn peek(&self) -> Option<&T> {
-        if !self.is_empty() {
-            Some(&self.data.as_slice()[self.read.value()])
-        } else {
-            None
-        }
-    }
-
-    pub fn pop(&mut self) -> Option<&T> {
-        if !self.is_empty() {
-            let result = Some(&self.data.as_slice()[self.read.value()]);
-            self.read.increment();
-            result
-        } else {
-            None
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.read = self.write;
-    }
-
-    pub fn as_slices(&self) -> (&[T], &[T]) {
-        let slice = self.data.as_slice();
-        let read = self.read.value();
-        let write = self.write.value();
-        if read <= write {
-            (&slice[read..write], &[])
-        } else {
-            (&slice[read..], &slice[..write])
-        }
-    }
 
     pub fn make_continuous(&mut self) -> &[T] {
         let len = self.len();
@@ -200,7 +205,7 @@ impl<T, S: Sliceable<T>, const N: usize> Ring<T, S, N> {
     }
 }
 
-impl<S: Sliceable<u8>, const N: usize> Ring<u8, S, N> {
+impl<S: MutSliceable<u8>, const N: usize> Ring<u8, S, N> {
     pub fn to_str(&mut self) -> Result<&str, Utf8Error> {
         core::str::from_utf8(self.make_continuous())
     }
@@ -215,14 +220,14 @@ impl<T: Default + Copy, const N: usize> RingArray<T, N> {
     }
 }
 
-impl<S: Sliceable<u8>, const N: usize> core::fmt::Write for Ring<u8, S, N> {
+impl<S: MutSliceable<u8>, const N: usize> core::fmt::Write for Ring<u8, S, N> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.copy_from_slice(s.as_bytes())
             .map_err(|_| core::fmt::Error)
     }
 }
 
-impl<S: Sliceable<char>, const N: usize> core::fmt::Write for Ring<char, S, N> {
+impl<S: MutSliceable<char>, const N: usize> core::fmt::Write for Ring<char, S, N> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         s.chars()
             .try_for_each(|char| self.put(char).map_err(|_| core::fmt::Error))

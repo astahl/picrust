@@ -14,6 +14,7 @@ use core::arch::asm;
 use core::arch::global_asm;
 use core::time::Duration;
 use mystd::io::Write;
+use mystd::morse::MorseTextArray;
 use system::arm_core;
 use system::arm_core::current_exception_level;
 use system::arm_core::get_core_num;
@@ -70,7 +71,10 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    status_blink_twice(1000);
+    let led = hal::led::Led::Status;
+    let mut text: MorseTextArray<256> = MorseTextArray::new();
+    text.write_str("IKZ IKZ");
+    led.morse(&text.as_slice(), Duration::from_millis(50));
    // assert_eq!(0, get_core_num());
     system::initialize();
     // status_blink_twice(50);

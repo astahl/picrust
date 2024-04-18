@@ -1,4 +1,5 @@
 use super::BufferError;
+use super::MutSliceable;
 use super::Sliceable;
 use core::marker::PhantomData;
 
@@ -27,19 +28,6 @@ impl<T, S: Sliceable<T>, const N: usize> Line<T, S, N> {
         0 == self.end
     }
 
-    pub fn push_back(&mut self, value: T) -> Result<(), BufferError> {
-        if self.is_full() {
-            Err(BufferError::Overflow {
-                write_index: self.end,
-            })
-        } else {
-            self.cursor = self.end;
-            self.data.as_mut_slice()[self.cursor] = value;
-            self.end += 1;
-            Ok(())
-        }
-    }
-
     pub fn pop_back(&mut self) -> Option<&T> {
         if !self.is_empty() {
             self.end -= 1;
@@ -58,6 +46,22 @@ impl<T, S: Sliceable<T>, const N: usize> Line<T, S, N> {
     pub fn as_slice(&self) -> &[T] {
         unsafe { self.data.as_slice().get_unchecked(..self.end) }
     }
+}
+
+impl<T, S: MutSliceable<T>, const N: usize> Line<T, S, N> {
+    pub fn push_back(&mut self, value: T) -> Result<(), BufferError> {
+        if self.is_full() {
+            Err(BufferError::Overflow {
+                write_index: self.end,
+            })
+        } else {
+            self.cursor = self.end;
+            self.data.as_mut_slice()[self.cursor] = value;
+            self.end += 1;
+            Ok(())
+        }
+    }
+
 }
 
 pub type LineArray<T, const N: usize> = Line<T, [T; N], N>;
