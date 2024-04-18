@@ -659,11 +659,11 @@ impl TranslationTable4KB {
     fn initialize_level_2(&mut self) {
         assert!(
             Self::PERIPHERAL_BLOCKS_BEGIN < 512,
-            "Not yet implemented peripheral handling beyond 1 GB"
+            "Not yet implemented peripheral handling beyond 1 GB, peripheral block begin at {}", Self::PERIPHERAL_BLOCKS_BEGIN 
         );
         assert!(
             Self::PERIPHERAL_BLOCKS_END <= 512,
-            "Not yet implemented peripheral handling beyond 1 GB"
+            "Not yet implemented peripheral handling beyond 1 GB, peripheral block end at {}", Self::PERIPHERAL_BLOCKS_END
         );
 
         self.range_0_level_2[0] = TableDescriptor::default()

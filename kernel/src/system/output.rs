@@ -86,8 +86,8 @@ macro_rules! println_log {
         {
             use mystd::io::Write;
             let mut locked_out = $crate::system::output::std_out().lock();
-            write!(&mut locked_out, "[{}] LOG | ", $crate::system::hal::thread::id()).expect("write should always work!");
-            writeln!(&mut locked_out, $($param)*).expect("write to stdout should always work!");
+            let _ = writeln!(&mut locked_out, "[{}] LOG | {}", $crate::system::hal::thread::id(), format_args!($($param)*));
+                //.expect("write to stdout should always work!");
         }
     };
 }
@@ -99,7 +99,8 @@ macro_rules! print_log {
         {
             use mystd::io::Write;
             let mut locked_out = $crate::system::output::std_out().lock();
-            write!(&mut locked_out, $($param)*).expect("write to stdout should always work!");
+            let _ = write!(&mut locked_out, $($param)*);
+                //.expect("write to stdout should always work!");
         }
     };
 }
@@ -112,16 +113,18 @@ macro_rules! println_debug {
         {
             use mystd::io::Write;
             let mut locked_out = $crate::system::output::std_out().lock();
-            write!(&mut locked_out, "[{}] DEBUG {}:{} | {:#.3?} | ", 
+            let _ = writeln!(&mut locked_out, "[{}] DEBUG {}:{} | {:#.3?} | {}", 
                 $crate::system::hal::thread::id(), 
                 file!(), 
                 line!(),
-                $crate::system::hal::counter::uptime()
-            ).expect("debug write should always work!");
-            writeln!(&mut locked_out, $($param)*).expect("debug write should always work!");
+                $crate::system::hal::counter::uptime(),
+                format_args!($($param)*)
+            );
+                //.expect("debug write should always work!");
         }
     };
 }
+
 
 #[cfg(not(debug_assertions))]
 #[macro_export]

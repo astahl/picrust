@@ -1,6 +1,6 @@
 use mystd::slice::slice2d::{traits::MutSlice2dTrait, MutSlice2d};
 
-use crate::{println_debug, system};
+use crate::{println_debug, system::{self, output::std_out}};
 
 pub struct Console<'a> {
     tile_map: MutSlice2d<'a, u8>,

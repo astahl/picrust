@@ -5,11 +5,15 @@ use core::{
 };
 
 pub struct Mutex<T> {
+    #[cfg(feature="atomics")]
     is_locked: atomic::AtomicBool,
+    #[cfg(not(feature="atomics"))]
+    is_locked: core::cell::Cell<bool>,
     inner: core::cell::UnsafeCell<T>,
 }
 
 impl<T> Mutex<T> {
+    #[cfg(feature="atomics")]
     pub const fn new(value: T) -> Self {
         Self {
             is_locked: atomic::AtomicBool::new(false),
@@ -17,9 +21,18 @@ impl<T> Mutex<T> {
         }
     }
 
+    #[cfg(not(feature="atomics"))]
+    pub const fn new(value: T) -> Self {
+        Self {
+            is_locked: core::cell::Cell::new(false),
+            inner: core::cell::UnsafeCell::new(value),
+        }
+    }
+
     /// Tries to acquire the lock and returns None if it fails.
     /// ### Panic
     /// Panics when the atomic compare_exchange contract is violated, which really shouldn't happen.
+    #[cfg(feature = "atomics")]
     pub fn try_lock(&self) -> Option<MutexGuard<T>> {
         match self.is_locked.compare_exchange(
             false,
@@ -30,8 +43,19 @@ impl<T> Mutex<T> {
             Ok(false) => Some(MutexGuard::with_locked_mutex(self)),
             Ok(true) => panic!("This should never happen"),
             Err(_) => None,
+        } 
+    }
+
+    #[cfg(not(feature = "atomics"))]
+    pub fn try_lock(&self) -> Option<MutexGuard<T>> {
+        if self.is_locked.get() {
+            None
+        } else {
+            self.is_locked.set(true);
+            Some(MutexGuard::with_locked_mutex(self))
         }
     }
+    
 
     /// Blocks in a busy wait until the lock can be acquired.
     /// ### Safety
@@ -50,13 +74,23 @@ impl<T> Mutex<T> {
     // pub fn unlock(guard: MutexGuard<'_, T>) {
     //     drop(guard)
     // }
-
+    #[cfg(feature = "atomics")]
     fn unlock_internal(&self) {
         self.is_locked.store(false, atomic::Ordering::Release);
     }
-
+    #[cfg(feature = "atomics")]
     pub fn is_locked(&self) -> bool {
         self.is_locked.load(atomic::Ordering::Relaxed)
+    }
+
+    #[cfg(not(feature = "atomics"))]
+    fn unlock_internal(&self) {
+        self.is_locked.set(false);
+    }
+
+    #[cfg(not(feature = "atomics"))]
+    pub fn is_locked(&self) -> bool {
+        self.is_locked.get()
     }
 }
 
