@@ -14,3 +14,4 @@ pub mod parse;
 pub mod slice;
 pub mod fractions;
 pub mod protocols;
+pub mod morse;
