@@ -2,19 +2,57 @@ use mystd::bit_field;
 use mystd::fixed_point::FxU32;
 use crate::peripherals::gpio;
 use crate::system::hal::clocks::Clock;
+use crate::system::hal::counter::PointInTime;
 
 use super::gpio::PinSet;
 use super::mmio::PeripheralRegister;
 
 #[derive(Clone, Copy)]
 pub enum Uart {
-    Pl011Uart(usize),
-    MiniUart(usize),
+    Pl011Uart{
+        address: usize,
+        behavior: UartBehavior
+    },
+    MiniUart{
+        address: usize,
+        behavior: UartBehavior
+    }
+}
+
+pub enum UartReadError {
+    ReceiveFifoEmpty,
+    Status(UartStatus)
+}
+
+pub enum UartWriteError {
+    TransmitFifoFull
+}
+
+#[derive(Clone, Copy)]
+pub enum Blocking {
+    Never,
+    TimeoutAfter(core::time::Duration),
+    Indefinetly,
+}
+
+#[derive(Clone, Copy)]
+pub struct UartBehavior {
+    read_blocking: Blocking,
+    write_blocking: Blocking,
+}
+
+impl UartBehavior {
+    pub const fn default() -> Self {
+        Self {
+            read_blocking: Blocking::Indefinetly,
+            write_blocking: Blocking::Indefinetly,
+        }
+    } 
 }
 
 pub const UART_BASE: usize = 0x201000;
 
-pub const UART_0: Uart = Uart::Pl011Uart(UART_BASE);
+pub const UART_0: Uart = Uart::Pl011Uart{ address: UART_BASE, behavior: UartBehavior::default() };
 // pub type Uart2 = Pl011Uart<0x201400>;
 // pub type Uart3 = Pl011Uart<0x201600>;
 // pub type Uart4 = Pl011Uart<0x201800>;
@@ -52,12 +90,27 @@ pub fn handle_interrupts() {
 }
 
 impl Uart {
-    fn base_address(&self) -> usize {
+    const fn base_address(&self) -> usize {
         match self {
-            Uart::Pl011Uart(a) => *a,
-            Uart::MiniUart(a) => *a,
+            Uart::Pl011Uart{ address: a, ..} => *a,
+            Uart::MiniUart{ address: a, ..} => *a,
         }
     }
+
+    const fn read_blocking(&self) -> Blocking {
+        match self {
+            Uart::Pl011Uart{ behavior: b, ..} => b.read_blocking,
+            Uart::MiniUart{ behavior: b, ..} => b.read_blocking,
+        }
+    }
+
+    const fn write_blocking(&self) -> Blocking {
+        match self {
+            Uart::Pl011Uart{ behavior: b, ..} => b.write_blocking,
+            Uart::MiniUart{ behavior: b, ..} => b.write_blocking,
+        }
+    }
+
     pub fn init(&self) {
         // NOTE: The UART_LCRH, UART_IBRD, and UART_FBRD registers must not be changed:
         // when the UART is enabled
@@ -89,16 +142,26 @@ impl Uart {
         UartInterruptClearReg::at(base_address).write(UartInterrupts::all_set());
 
         let clock_rate = Clock::Uart.rate().unwrap_or(3_000_000);
-        let (brd_int, brd_frac) = UartBitrate::Baud1200.to_int_frac(clock_rate);
+        let (brd_int, brd_frac) = UartBitrate::Baud115200.to_int_frac(clock_rate);
         UartIntegerBaudRateDivisorReg::at(base_address).write(brd_int);
         UartFractionalBaudRateDivisorReg::at(base_address).write(brd_frac);
 
         UartLineControlReg::at(base_address).write(
             UartLineControl::zero()
                 .word_length()
-                .set_value(UartWordLength::Bit8)
+                    .set_value(UartWordLength::Bit8)
+                .parity_enabled()
+                    .clear()
+                .stick_parity_select()
+                    .clear()
+                .even_parity_select()
+                    .clear()
+                .send_break()
+                    .set()
+                .two_stop_bits()
+                    .clear()
                 .fifo_enabled()
-                .set(),
+                    .set(),
         );
         // mask (disable) all interrupts
         self.interrupt_mask_reg().write(UartInterrupts::zero());
@@ -108,24 +171,101 @@ impl Uart {
         UartControlReg::at(base_address).write(UartControl::enabled());
     }
 
-    pub fn put_byte(&self, data: u8) {
-        while self.flags().txff().is_set() {
-            core::hint::spin_loop();
+    pub fn try_put_byte(&self, data: u8) -> Result<(), UartWriteError> {
+        if self.flags().txff().is_set() {
+            Err(UartWriteError::TransmitFifoFull)
+        } else {
+            UartDataReg::at(self.base_address()).write(UartData::new(data as u32));
+            Ok(())
         }
-        UartDataReg::at(self.base_address()).write(UartData::new(data as u32));
     }
 
-    pub fn get_byte(&self) -> Result<u8, UartStatus> {
-        while self.flags().rxfe().is_set() {
-            core::hint::spin_loop();
-        }
-        let read = UartDataReg::at(self.base_address()).read();
-        let (status, data): (UartStatus, u8) =
-            (read.status().into(), read.data().value().unwrap());
-        if status.is_all_clear() {
-            Ok(data)
+    pub fn put_byte(&self, data: u8) -> Result<(), mystd::io::Error> {
+        match self.write_blocking() {
+            Blocking::Never => {
+                if let Err(UartWriteError::TransmitFifoFull) = self.try_put_byte(data) {
+                    return Err(mystd::io::Error::WouldBlock)
+                }
+            },
+            Blocking::TimeoutAfter(timeout_duration) => {
+                let timeout = PointInTime::now() + timeout_duration;
+                while let Err(UartWriteError::TransmitFifoFull) = self.try_put_byte(data) {
+                    if !timeout.is_in_the_future() {
+                        return Err(mystd::io::Error::TimedOut)
+                    }
+                    core::hint::spin_loop();
+                }
+            }
+            Blocking::Indefinetly => {
+                while let Err(UartWriteError::TransmitFifoFull) = self.try_put_byte(data) {
+                    core::hint::spin_loop();
+                }
+            },
+        } 
+        
+        Ok(())
+    }
+
+    pub fn try_get_byte(&self) -> Result<u8, UartReadError> {
+        if self.flags().rxfe().is_set() {
+            Err(UartReadError::ReceiveFifoEmpty)
         } else {
-            Err(status)
+            let read = UartDataReg::at(self.base_address()).read();
+            let (status, data): (UartStatus, u8) =
+                (read.status().into(), read.data().value().unwrap());
+            if status.overrun_error().clear().is_all_clear() { 
+                // don't propagate overrun errors, because reading clears the flag.
+                Ok(data)
+            } else {
+                Err(UartReadError::Status(status))
+            }
+        }
+    }
+
+    pub fn get_byte(&self) -> Result<u8, mystd::io::Error> {
+        let err_status = match self.read_blocking() {
+            Blocking::Never => {
+                match self.try_get_byte() {
+                    Ok(byte) => return Ok(byte),
+                    Err(UartReadError::ReceiveFifoEmpty) => return Err(mystd::io::Error::WouldBlock),
+                    Err(UartReadError::Status(error_status)) => error_status,
+                }
+            }
+            Blocking::TimeoutAfter(timeout_duration) => {
+                let timeout = PointInTime::now() + timeout_duration;
+                loop {
+                    match self.try_get_byte() {
+                        Ok(byte) => return Ok(byte),
+                        Err(UartReadError::ReceiveFifoEmpty) => {
+                            if !timeout.is_in_the_future() {
+                                return Err(mystd::io::Error::TimedOut);
+                            } else {
+                                core::hint::spin_loop();
+                            }
+                        },
+                        Err(UartReadError::Status(error_status)) => break error_status,
+                    }
+                }    
+            }
+            Blocking::Indefinetly => {
+                loop {
+                    match self.try_get_byte() {
+                        Ok(byte) => return Ok(byte),
+                        Err(UartReadError::ReceiveFifoEmpty) => {
+                            core::hint::spin_loop();    
+                        },
+                        Err(UartReadError::Status(error_status)) => break error_status,
+                    }
+                }    
+            }
+        };
+            
+        if err_status.parity_error().is_set() || err_status.framing_error().is_set(){
+            Err(mystd::io::Error::InvalidData)
+        } else if err_status.break_error().is_set() {
+            Err(mystd::io::Error::UnexpectedEof)
+        } else {
+            Err(mystd::io::Error::Unknown { err_code: err_status.to_underlying() as i32 })
         }
     }
 
@@ -155,18 +295,18 @@ impl Uart {
 
 impl mystd::io::Write for Uart {
     fn write(&mut self, buf: &[u8]) -> mystd::io::Result<mystd::io::Size> {
-        while self.flags().txff().is_set() {
-            core::hint::spin_loop();
-        }
-        let reg_ptr = UartDataReg::at(self.base_address())
-            .as_mut_ptr()
-            .cast::<u32>();
         let mut count = 0;
         for b in buf {
-            unsafe {
-                reg_ptr.write_volatile(*b as u32);
+            match self.put_byte(*b) {
+                Ok(_) => count += 1,
+                Err(e) => {
+                    if count == 0 {
+                        return Err(e)
+                    } else {
+                        break;
+                    }
+                },
             }
-            count += 1;
         }
         Ok(mystd::io::Size::from_usize(count))
     }
@@ -181,22 +321,20 @@ impl mystd::io::Write for Uart {
 
 impl mystd::io::Read for Uart {
     fn read(&mut self, buf: &mut [u8]) -> mystd::io::Result<mystd::io::Size> {
-        while self.flags().rxfe().is_set() {
-            core::hint::spin_loop();
-        }
-
-        let reg_ptr = UartDataReg::at(self.base_address()).as_ptr();
         let mut count = 0;
-        while count < buf.len() && !self.flags().rxfe().is_set() {
-            let received = unsafe { reg_ptr.read_volatile() };
-            if received.break_error().is_set() {
-                return Err(mystd::io::Error::Interrupted);
+        while count < buf.len() {
+
+            match self.get_byte() {
+                Ok(byte) => {
+                    buf[count] = byte;
+                    count += 1;
+                },
+                Err(e) => if count == 0 {
+                    return Err(e)
+                } else {
+                    break;
+                },
             }
-            if received.parity_error().is_set() || received.framing_error().is_set() {
-                return Err(mystd::io::Error::InvalidData);
-            }
-            buf[count] = received.data().value().unwrap();
-            count += 1;
         }
         Ok(mystd::io::Size::from_usize(count))
     }
@@ -303,28 +441,98 @@ impl UartBitrate {
     }
 }
 
-bit_field!(pub UartLineControl(u32){
-    7 => stick_parity,
+bit_field!(
+    /// The UART_LCRH Register is the line control register.
+    /// 
+    /// NOTE: The UART_LCRH, UART_IBRD, and UART_FBRD registers must not be changed:
+    /// * when the UART is enabled
+    /// * when completing a transmission or a reception when it has been programmed to become disabled.
+    /// 
+    /// The parity bit behavior is determined by three flags:
+    /// 
+    /// | PEN | EPS | SPS | Parity bit (transmitted or checked) |
+    /// |-----|-----|-----|-------------------------------------|
+    /// | 0   | x   | x   | Not transmitted or checked |
+    /// | 1   | 1   | 0   | Even parity |
+    /// | 1   | 0   | 0   | Odd parity |
+    /// | 1   | 0   | 1   | 1 |
+    /// | 1   | 1   | 1   | 0 |
+    pub UartLineControl(u32){
+    /// # SPS 
+    /// Stick parity select.
+    /// * 0b0
+    ///     - stick parity is disabled
+    /// * 0b1
+    ///     - either:
+    ///         + if the EPS bit is 0 then the parity bit is transmitted and checked as a 1
+    ///         + if the EPS bit is 1 then the parity bit is transmitted and checked as a 0. See the table in the type documentation.
+    /// 
+    /// Resets to 0.
+    7 => stick_parity_select,
+    /// Word length. These bits indicate the number of data bits transmitted or received in a frame as follows:
+    /// * b11 = 8 bits
+    /// * b10 = 7 bits
+    /// * b01 = 6 bits 
+    /// * b00 = 5 bits.
+    /// 
+    /// Resets to 0.
     5:6 => word_length: enum UartWordLength {
         Bit5 = 0b00,
         Bit6 = 0b01,
         Bit7 = 0b10,
         Bit8 = 0b11,
     },
+    /// Enable FIFOs:
+    /// * 0 = FIFOs are disabled (character mode) that is, the FIFOs become 1-byte-deep holding registers
+    /// * 1 = transmit and receive FIFO buffers are enabled (FIFO mode).
+    /// 
+    /// Resets to 0.
     4 => fifo_enabled,
+    /// Two stop bits select. If this bit is set to 1, two stop bits are transmitted at the end of the frame. 
+    /// The receive logic does not check for two stop bits being received.
+    /// 
+    /// Resets to 0.
     3 => two_stop_bits,
-    2 => even_parity,
+    /// # EPS 
+    /// Even parity select. Controls the type of parity the UART uses during transmission and reception:
+    /// * 0 = odd parity. The UART generates or checks for an odd number of 1s in the data and parity bits.
+    /// * 1 = even parity. The UART generates or checks for an even number of 1s in the data and parity bits.
+    /// 
+    /// This bit has no effect when the PEN bit disables parity checking and generation. See the table in the type documentation.
+    /// 
+    /// Resets to 0.
+    2 => even_parity_select,
+    /// # PEN 
+    /// Parity enable. See the table in the type documentation.
+    /// * 0 = parity is disabled and no parity bit added to the data frame
+    /// * 1 = parity checking and generation is enabled.
+    ///
+    /// Resets to 0.
     1 => parity_enabled,
+    /// Send break. If this bit is set to 1, a low-level is continually output on the TXD output, after completing transmission of the current character.
+    /// 
+    /// Resets to 0.
     0 => send_break
 });
 
 bit_field!(pub UartControl (u32){
+    /// CTS hardware flow control enable. If this bit is set to 1, CTS hardware flow control is enabled. Data is only transmitted when the nUARTCTS signal is asserted.
     15 => cts_hardware_flow_control,
+    /// RTS hardware flow control enable. If this bit is set to 1, RTS hardware flow control is enabled. Data is only requested when there is space in the receive FIFO for it to be received.
     14 => rts_hardware_flow_control,
+    /// Request to send. This bit is the complement of the UART request to send, nUARTRTS, modem status output. That is, when the bit is programmed to a 1 then nUARTRTS is LOW.
     11 => request_to_send,
+    /// Receive enable. If this bit is set to 1, the receive section of the UART is enabled. Data reception occurs for UART signals. When the UART is disabled in the middle of reception, it completes the current character before stopping.
     9 => receive_enable,
+    /// Transmit enable. If this bit is set to 1, the transmit section of the UART is enabled. Data transmission occurs for UART signals. When the UART is disabled in the middle of transmission, it completes the current character before stopping.
     8 => transmit_enable,
+    /// Loopback enable. If this bit is set to 1, the UARTTXD path is fed through to the UARTRXD path. In UART mode, when this bit is set, the modem outputs are also fed through to the modem inputs. This bit is cleared to 0 on reset, to disable loopback.
     7 => loopback_enable,
+    /// UART enable:
+    /// * 0b0 
+    ///     - UART is disabled. If the UART is disabled in the middle of transmission or reception, it completes the current character before stopping.
+    /// * 0b1 
+    ///     - the UART is enabled.
     0 => uart_enable
 });
 

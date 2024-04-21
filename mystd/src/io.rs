@@ -11,6 +11,9 @@ pub enum Error {
     UnexpectedEof,
     ReadBufferZeroLength,
     Unknown { err_code: i32 },
+    WouldBlock,
+    TimedOut,
+    ConnectionAborted,
 }
 
 #[derive(Clone, Copy, Debug)]

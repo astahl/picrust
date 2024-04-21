@@ -50,9 +50,9 @@ raspi3b=[
 raspi4=[
     "bcm2711", 
     "status_led",
-    "mmu", 
-   # "serial_uart", 
-    "framebuffer", 
+   # "mmu", 
+    "serial_uart", 
+   # "framebuffer", 
     "cortex_a72"] 
 default=["raspi3b"]
 

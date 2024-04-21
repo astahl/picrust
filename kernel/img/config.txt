@@ -75,3 +75,4 @@ arm_boost=1
 kernel=kernel_bcm2711.img
 
 [all]
+enable_uart=1

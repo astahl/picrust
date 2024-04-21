@@ -48,16 +48,26 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
     if cfg!(any(feature = "serial_uart", feature = "qemu")) {
         let mut uart = uart::UART_0;
+        status_blink_twice(50);
+        uart.init();
+        status_blink_twice(500);
         let _ = writeln!(uart, "Doki Doki! {info}");
         loop {
             let _ = writeln!(uart, "press m for monitor, r to reset");
-            match uart.get_byte() {
-                Ok(b'm') => monitor::Monitor::new(uart, uart).run(),
-                Ok(b'r') => {
-                    writeln!(uart, "Resetting...").unwrap();
-                    arm_core::reset();
-                },
-                _ => ()
+            'inner: loop {
+                match uart.try_get_byte() {
+                    Ok(b'm') => monitor::Monitor::new(uart, uart).run(),
+                    Ok(b'r') => {
+                        writeln!(uart, "Resetting...").unwrap();
+                        arm_core::reset();
+                    },
+                    Ok(_) => { 
+                        break 'inner;
+                    }
+                    _ => {
+                        core::hint::spin_loop()
+                    }
+                }
             }
         }
     } else {
@@ -71,13 +81,13 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    let led = hal::led::Led::Status;
-    let mut text: MorseTextArray<256> = MorseTextArray::new();
-    text.write_str("IKZ IKZ");
-    led.morse(&text.as_slice(), Duration::from_millis(50));
+    //let led = hal::led::Led::Status;
+    // let mut text: MorseTextArray<256> = MorseTextArray::new();
+    // text.write_str("IKZ IKZ");
+    // led.morse(&text.as_slice(), Duration::from_millis(50));
    // assert_eq!(0, get_core_num());
-    system::initialize();
-    // status_blink_twice(50);
+    //system::initialize();
+    status_blink_twice(500);
     // status_blink_twice(50);
     // status_blink_twice(50);
     // println_debug!("Continue after Init.");
@@ -85,7 +95,7 @@ pub extern "C" fn main() -> ! {
     //tests::test_screen();
     // tests::test_dma();
     // if core_id == 0 {
-    //     panic!("Let's go monitor!")
+    panic!("Let's go monitor!");
     // } else {
 
     // status_blink_twice(1000);
@@ -198,9 +208,9 @@ fn leave_el3() -> ! {
         // enable hypervisor call 
         .hce()
         .set() 
-        // disable secure monitor call ?? todo ??
+        // enable secure monitor call
         .smd()
-        .set() 
+        .clear() 
         // EL below 3 is non secure ?? todo ??
         .ns()
         .set() 
