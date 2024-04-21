@@ -1,4 +1,4 @@
-use crate::{println_debug, println_log};
+use crate::{print_init, println_debug, println_log};
 
 pub mod arm_core;
 pub mod hal;
@@ -9,18 +9,17 @@ pub mod output;
 
 pub fn initialize() {
     if cfg!(feature = "mmu") {
-        hal::led::status_blink_twice(100);
+        print_init!("before mmu");
         arm_core::mmu::mmu_init()
             .expect("MMU should be initialised");
-
-        hal::led::status_blink_twice(1000);
-        hal::led::status_blink_twice(100);
+        print_init!("after mmu");
     }
     if cfg!(feature = "serial_uart") {
+        print_init!("before serial uart");
         output::init_serial_uart();
         println_log!("Serial UART Initialized...");
         // print a memory map
-        println_debug!("{:#?}", hal::info::MemoryMap());
+        println_log!("{:#?}", hal::info::MemoryMap());
     }
     
     if cfg!(feature = "framebuffer") {

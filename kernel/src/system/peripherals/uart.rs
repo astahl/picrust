@@ -52,6 +52,8 @@ impl UartBehavior {
 
 pub const UART_BASE: usize = 0x201000;
 
+static mut UART0_IS_INIT: bool = false;
+
 pub const UART_0: Uart = Uart::Pl011Uart{ address: UART_BASE, behavior: UartBehavior::default() };
 // pub type Uart2 = Pl011Uart<0x201400>;
 // pub type Uart3 = Pl011Uart<0x201600>;
@@ -112,6 +114,13 @@ impl Uart {
     }
 
     pub fn init(&self) {
+        unsafe {
+            if UART0_IS_INIT {
+                return;
+            } else {
+                UART0_IS_INIT = true;
+            }
+        }
         // NOTE: The UART_LCRH, UART_IBRD, and UART_FBRD registers must not be changed:
         // when the UART is enabled
         // when completing a transmission or a reception when it has been programmed to become disabled.

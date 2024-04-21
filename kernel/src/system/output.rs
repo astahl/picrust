@@ -65,10 +65,17 @@ pub fn std_out() -> Stdout {
 }
 
 pub fn init_serial_uart() {
-    uart::UART_0.init();
+    let uart = uart::UART_0;
+    use crate::print_init;
+    print_init!("Before init");
+    uart.init();
+    print_init!("Before lock");
     let locked_out = unsafe { OUT_WRITER.lock() };
+    print_init!("after lock");
     let mut writer = locked_out.borrow_mut();
-    writer.replace_first(uart::UART_0);
+    print_init!("after borrow");
+    writer.replace_first(uart);
+    print_init!("after writer");
 }
 
 pub fn init_fb_console(base_ptr: *mut u8) {
@@ -101,6 +108,24 @@ macro_rules! print_log {
             let mut locked_out = $crate::system::output::std_out().lock();
             let _ = write!(&mut locked_out, $($param)*);
                 //.expect("write to stdout should always work!");
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! print_init {
+    ($($param:tt)*) => {
+        {
+        use mystd::io::Write;
+        let mut uart = crate::system::peripherals::uart::UART_0;
+        let _ = writeln!(&mut uart, "[{}] INIT {}:{} | {:#.3?} | {}", 
+                $crate::system::hal::thread::id(), 
+                file!(), 
+                line!(),
+                $crate::system::hal::counter::uptime(),
+                format_args!($($param)*)
+            );
+        let _ = uart.flush();
         }
     };
 }

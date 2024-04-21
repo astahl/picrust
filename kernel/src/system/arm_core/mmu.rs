@@ -28,6 +28,7 @@ const MEMORY_ATTR_IDX_NON_CACHEABLE: u64 = 2;
 
 #[cfg(feature = "mmu")]
 pub fn mmu_init() -> Result<(), MMUInitError> {
+    use crate::print_init;
     // check for 4k granule and at least 36 bits physical address bus */
     use crate::system::arm_core::mmu::descriptors::Shareability;
     use crate::system::arm_core::registers::aarch64::general_sys_ctrl;
@@ -48,7 +49,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     if mm_feats.t_gran4() == memory_model_features::Granule4KBSupport::NotSupported {
         return Err(MMUInitError::TranslationGranule4kbNotSupported);
     }
-    crate::hal::led::status_blink_twice(1000);
+    print_init!("before table");
     let table = unsafe {
         let table_ptr = ByteValue::from_mibi(2).as_bytes() as *mut TranslationTable4KB;
         TranslationTable4KB::init(table_ptr)
@@ -60,7 +61,6 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
         // }
         // panic!("hold it");
     };
-    crate::hal::led::status_blink_twice(100);
 
     // const PAGE_ENTRY_COUNT: usize = PAGESIZE / core::mem::size_of::<usize>();
     // // granularity
@@ -362,6 +362,7 @@ pub fn mmu_init() -> Result<(), MMUInitError> {
     //        (1 << 2) |    // clear C, no cache at all
     //        (1 << 1)); // clear A, no aligment check
     // r |= 1 << 0; // set M, enable MMU
+    print_init!("End of MMU init");
     Ok(())
 }
 

@@ -34,6 +34,7 @@ use system::arm_core::registers::aarch64::special_purpose::spsr_el3;
 use system::arm_core::send_event;
 use system::arm_core::stop_core;
 use system::arm_core::wait_for_all_cores;
+use system::arm_core::ExceptionLevel;
 use system::hal;
 use system::hal::thread;
 use system::peripherals;
@@ -49,7 +50,6 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     if cfg!(any(feature = "serial_uart", feature = "qemu")) {
         let mut uart = uart::UART_0;
         status_blink_twice(50);
-        uart.init();
         status_blink_twice(500);
         let _ = writeln!(uart, "Doki Doki! {info}");
         loop {
@@ -79,33 +79,35 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 
 
 
+static mut STARTING_EL: ExceptionLevel = ExceptionLevel::EL0;
+
 #[no_mangle]
 pub extern "C" fn main() -> ! {
+    uart::UART_0.init();
+    //panic!("Let's go monitor!");
     //let led = hal::led::Led::Status;
     // let mut text: MorseTextArray<256> = MorseTextArray::new();
     // text.write_str("IKZ IKZ");
     // led.morse(&text.as_slice(), Duration::from_millis(50));
    // assert_eq!(0, get_core_num());
-    //system::initialize();
-    uart::UART_0.init();
-    uart::UART_0.put_byte(b'A');
-    uart::UART_0.put_byte(b'B');
-    status_blink_twice(500);
-    uart::UART_0.put_byte(b'C');
+    system::initialize();
+    print_log!("HALLO");
+    print_log!("HALLO");
+    print_log!("HALLO");
+    print_log!("HALLO");
     // status_blink_twice(50);
     // status_blink_twice(50);
     // println_debug!("Continue after Init.");
     //tests::test_screen();
     // tests::test_dma();
     // if core_id == 0 {
-    panic!("Let's go monitor!");
+    print_log!("Bye!");
     // } else {
 
     // status_blink_twice(1000);
     
     arm_core::wake_up_secondary_cores();
     loop {
-        print_log!("a");
         status_blink_twice(100);
         core::hint::spin_loop();
     }
@@ -116,7 +118,8 @@ pub extern "C" fn main() -> ! {
 
 #[no_mangle]
 pub extern "C" fn secondary() -> ! {
-    // let core_num = get_core_num();
+    let core_num = get_core_num();
+    println_log!("Core {} ready for duty", core_num as u32);
     // thread::spin_wait_for(Duration::from_secs(core_num * 3));
     loop {
         // if matches!(core_num, CoreId::Core1) {
@@ -175,6 +178,7 @@ pub extern "C" fn _start() -> ! {
         }
     }
 
+    unsafe { STARTING_EL = current_exception_level() };
     match current_exception_level() {
         arm_core::ExceptionLevel::EL3 => {
             unsafe { asm!("mov sp, {}", in(reg) core_stack_el3); }
