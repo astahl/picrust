@@ -87,11 +87,14 @@ pub extern "C" fn main() -> ! {
     // led.morse(&text.as_slice(), Duration::from_millis(50));
    // assert_eq!(0, get_core_num());
     //system::initialize();
+    uart::UART_0.init();
+    uart::UART_0.put_byte(b'A');
+    uart::UART_0.put_byte(b'B');
     status_blink_twice(500);
+    uart::UART_0.put_byte(b'C');
     // status_blink_twice(50);
     // status_blink_twice(50);
     // println_debug!("Continue after Init.");
-
     //tests::test_screen();
     // tests::test_dma();
     // if core_id == 0 {
