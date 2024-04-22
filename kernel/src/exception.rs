@@ -22,6 +22,38 @@ pub fn return_from_el1(address: *const ()) -> ! {
     unsafe { core::arch::asm!("eret", options(noreturn)); }
 }
 
+/// Supervisor Call causes an exception to be taken to EL1.
+/// 
+/// On executing an SVC instruction, the PE records the exception as a Supervisor Call exception in ESR_ELx, using the EC value 0x15, and the value of the immediate argument.
+pub fn supervisor_call() -> ! {
+    unsafe { core::arch::asm!("svc #0", options(noreturn)); }
+}
+
+/// Hypervisor Call causes an exception to EL2. Software executing at EL1 can use this instruction to call the hypervisor to request a service.
+/// 
+/// The HVC instruction is UNDEFINED:
+/// * When EL3 is implemented and SCR_EL3.HCE is set to 0.
+/// * When EL3 is not implemented and HCR_EL2.HCD is set to 1.
+/// * When EL2 is not implemented.
+/// * At EL1 if EL2 is not enabled in the current Security state.
+/// * At EL0.
+/// 
+/// On executing an HVC instruction, the PE records the exception as a Hypervisor Call exception in ESR_ELx, using the EC value 0x16, and the value of the immediate argument.
+pub fn hypervisor_call() -> ! {
+    unsafe { core::arch::asm!("hvc #0", options(noreturn)); }
+}
+
+/// Secure Monitor Call causes an exception to EL3.
+/// 
+/// SMC is available only for software executing at EL1 or higher. It is UNDEFINED in EL0.
+/// 
+/// * If the values of HCR_EL2.TSC and SCR_EL3.SMD are both 0, execution of an SMC instruction at EL1 or higher generates a Secure Monitor Call exception, recording it in ESR_ELx, using the EC value 0x17, that is taken to EL3.
+/// * If the value of HCR_EL2.TSC is 1 and EL2 is enabled in the current Security state, execution of an SMC instruction at EL1 generates an exception that is taken to EL2, regardless of the value of SCR_EL3.SMD.
+/// * If the value of HCR_EL2.TSC is 0 and the value of SCR_EL3.SMD is 1, the SMC instruction is UNDEFINED.
+pub fn securemonitor_call() -> ! {
+    unsafe { core::arch::asm!("smc #0", options(noreturn)); }
+}
+
 
 #[no_mangle]
 pub extern "C" fn exc_handler(

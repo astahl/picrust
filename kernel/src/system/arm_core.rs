@@ -7,6 +7,8 @@ use core::arch::asm;
 use registers::aarch64::general_sys_ctrl;
 use registers::aarch64::special_purpose;
 
+use crate::print_init;
+
 use self::registers::aarch64::general_sys_ctrl::rmr_elx::RmrElx;
 pub use self::registers::aarch64::special_purpose::ExceptionLevel as ExceptionLevel;
 pub use self::registers::aarch64::general_sys_ctrl::mpidr_el1::CoreId as CoreId;
@@ -43,8 +45,8 @@ pub fn reset() -> ! {
     let reset_req = RmrElx::zero().rr().set().aa64().set_value(general_sys_ctrl::rmr_elx::ArchSelect::AArch64);
     match current_exception_level() {
         ExceptionLevel::EL0 => panic!("Invalid EL to reset"),
-        ExceptionLevel::EL1 => unsafe { asm!("hvc #0x1") },
-        ExceptionLevel::EL2 => unsafe { asm!("smc #0x1") },
+        ExceptionLevel::EL1 => reset_req.write_register_el1(),
+        ExceptionLevel::EL2 => reset_req.write_register_el2(),
         ExceptionLevel::EL3 => reset_req.write_register_el3(),
     }
     loop {
@@ -84,6 +86,7 @@ pub fn wait_for_all_cores() {
 
 /// tries to wake up the secondary cores if they were not yet released by the firmware
 pub fn wake_up_secondary_cores() {
+    print_init!("Waking up secondary cores...");
     // try to wake up all other cores
     let start_fn = crate::_start as *const ();
     for core_i in 1..4 {
@@ -91,6 +94,7 @@ pub fn wake_up_secondary_cores() {
             // https://forums.raspberrypi.com/viewtopic.php?t=209190
             let mbox_old_ptr = (0x4000008C + core_i * 0x10) as *mut u32;
             unsafe { mbox_old_ptr.write_volatile(start_fn as u32) };
+            print_init!("Write {:#p} to {:#p} to wake core {}", start_fn, mbox_old_ptr, core_i);
         }
 
         // let mbox_ptr = (0x4c000008c_usize + core_i * 0x10) as *mut u32;
@@ -100,8 +104,11 @@ pub fn wake_up_secondary_cores() {
             // https://forums.raspberrypi.com/viewtopic.php?t=273010
             let jmp_address_ptr = (0xe0 + (core_i - 1) * 0x8) as *mut u64;
             unsafe { jmp_address_ptr.write_volatile(start_fn as u64) };
+            print_init!("Write {:#p} to {:#p} to wake core {}", start_fn, jmp_address_ptr, core_i);
         }
     }
-    unsafe { core::arch::asm!("dsb ish", "isb") };
-    send_event();
+    // sync and send event
+    print_init!("Send event...");
+    unsafe { core::arch::asm!("dsb ish", "isb", "SEV") };
+    print_init!("Done");
 }

@@ -40,16 +40,20 @@ use system::hal::thread;
 use system::peripherals;
 use system::peripherals::uart;
 
+use crate::system::arm_core::wait_for_event;
 use crate::system::arm_core::CoreId;
 use crate::system::hal::led::status_blink_twice;
 use crate::system::hal::signal::new_latch;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
+    status_blink_twice(50);
+    status_blink_twice(50);
+    status_blink_twice(50);
+    status_blink_twice(50);
 
     if cfg!(any(feature = "serial_uart", feature = "qemu")) {
         let mut uart = uart::UART_0;
-        status_blink_twice(50);
         status_blink_twice(500);
         let _ = writeln!(uart, "Doki Doki! {info}");
         loop {
@@ -77,14 +81,9 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
     }
 }
 
-
-
-static mut STARTING_EL: ExceptionLevel = ExceptionLevel::EL0;
-
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     uart::UART_0.init();
-    //panic!("Let's go monitor!");
     //let led = hal::led::Led::Status;
     // let mut text: MorseTextArray<256> = MorseTextArray::new();
     // text.write_str("IKZ IKZ");
@@ -107,8 +106,9 @@ pub extern "C" fn main() -> ! {
     // status_blink_twice(1000);
     
     arm_core::wake_up_secondary_cores();
+    println_log!("Halting Core 0!");
+    status_blink_twice(100);
     loop {
-        status_blink_twice(100);
         core::hint::spin_loop();
     }
     // }
@@ -119,8 +119,8 @@ pub extern "C" fn main() -> ! {
 #[no_mangle]
 pub extern "C" fn secondary() -> ! {
     let core_num = get_core_num();
-    println_log!("Core {} ready for duty", core_num as u32);
-    // thread::spin_wait_for(Duration::from_secs(core_num * 3));
+    thread::spin_wait_for(Duration::from_secs((core_num as u64) * 3));
+    println_log!("Core {} ready for duty", core_num as u64);
     loop {
         // if matches!(core_num, CoreId::Core1) {
         //     status_blink_twice(100);
@@ -176,9 +176,10 @@ pub extern "C" fn _start() -> ! {
                 bss_start.offset(i).write_volatile(0);
             }
         }
+    } else {
+        wait_for_event();
     }
 
-    unsafe { STARTING_EL = current_exception_level() };
     match current_exception_level() {
         arm_core::ExceptionLevel::EL3 => {
             unsafe { asm!("mov sp, {}", in(reg) core_stack_el3); }
