@@ -52,6 +52,7 @@ impl<'a> mystd::io::Write for StdoutLock<'a> {
 
 impl Stdout {
     pub fn lock(&self) -> StdoutLock<'static> {
+        assert!(!self.inner.is_locked());
         StdoutLock {
             inner: unsafe { self.inner.lock() },
         }

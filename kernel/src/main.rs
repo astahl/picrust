@@ -13,6 +13,7 @@ mod tests;
 use core::arch::asm;
 use core::arch::global_asm;
 use core::time::Duration;
+use mystd::byte_value::ByteValue;
 use mystd::io::Write;
 use mystd::morse::MorseTextArray;
 use system::arm_core;
@@ -47,14 +48,14 @@ use crate::system::hal::signal::new_latch;
 
 #[panic_handler]
 fn on_panic(info: &core::panic::PanicInfo) -> ! {
-    status_blink_twice(50);
-    status_blink_twice(50);
-    status_blink_twice(50);
-    status_blink_twice(50);
+    // status_blink_twice(50);
+    // status_blink_twice(50);
+    // status_blink_twice(50);
+    // status_blink_twice(50);
 
     if cfg!(any(feature = "serial_uart", feature = "qemu")) {
         let mut uart = uart::UART_0;
-        status_blink_twice(500);
+        // status_blink_twice(500);
         let _ = writeln!(uart, "Doki Doki! {info}");
         loop {
             let _ = writeln!(uart, "press m for monitor, r to reset");
@@ -84,33 +85,36 @@ fn on_panic(info: &core::panic::PanicInfo) -> ! {
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     uart::UART_0.init();
+    print_init!("hi");
+    arm_core::wake_up_secondary_cores();
+    panic!("Lets go monitor");
     //let led = hal::led::Led::Status;
     // let mut text: MorseTextArray<256> = MorseTextArray::new();
     // text.write_str("IKZ IKZ");
     // led.morse(&text.as_slice(), Duration::from_millis(50));
    // assert_eq!(0, get_core_num());
     system::initialize();
-    print_log!("HALLO");
-    print_log!("HALLO");
-    print_log!("HALLO");
-    print_log!("HALLO");
+    // print_log!("HALLO");
+    // print_log!("HALLO");
+    // print_log!("HALLO");
+    // print_log!("HALLO");
     // status_blink_twice(50);
     // status_blink_twice(50);
     // println_debug!("Continue after Init.");
     //tests::test_screen();
     // tests::test_dma();
     // if core_id == 0 {
-    print_log!("Bye!");
+    //print_log!("Bye!");
     // } else {
 
     // status_blink_twice(1000);
     
-    arm_core::wake_up_secondary_cores();
-    println_log!("Halting Core 0!");
-    status_blink_twice(100);
-    loop {
-        core::hint::spin_loop();
-    }
+    //println_log!("Halting Core 0!");
+    // status_blink_twice(100);
+
+    // loop {
+    //     core::hint::spin_loop();
+    // }
     // }
     // tests::run();
     // tests::test_usb().expect("USB test should pass");
@@ -119,8 +123,8 @@ pub extern "C" fn main() -> ! {
 #[no_mangle]
 pub extern "C" fn secondary() -> ! {
     let core_num = get_core_num();
-    thread::spin_wait_for(Duration::from_secs((core_num as u64) * 3));
-    println_log!("Core {} ready for duty", core_num as u64);
+    thread::spin_wait_for(Duration::from_secs(core_num.num() * 3));
+    print_init!("Core {} ready for duty", core_num.num());
     loop {
         // if matches!(core_num, CoreId::Core1) {
         //     status_blink_twice(100);
@@ -149,6 +153,9 @@ extern "C" {
 pub extern "C" fn _start() -> ! {
     let core_id = get_core_num();
     
+
+    unsafe { (ByteValue::from_mibi(9).as_bytes() as *mut u64).add(core_id.num() as usize).write_volatile(!core_id.num()) };
+
     // set up the stacks we'll use
     // every core gets 1 / 4 of the first 0x80000 -> 512k / 4 -> 128 kbyte
     let stack_top = unsafe { core::ptr::addr_of!(__stack_top) } as u64;

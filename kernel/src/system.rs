@@ -17,9 +17,9 @@ pub fn initialize() {
     if cfg!(feature = "serial_uart") {
         print_init!("before serial uart");
         output::init_serial_uart();
-        println_log!("Serial UART Initialized...");
+        //println_log!("Serial UART Initialized...");
         // print a memory map
-        println_log!("{:#?}", hal::info::MemoryMap());
+       // println_log!("{:#?}", hal::info::MemoryMap());
     }
     
     if cfg!(feature = "framebuffer") {
